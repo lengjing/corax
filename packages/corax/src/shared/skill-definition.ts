@@ -1,0 +1,42 @@
+/**
+ * File payload accepted for authored or runtime-created skill package
+ * siblings. Strings are written as UTF-8; bytes are preserved exactly.
+ */
+export type SkillFileContent = string | Uint8Array;
+
+/**
+ * Public skill package content for authored skills and dynamic skill
+ * resolvers.
+ */
+export interface SkillPackageDefinition {
+  /**
+   * Keeps this skill out of the system prompt and the dynamic skill
+   * announcement. The model finds it with `corax__search` and loads it with
+   * `corax__skill({ name })`. Defaults to `false`.
+   */
+  readonly deferred?: boolean;
+  readonly description: string;
+  readonly license?: string;
+  readonly markdown: string;
+  readonly metadata?: Record<string, string>;
+  readonly files?: Readonly<Record<string, SkillFileContent>>;
+}
+
+/**
+ * Skill package with an explicit name. Used by compiled skill entries
+ * (where the name is path-derived) and by dynamic skill resolvers
+ * (where the name is qualified from the resolver slug + entry key).
+ */
+export interface NamedSkillDefinition extends SkillPackageDefinition {
+  readonly name: string;
+}
+
+export const SKILL_BRAND = Symbol.for("corax:skill-brand");
+
+export function isBrandedSkillEntry(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[SKILL_BRAND] === true
+  );
+}

@@ -1,0 +1,755 @@
+import type { TokenUsage } from "#shared/token-usage.js";
+import type { Experimental_DecisionModel as DecisionModel } from "ai";
+
+import type { StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
+import type { ClientAgentSession } from "#client/agent-session.js";
+import type {
+  RuntimeIdentity,
+  RuntimeTraceContext,
+  MessageStreamEvent,
+  AgentStartedStreamEvent,
+} from "#protocol/message.js";
+import type {
+  CancelSessionResult,
+  ClientSessionState,
+  CreateSessionOptions,
+  SendTurnInput,
+  SendTurnOptions,
+} from "#client/types.js";
+import type { InputRequest, InputResponse } from "#shared/input.js";
+import type { JsonObject, JsonValue } from "#shared/json.js";
+import type { AgentModelOptionsDefinition } from "#shared/agent-definition.js";
+import type { EvalReporter } from "#evals/runner/reporters/types.js";
+import type {
+  CoraxEvalEventMatch,
+  CoraxEvalInputRequestMatchOptions,
+  CoraxEvalSkillLoadMatchOptions,
+  CoraxEvalSubagentCallMatchOptions,
+  CoraxEvalToolCallMatchOptions,
+} from "#evals/match.js";
+
+/** Lifecycle outcome of an eval-observed tool action. */
+export type CoraxEvalActionStatus = "pending" | "completed" | "failed" | "rejected";
+
+/**
+ * One tool call extracted from the captured stream, pairing the
+ * `actions.requested` request with its matching `action.result`.
+ */
+export interface CoraxEvalToolCall {
+  /** Authored tool name (e.g. `"get_weather"`). */
+  readonly name: string;
+  /** Tool input as requested by the model. */
+  readonly input: JsonObject;
+  /** Tool output from the matching `action.result`; `undefined` when the call never resolved. */
+  readonly output: JsonValue | undefined;
+  /** Whether the request is unresolved, completed, failed, or user-rejected. */
+  readonly status: CoraxEvalActionStatus;
+  /** Zero-based index of the turn the call happened in. */
+  readonly turnIndex: number;
+  /** Owning session id, when the runner knows it. */
+  readonly sessionId?: string;
+}
+
+/**
+ * One skill load extracted from the captured stream, pairing the `load-skill`
+ * request with its matching `load-skill-result`.
+ */
+export interface CoraxEvalSkillLoad {
+  /** The loaded skill's name. */
+  readonly skill: string;
+  /** The skill's instructions; `undefined` when the load never resolved. */
+  readonly output: JsonValue | undefined;
+  readonly status: CoraxEvalActionStatus;
+  /** Zero-based index of the turn the load happened in. */
+  readonly turnIndex: number;
+  /** Owning session id, when the runner knows it. */
+  readonly sessionId?: string;
+}
+
+/**
+ * One call to an agent task extracted from the captured stream: its
+ * `task.started`, joined with its `task.settled` and the task's
+ * `agent.started`.
+ */
+export interface CoraxEvalSubagentCall {
+  /** The agent tool call's id, as on its task events. */
+  readonly callId?: string;
+  /** The agent's session id, shared by every call to one task; absent if it never opened. */
+  readonly childSessionId?: string;
+  /** Subagent name. */
+  readonly name: string;
+  /** Remote agent URL for remote delegations (`agent.started` remote metadata). */
+  readonly remoteUrl?: string;
+  /** Output from the call's `task.settled`; `undefined` until the call completes. */
+  readonly output?: JsonValue;
+  /** The call's task status: `working` until its `task.settled` arrives. */
+  readonly status: "working" | "completed" | "failed" | "cancelled";
+  /** Zero-based index of the turn the delegation happened in. */
+  readonly turnIndex: number;
+  /** Owning session id, when the runner knows it. */
+  readonly sessionId?: string;
+}
+
+/**
+ * Execution facts the runner extracts from a completed session's stream events.
+ */
+export interface CoraxEvalDerivedFacts {
+  readonly toolCalls: readonly CoraxEvalToolCall[];
+  readonly toolCallCount: number;
+  readonly skillLoads: readonly CoraxEvalSkillLoad[];
+  readonly subagentCalls: readonly CoraxEvalSubagentCall[];
+  readonly subagentCallCount: number;
+  /** Every HITL input request raised during the run (`input.requested`). */
+  readonly inputRequests: readonly InputRequest[];
+  /** True when the run ended parked on unanswered HITL input requests. */
+  readonly parked: boolean;
+  readonly messageCount: number;
+  readonly reasoningBlockCount: number;
+  /**
+   * Distinct ids of the models the steps started with (`step.started`): in first-use order for one
+   * session, and in session order for an eval. Covers only the sessions the eval created or
+   * attached: a delegated subagent runs in its own session, so its models appear only when the eval
+   * attaches that session. Compaction and `auto` routing calls are not included.
+   */
+  readonly models: readonly string[];
+  /**
+   * Token usage from the latest `session.waiting`, `turn.waiting`, `session.failed`, or
+   * `session.completed`: the
+   * session's own model calls plus what the agents it delegated to spent, so on a turn it is the
+   * session's total so far. For an eval, each captured session counts once, by its latest usage,
+   * except sessions another captured session opened. Absent when a counted session reported none.
+   */
+  readonly usage?: TokenUsage;
+  readonly failureCode?: string;
+}
+
+/**
+ * Captured event stream and facts for one session involved in an eval.
+ */
+export interface CoraxEvalSessionResult {
+  readonly derived: CoraxEvalDerivedFacts;
+  readonly events: readonly MessageStreamEvent[];
+  readonly primary: boolean;
+  readonly sessionId?: string;
+  readonly state: ClientSessionState | undefined;
+  /** Distinct trace contexts observed for this session, in stream order. */
+  readonly traceContexts: readonly RuntimeTraceContext[];
+}
+
+/** Trace context attributed to one session involved in an eval. */
+export interface CoraxEvalTraceContext extends RuntimeTraceContext {
+  readonly primary: boolean;
+  readonly sessionId: string;
+}
+
+/**
+ * Full result of executing one eval against an corax agent.
+ */
+export interface CoraxEvalTaskResult {
+  /**
+   * The final turn's structured data when present, otherwise its last assistant
+   * message. Retained for reporters and artifacts that log one output value.
+   */
+  output: unknown;
+  /** The agent's last assistant message, or null when none was produced. */
+  readonly finalMessage: string | null;
+  readonly sessionId?: string;
+  /**
+   * How the run's final turn ended: `"completed"` (session finished),
+   * `"failed"` (terminal failure), or `"waiting"` (parked for the next
+   * user message).
+   */
+  readonly status: "completed" | "failed" | "waiting";
+  /** The captured stream events from the run. */
+  readonly events: readonly MessageStreamEvent[];
+  /** Lines written through `t.log` while the eval ran. */
+  readonly logs?: readonly string[];
+  /** Facts extracted from the stream (tool calls, message counts, etc.). */
+  readonly derived: CoraxEvalDerivedFacts;
+  /** Per-session event streams captured while executing this eval. */
+  readonly sessions?: readonly CoraxEvalSessionResult[];
+  /**
+   * Runtime identity metadata captured from the `session.started` stream event.
+   * Present when the corax server populates the event with its runtime metadata.
+   */
+  readonly runtimeIdentity?: RuntimeIdentity;
+  /** Distinct trace contexts observed across every captured session. */
+  readonly traceContexts: readonly CoraxEvalTraceContext[];
+}
+
+// ---------------------------------------------------------------------------
+// Assertions
+// ---------------------------------------------------------------------------
+
+/**
+ * How a failing assertion affects the verdict. A `"gate"` is a hard
+ * assertion: missing it fails the eval. A `"soft"` assertion is tracked
+ * data that only fails the eval under `corax eval --strict` (and only when it
+ * carries a threshold).
+ */
+export type AssertionSeverity = "gate" | "soft";
+
+/**
+ * A rich value-assertion evaluation. Built-in assertions use this to retain a
+ * concise failure reason and structured evidence alongside the numeric score.
+ */
+export interface AssertionEvaluation {
+  /** Normalized 0–1 score. */
+  readonly score: number;
+  /** Concise human-readable reason, shown when the assertion fails. */
+  readonly message?: string;
+  /** Structured diagnostic evidence retained by artifacts and reporters. */
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/** A score from 0 to 1, or an evaluation carrying one, accepted by `t.score`; may be a promise. */
+export type ScoreInput = number | AssertionEvaluation | Promise<number | AssertionEvaluation>;
+
+/**
+ * A value-level assertion produced by the builders in `corax/evals/expect`
+ * (e.g. `includes`, `equals`, `similarity`) and applied to an explicit value
+ * via `t.check(value, assertion)`. Boolean assertions score exactly 0 or 1.
+ *
+ * The chainable `gate`/`soft`/`atLeast` return a new assertion with the
+ * severity or threshold overridden.
+ */
+export interface Assertion {
+  readonly name: string;
+  readonly severity: AssertionSeverity;
+  /** Minimum passing score. `undefined` on a soft assertion = tracked only. */
+  readonly threshold?: number;
+  score(value: unknown): number | Promise<number>;
+  /** Rich evaluation used by `t.check` and `t.require`; custom assertions may omit it. */
+  evaluate?(value: unknown): AssertionEvaluation | Promise<AssertionEvaluation>;
+  gate(threshold?: number): Assertion;
+  soft(threshold?: number): Assertion;
+  atLeast(threshold: number): Assertion;
+}
+
+/**
+ * Handle to a recorded assertion, returned by every `t` assertion method.
+ * Chain `gate`/`soft`/`atLeast` to override the recorded severity or threshold,
+ * and `label` to distinguish repeated assertion families. Recorded assertions
+ * are finalized by the runner; use `t.require` or a `require*` lookup when
+ * later control flow depends on a passing result.
+ */
+export interface AssertionHandle {
+  gate(threshold?: number): this;
+  soft(threshold?: number): this;
+  atLeast(threshold: number): this;
+  /** Sets this entry's stable `key` and appends the label to its display name. */
+  label(label: string): this;
+}
+
+/**
+ * The recorded outcome of one assertion or `t.score`, consumed by the verdict,
+ * reporters, and artifacts. `score` is the measurement and a rule does not
+ * change it; `threshold` and `passed` describe the rule and are absent when
+ * none applies. A boolean assertion has `score` 0 or 1.
+ */
+export interface AssertionResult {
+  /** Display name, e.g. `judge.boolean [citation]`. */
+  readonly name: string;
+  /** Stable identifier set by `.label(key)`; absent for unlabeled assertions. */
+  readonly key?: string;
+  /** The measurement; absent when the scorer threw. */
+  readonly score?: number;
+  readonly severity: AssertionSeverity;
+  /** Effective minimum passing score (a gate defaults to 1); absent when no rule applies. */
+  readonly threshold?: number;
+  /** Verdict of the acceptance rule; absent when no rule applies. */
+  readonly passed?: boolean;
+  /** Whether the scorer threw; an errored entry is always a failed outcome. */
+  readonly errored: boolean;
+  /** Human-readable failure detail, shown in console output and artifacts. */
+  readonly message?: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/** Recorded assertions shared by aggregate, session, and turn scopes. */
+export interface CoraxEvalAssertions {
+  succeeded(): AssertionHandle;
+  parked(): AssertionHandle;
+  messageIncludes(token: string | RegExp): AssertionHandle;
+  calledTool(name: string, options?: CoraxEvalToolCallMatchOptions): AssertionHandle;
+  /** Asserts a completed load of `skill`, constrained like `calledTool`. */
+  loadedSkill(skill: string, options?: CoraxEvalSkillLoadMatchOptions): AssertionHandle;
+  notCalledTool(name: string): AssertionHandle;
+  /** Asserts that tool requests appeared in order, allowing unrelated requests between them. */
+  toolOrder(names: readonly string[]): AssertionHandle;
+  usedNoTools(): AssertionHandle;
+  maxToolCalls(max: number): AssertionHandle;
+  calledSubagent(name: string, options?: CoraxEvalSubagentCallMatchOptions): AssertionHandle;
+  noFailedActions(): AssertionHandle;
+  event<TType extends MessageStreamEvent["type"]>(
+    type: TType,
+    options?: Omit<Extract<CoraxEvalEventMatch, { type: TType }>, "type">,
+  ): AssertionHandle;
+  notEvent<TType extends MessageStreamEvent["type"]>(
+    type: TType,
+    options?: Omit<Extract<CoraxEvalEventMatch, { type: TType }>, "type" | "count">,
+  ): AssertionHandle;
+  eventOrder(matchers: readonly CoraxEvalEventMatch[]): AssertionHandle;
+  eventsSatisfy(
+    label: string,
+    predicate: (events: readonly MessageStreamEvent[]) => boolean,
+  ): AssertionHandle;
+}
+
+/** Assertions over the final output captured by one session or immutable turn. */
+export interface CoraxEvalOutputAssertions {
+  outputEquals(value: unknown): AssertionHandle;
+  outputMatches(schema: StandardSchemaV1): AssertionHandle;
+}
+
+/** Typed stream event returned by {@link CoraxEvalLiveTurn.waitForEvent}. */
+export type CoraxEvalStreamEvent<
+  TType extends MessageStreamEvent["type"] = MessageStreamEvent["type"],
+> = Extract<MessageStreamEvent, { type: TType }>;
+
+/** Matcher options for waiting until one live turn emits a specific event. */
+export type CoraxEvalWaitForEventOptions<TType extends MessageStreamEvent["type"]> = Omit<
+  Extract<CoraxEvalEventMatch, { type: TType }>,
+  "count" | "type"
+>;
+
+/**
+ * One accepted turn whose event stream is still in progress.
+ *
+ * The handle owns the stream consumer: event waiters observe its buffer and
+ * {@link result} settles and records that same stream exactly once.
+ */
+export interface CoraxEvalLiveTurn {
+  /** Events observed on this turn so far. */
+  readonly events: readonly MessageStreamEvent[];
+  /** Session driver that started or owns this turn. */
+  readonly session: CoraxEvalSession;
+  /** Durable session id available as soon as the turn is accepted or attached. */
+  readonly sessionId: string;
+  /** Request cooperative cancellation of this turn's session. */
+  cancel(): Promise<CancelSessionResult>;
+  /** Wait for the turn boundary and return the recorded immutable result. */
+  result(): Promise<CoraxEvalTurn>;
+  /** Wait until the live stream emits one typed event matching `options`. */
+  waitForEvent<TType extends MessageStreamEvent["type"]>(
+    type: TType,
+    options?: CoraxEvalWaitForEventOptions<TType>,
+  ): Promise<CoraxEvalStreamEvent<TType>>;
+}
+
+/** Operations and state belonging to one accepted session. */
+interface CoraxEvalSessionDriver {
+  /** All events observed on this session so far. */
+  readonly events: readonly MessageStreamEvent[];
+  /**
+   * User and assistant messages observed on this session in turn order. Pass
+   * this to a judge's `on` option to grade the complete conversation.
+   */
+  readonly transcript: string;
+  /** Input requests left pending by the last parked turn. */
+  readonly pendingInputRequests: readonly InputRequest[];
+  /** Serializable cursor for resuming this session. */
+  readonly state: ClientSessionState;
+  /** Durable session id, available when the session is returned. */
+  readonly sessionId: string;
+  /** Request cooperative cancellation of this session's active turn. */
+  cancel(): Promise<CancelSessionResult>;
+  /**
+   * Compact this session's history between turns and wait for it to finish.
+   * Returns the compaction events through `session.waiting`; throws when the
+   * session is no longer active.
+   */
+  compact(): Promise<CoraxEvalTurn>;
+  /** Require exactly one pending input request matching `filter`, or abort dependent control flow. */
+  requireInputRequest(filter?: CoraxEvalInputRequestMatchOptions): InputRequest;
+  /** Resolve specific pending requests and run the resumed turn. */
+  respond(responses: readonly InputResponse[], options?: SendTurnOptions): Promise<CoraxEvalTurn>;
+  /** Start a response turn without waiting for its boundary. */
+  startRespond(
+    responses: readonly InputResponse[],
+    options?: SendTurnOptions,
+  ): Promise<CoraxEvalLiveTurn>;
+  /** Resolve every pending request with the same option id. */
+  respondAll(optionId: string): Promise<CoraxEvalTurn>;
+  /** Send one turn through this session. */
+  send(message: SendTurnInput["message"], options?: SendTurnOptions): Promise<CoraxEvalTurn>;
+  /** Start one text turn and return as soon as its session is accepted. */
+  start(message: string, options?: SendTurnOptions): Promise<CoraxEvalLiveTurn>;
+  /** Send one text turn with a local file attached as a data URL. */
+  sendFile(text: string, filePath: string, mediaType?: string): Promise<CoraxEvalTurn>;
+  /**
+   * The session an agent run opened, as this session's stream announced it with
+   * `agent.started`. Its `stream()` follows the child through this parent session
+   * with the eval client's credentials, and stops with the eval unless given a `signal`.
+   */
+  agent(started: AgentStartedStreamEvent): CoraxEvalAgentSession;
+}
+
+/** A session an agent run opened, reached through the parent eval session. */
+export type CoraxEvalAgentSession = Pick<
+  ClientAgentSession,
+  "name" | "sessionId" | "stream" | "taskId"
+>;
+
+/** One accepted session, exposed by `t.session()`, turns, and target attachment helpers. */
+export interface CoraxEvalSession
+  extends CoraxEvalSessionDriver, CoraxEvalAssertions, CoraxEvalOutputAssertions {}
+
+/**
+ * One completed eval-driver turn.
+ */
+export interface CoraxEvalTurn extends CoraxEvalAssertions, CoraxEvalOutputAssertions {
+  readonly data: unknown;
+  readonly events: readonly MessageStreamEvent[];
+  readonly inputRequests: readonly InputRequest[];
+  readonly message: string | undefined;
+  /** Session that owns this turn; use it for follow-up messages. */
+  readonly session: CoraxEvalSession;
+  readonly sessionId: string;
+  readonly status: "completed" | "failed" | "waiting";
+  readonly toolCalls: readonly CoraxEvalToolCall[];
+  /** Require exactly one matching tool call, record a gate, and return it for dependent checks. */
+  requireToolCall(
+    name: string,
+    options?: Omit<CoraxEvalToolCallMatchOptions, "count">,
+  ): CoraxEvalToolCall;
+  expectOk(): this;
+}
+
+// ---------------------------------------------------------------------------
+// Judge (LLM-as-judge)
+// ---------------------------------------------------------------------------
+
+/** Decision settings used only for scoring, independently of the agent under test. */
+export interface CoraxEvalJudgeConfig {
+  /** Decision model ID or instance. Defaults to the model used by `corax/ai` decide. */
+  readonly model?: DecisionModel;
+  /** Judge calls carry provider options only; corax places no prompt-cache breakpoints on them. */
+  readonly modelOptions?: Pick<AgentModelOptionsDefinition, "providerOptions">;
+}
+
+/** JSON content accepted as decision state, instructions, or rubric descriptions. */
+export type JudgeInput = string | JsonObject | readonly JsonValue[];
+
+/** A boolean judgment, ordered rubric, or categorical judgment with an expected option. */
+export type JudgeQuestion =
+  | {
+      readonly type: "boolean";
+      readonly instructions: JudgeInput;
+      readonly criteria?: { readonly true?: JudgeInput | null; readonly false?: JudgeInput | null };
+    }
+  | {
+      readonly type: "score";
+      readonly instructions: JudgeInput;
+      readonly criteria: readonly (JudgeInput | null)[];
+    }
+  | {
+      readonly type: "choice";
+      readonly instructions: JudgeInput;
+      readonly criteria: Readonly<Record<string, JudgeInput | null>>;
+      readonly expected: string;
+    };
+
+/** Restricts a choice expectation to one of its authored option keys. */
+export type JudgeQuestionConstraint<Q extends JudgeQuestion> = Q extends { type: "choice" }
+  ? { readonly expected: NoInfer<Extract<keyof Q["criteria"], string>> }
+  : unknown;
+
+/** Named judgments decided together against one shared state. */
+export interface JudgeBatch<Questions extends Record<string, JudgeQuestion>> {
+  /** Replaces the default `{ input, output }` state when supplied. */
+  readonly state?: JudgeInput;
+  readonly questions: Questions & {
+    readonly [Key in keyof Questions]: JudgeQuestionConstraint<Questions[Key]>;
+  };
+}
+
+/** Per-call settings override the resolved eval/project judge settings. */
+export interface JudgeOpts extends CoraxEvalJudgeConfig {
+  /** JSON value to grade instead of the latest settled turn's assistant message. */
+  readonly on?: JsonValue;
+}
+
+/** Model-backed assertions. Calls start immediately and return non-awaitable handles. */
+export interface JudgeContext {
+  (criteria: string, opts?: JudgeOpts): AssertionHandle;
+  <const Q extends JudgeQuestion>(
+    question: Q & JudgeQuestionConstraint<Q>,
+    opts?: JudgeOpts,
+  ): AssertionHandle;
+  <const Questions extends Record<string, JudgeQuestion>>(
+    batch: JudgeBatch<Questions>,
+    opts?: CoraxEvalJudgeConfig,
+  ): { readonly [Key in keyof Questions]: AssertionHandle };
+}
+
+/**
+ * The context passed to `test(t)`. Creates independent sessions and carries
+ * run-level assertions, value-level assertions, and model-backed judges.
+ *
+ * Scoped assertions (`succeeded`, `calledTool`, …) record an entry evaluated
+ * after the test body; `check`, `require`, and `judge` evaluate explicit values.
+ */
+export interface CoraxEvalContext<TContext = unknown> extends CoraxEvalAssertions {
+  /** Run-wide setup context, shared by reference across evals and teardown. */
+  readonly context: TContext;
+  /** Eval timeout signal. */
+  readonly signal: AbortSignal;
+  /** Current target under test. */
+  readonly target: CoraxEvalTargetHandle;
+  /** Structured eval log hook. */
+  log(message: string): void;
+  /** Pause the eval task, defaulting to 1 second, while respecting the eval timeout signal. */
+  sleep(ms?: number): Promise<void>;
+  /**
+   * Create a new session without starting a turn or reading events. Resolves on
+   * acceptance with a definite session id and cursor. Every call creates a session.
+   */
+  session(options?: CreateSessionOptions): Promise<CoraxEvalSession>;
+  /** Create a new session with its first message and wait for the turn to settle. */
+  send(message: SendTurnInput["message"], options?: SendTurnOptions): Promise<CoraxEvalTurn>;
+
+  /** Apply a value-level assertion (from `corax/evals/expect`) to a value. */
+  check(value: unknown, assertion: Assertion): AssertionHandle;
+  /**
+   * Record a score from 0 to 1. Chain `.label(key)` to name it, `.gate(0.9)`
+   * to fail the eval below 0.9, or `.atLeast(0.9)` to mark it `scored`.
+   * Without a rule the score has no verdict.
+   */
+  score(evaluation: ScoreInput): AssertionHandle;
+  /** Record an immediate gate and abort dependent control flow when it fails. */
+  require<T>(value: T, assertion: Assertion): Promise<T>;
+  /** Mark this eval as intentionally skipped and stop executing its test body. */
+  skip(reason: string): never;
+
+  /** LLM-as-judge assertions, bound to the resolved judge model. */
+  readonly judge: JudgeContext;
+}
+
+/**
+ * Describes the corax server an eval runs against.
+ */
+export interface CoraxEvalTarget {
+  /**
+   * `"local"` for a dev server the runner starts in-process, `"remote"` for
+   * a deployed instance addressed by `--url`.
+   */
+  readonly kind: "local" | "remote";
+  /** Base HTTP URL the eval client connects to and sends message requests. */
+  readonly url: string;
+  /** Capabilities discovered from the live target's info route. */
+  readonly capabilities: CoraxEvalTargetCapabilities;
+}
+
+export interface CoraxEvalTargetCapabilities {
+  readonly devRoutes: boolean;
+}
+
+export interface CoraxEvalScheduleDispatchResult {
+  readonly scheduleId: string;
+  readonly sessionIds: readonly string[];
+}
+
+/**
+ * Live target handle exposed to eval runs.
+ */
+export interface CoraxEvalTargetHandle extends CoraxEvalTarget {
+  /** Dispatch a dev-only authored schedule. Requires a target with dev routes enabled. */
+  dispatchSchedule(scheduleId: string): Promise<CoraxEvalScheduleDispatchResult>;
+  /** Authenticated fetch against the target base URL. */
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * Attach to a pre-existing session and consume one turn boundary.
+   *
+   * When that boundary is `session.waiting`, the attached session recovers
+   * the exact session ID, so `session.send(...)` and `session.respond(...)`
+   * continue the same durable session.
+   */
+  attachSession(
+    sessionId: string,
+    opts?: { readonly startIndex?: number },
+  ): Promise<CoraxEvalSession>;
+  /**
+   * Observe one in-progress turn from a session created outside the eval.
+   * The returned live-turn handle starts consuming immediately and owns the
+   * stream through its next turn boundary.
+   */
+  watchTurn(sessionId: string, opts?: { readonly startIndex?: number }): CoraxEvalLiveTurn;
+}
+
+// ---------------------------------------------------------------------------
+// Eval definition types
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared fields between the user-facing input and the validated eval.
+ *
+ * Eval identity (`id`) is derived from the `evals/<path>.eval.ts` file
+ * path by the discovery layer; it is not authored on the input.
+ */
+interface CoraxEvalBase {
+  readonly description?: string;
+  /**
+   * Judge model for this eval's `t.judge(...)` assertions. Optional: when
+   * omitted, judge assertions fall back to the `judge` declared in
+   * `evals.config.ts`, then the shared decision default. Only used for
+   * scoring; never changes the agent under test.
+   */
+  readonly judge?: CoraxEvalJudgeConfig;
+  readonly timeoutMs?: number;
+  /** Used by `--tag` filtering. */
+  readonly tags?: readonly string[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly reporters?: readonly EvalReporter[];
+}
+
+/**
+ * Complete top-level key set accepted by {@link defineEval}, used to reject
+ * unknown authored keys.
+ */
+export interface CoraxEvalInputFields extends CoraxEvalBase {
+  readonly test?: (t: CoraxEvalContext) => void | Promise<void>;
+}
+
+/**
+ * Full eval input passed to `defineEval()`.
+ *
+ * Each eval file is exactly one case: an imperative `test(t)` function that
+ * drives the agent and asserts on what it produced. Eval identity is derived
+ * from the file path, so authors do not specify an `id` or `name`.
+ */
+export interface CoraxEvalInput<TContext = unknown> extends CoraxEvalBase {
+  /** Imperative interaction-and-assertion script. */
+  test(t: CoraxEvalContext<TContext>): void | Promise<void>;
+}
+
+/**
+ * Eval returned by `defineEval()`. Carries no `id` yet: discovery stamps
+ * the path-derived id at import time to produce a full {@link CoraxEval}. The
+ * `_tag` literal (`"CoraxEval"`) brands the value so discovery and the runner
+ * can recognize a defined eval.
+ */
+export type CoraxEvalDefinition<TContext = unknown> = CoraxEvalInput<TContext> & {
+  readonly _tag: "CoraxEval";
+};
+
+/**
+ * Validated eval consumed by the runner and reporters. The `id` is the
+ * path-derived slug attached by discovery (e.g. `evals/weather.eval.ts` →
+ * `"weather"`, `evals/runtime/multi-turn.eval.ts` → `"runtime/multi-turn"`).
+ * Files that default-export an array of evals derive
+ * `<file-id>/<zero-padded index>` ids (e.g. `"weather/0000"`).
+ */
+export type CoraxEval = CoraxEvalDefinition & {
+  readonly id: string;
+};
+
+/**
+ * Per-eval outcome computed by the runner:
+ *
+ * - `"passed"`  — no execution error, every gate held, every soft threshold met
+ * - `"failed"`  — a gate assertion failed or execution errored (timeout, transport, thrown task)
+ * - `"scored"`  — every gate held but a soft assertion fell below its threshold
+ * - `"skipped"` — the test body intentionally called `t.skip(reason)`
+ */
+export type CoraxEvalVerdict = "passed" | "failed" | "scored" | "skipped";
+
+/**
+ * Result of executing and asserting one eval.
+ *
+ * `id` is the path-derived eval id
+ * (e.g. `evals/weather.eval.ts` → `"weather"`).
+ */
+export interface CoraxEvalResult {
+  readonly id: string;
+  readonly result: CoraxEvalTaskResult;
+  /** Every assertion recorded by the eval's `test(t)`, in record order. */
+  readonly assertions: readonly AssertionResult[];
+  /** Per-eval verdict; see {@link CoraxEvalVerdict}. */
+  readonly verdict: CoraxEvalVerdict;
+  readonly error?: string;
+  /** Why the eval intentionally skipped, present only for a `"skipped"` verdict. */
+  readonly skipReason?: string;
+  readonly startedAt: string;
+  readonly completedAt: string;
+}
+
+/**
+ * Aggregated outcome of one `corax eval` run across every executed eval.
+ */
+export interface CoraxEvalRunSummary {
+  readonly target: CoraxEvalTarget;
+  readonly results: readonly CoraxEvalResult[];
+  readonly startedAt: string;
+  readonly completedAt: string;
+  /** Evals with verdict `"passed"`. */
+  readonly passed: number;
+  /** Evals with verdict `"failed"` (gate failures and execution errors). */
+  readonly failed: number;
+  /** Evals with verdict `"scored"` (below-threshold soft assertions only). */
+  readonly scored: number;
+  /** Evals intentionally skipped by their test body. */
+  readonly skipped: number;
+  /** The execution-error subset of `failed` (timeouts, connection failures, exceptions). */
+  readonly errored: number;
+}
+
+// ---------------------------------------------------------------------------
+// Eval run configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Run-wide eval configuration authored in `evals.config.ts`.
+ *
+ * Exactly one `evals.config.ts` is required at the root of the `evals/`
+ * directory; it supplies the defaults every eval in the run shares.
+ */
+export interface CoraxEvalConfigInput<TContext = unknown> {
+  /**
+   * Runs once before target startup, except for `--list` or an empty selection.
+   * The return value is shared with evals and teardown by reference in the runner process.
+   */
+  readonly setup?: () => TContext | Promise<TContext>;
+  /**
+   * Runs once after server and sandbox shutdown, even if setup or eval execution fails.
+   * Receives undefined if setup returns no context or throws before returning.
+   * Can be used without setup.
+   * Does not run for `--list` or an empty selection.
+   */
+  teardown?(context: TContext | undefined): void | Promise<void>;
+  /**
+   * Default judge model for `t.judge(...)` assertions across every eval.
+   * Optional: omission uses the shared decision default. Individual evals
+   * may override it with their own `judge`. Only ever used for scoring.
+   */
+  readonly judge?: CoraxEvalJudgeConfig;
+  /**
+   * Reporters that observe every eval in the run (e.g. a shared
+   * `Braintrust()` experiment). Suppressed by `corax eval --skip-report`.
+   */
+  readonly reporters?: readonly EvalReporter[];
+  /**
+   * Default maximum number of evals executing at once. Must be a positive
+   * integer. `corax eval --max-concurrency` overrides it; defaults to 8 when
+   * neither is set.
+   */
+  readonly maxConcurrency?: number;
+  /**
+   * Default per-eval timeout in milliseconds. An eval's own `timeoutMs`
+   * overrides it, and `corax eval --timeout` overrides both.
+   */
+  readonly timeoutMs?: number;
+}
+
+/**
+ * Validated eval run configuration returned by `defineEvalConfig()`. The
+ * `_tag` literal brands the value so discovery can recognize it.
+ */
+export type CoraxEvalConfig<TContext = unknown> = CoraxEvalConfigInput<TContext> & {
+  readonly _tag: "CoraxEvalConfig";
+};
+
+/** Setup context type associated with an authored eval config. */
+export type CoraxEvalConfigContext<TConfig extends CoraxEvalConfig> = Awaited<
+  ReturnType<NonNullable<TConfig["setup"]>>
+>;

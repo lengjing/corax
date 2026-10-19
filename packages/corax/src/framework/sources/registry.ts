@@ -1,0 +1,122 @@
+import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import {
+  createAgentSourceRegistry,
+  defineProgrammaticAgentSource,
+  loadProgrammaticModuleNamespace,
+  memoizeModuleNamespaceFactories,
+  type AgentSourceRegistry,
+  type AgentModuleBacking,
+  type ProgrammaticModuleNamespace,
+} from "#compiler/source-graph.js";
+
+const revision = `corax@${resolveInstalledPackageInfo().version}:compiled-manifest-v53`;
+
+const localDefaults = defineProgrammaticAgentSource({
+  id: "corax:defaults",
+  revision,
+  modules: [
+    { logicalPath: "agent.ts", loadNamespace: () => import("#framework/sources/modules/agent.js") },
+    {
+      logicalPath: "sandbox.ts",
+      semanticRevision: "corax:default-sandbox:v1",
+      loadNamespace: () => import("#framework/sources/modules/sandbox.js"),
+    },
+    {
+      logicalPath: "tools/bash.ts",
+      loadNamespace: () => import("#tools/provided/bash.js"),
+    },
+    {
+      logicalPath: "tools/read_file.ts",
+      loadNamespace: () => import("#tools/provided/read-file.js"),
+    },
+    {
+      logicalPath: "tools/write_file.ts",
+      loadNamespace: () => import("#tools/provided/write-file.js"),
+    },
+    {
+      logicalPath: "tools/web_fetch.ts",
+      loadNamespace: () => import("#tools/provided/web-fetch.js"),
+    },
+    {
+      logicalPath: "tools/web_search.ts",
+      loadNamespace: () => import("#tools/provided/web-search.js"),
+    },
+  ],
+});
+
+const rootDefaults = defineProgrammaticAgentSource({
+  id: "corax:root-defaults",
+  revision,
+  modules: [
+    {
+      logicalPath: "tools/agent.ts",
+      loadNamespace: () => import("#tools/framework/agent.js"),
+    },
+    {
+      logicalPath: "channels/corax.ts",
+      loadNamespace: () => import("#framework/sources/modules/corax-channel.js"),
+    },
+    {
+      logicalPath: "channels/home.ts",
+      loadNamespace: () => import("#framework/sources/modules/home-channel.js"),
+    },
+  ],
+});
+
+const scheduleCollectionWrapperTemplateSource = defineProgrammaticAgentSource({
+  id: "corax:schedule-collection-wrapper",
+  revision,
+  modules: [
+    {
+      logicalPath: "tools/schedule-collection-wrapper.ts",
+      loadNamespace: async (context) => {
+        const { loadScheduleCollectionWrapperNamespace } =
+          await import("#framework/sources/modules/schedule-collection-wrapper.js");
+        return await loadScheduleCollectionWrapperNamespace(context);
+      },
+    },
+  ],
+});
+
+const memoryWrapperTemplateSource = defineProgrammaticAgentSource({
+  id: "corax:memory-wrapper",
+  revision,
+  modules: [
+    {
+      logicalPath: "tools/memory-wrapper.ts",
+      loadNamespace: async (context) => {
+        const { loadMemoryWrapperNamespace } =
+          await import("#framework/sources/modules/memory-wrapper.js");
+        return await loadMemoryWrapperNamespace(context);
+      },
+    },
+  ],
+});
+
+export const frameworkAgentSourceRegistry: AgentSourceRegistry = createAgentSourceRegistry(
+  [
+    { applyTo: "all-local-nodes", source: localDefaults },
+    { applyTo: "root", source: rootDefaults },
+  ],
+  { templates: [memoryWrapperTemplateSource, scheduleCollectionWrapperTemplateSource] },
+);
+
+export const memoryWrapperTemplate = frameworkAgentSourceRegistry.templates.get(
+  memoryWrapperTemplateSource.id,
+)!;
+export const scheduleCollectionWrapperTemplate = frameworkAgentSourceRegistry.templates.get(
+  scheduleCollectionWrapperTemplateSource.id,
+)!;
+
+export async function loadFrameworkProgrammaticModule(
+  backing: Extract<AgentModuleBacking, { readonly kind: "programmatic" }>,
+  dependencyNamespaces?: Readonly<Record<string, ProgrammaticModuleNamespace>>,
+): Promise<ProgrammaticModuleNamespace> {
+  return memoizeModuleNamespaceFactories(
+    await loadProgrammaticModuleNamespace({
+      backing,
+      dependencyNamespaces,
+      registries: [frameworkAgentSourceRegistry],
+    }),
+  );
+}

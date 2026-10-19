@@ -1,0 +1,64 @@
+import { access } from "node:fs/promises";
+import { join } from "node:path";
+
+import { expect, it } from "vitest";
+
+import { runPnpmCommand } from "#internal/testing/run-pnpm-command.js";
+import { useScenarioApp } from "#internal/testing/scenario-app.js";
+
+const scenarioApp = useScenarioApp();
+
+it("builds an agent and child with Gateway and provider decision models from packed corax", async () => {
+  const app = await scenarioApp({
+    name: "ai-models",
+    installDependencies: true,
+    files: {
+      "agent/instructions.md": "Help Alice review the export incident.",
+      "agent/decision.ts": `import type { Experimental_DecisionModel } from "ai";
+export const decisionModel = {
+  specificationVersion: "v4",
+  provider: "fixture",
+  modelId: "fixture-decider",
+  supportedQuestionTypes: ["choice"],
+  async doDecide() { throw new Error("Build must not decide models."); },
+} satisfies Exclude<Experimental_DecisionModel, string>;`,
+      "agent/agent.ts": `import { defineAgent } from "corax";
+import { auto } from "corax/models";
+import { anthropic } from "corax/models/anthropic";
+export default defineAgent({ model: auto({ options: { "openai/gpt-5.6-sol": "Investigations", my_secret_model: { model: anthropic("sonnet-5"), reasoning: "low", description: "Routine work" } } }) });`,
+      "agent/tools/classify.ts": `import { defineTool } from "corax/tools";
+import { decide } from "corax/ai";
+export default defineTool({
+  description: "Classify an incident",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  async execute(_input, ctx) {
+    const result = await decide({
+      state: { incident: "Alice needs an export summary." },
+      questions: { category: { type: "choice", instructions: "Choose a category.", criteria: { routine: "Routine work", investigation: "Investigation" } } },
+      abortSignal: ctx.abortSignal,
+    });
+    return result.answers.category.choice;
+  },
+});`,
+      "agent/subagents/worker/instructions.md": "Review the assigned evidence.",
+      "agent/subagents/worker/agent.ts": `import { defineAgent } from "corax";
+import { auto } from "corax/models";
+import { anthropic } from "corax/models/anthropic";
+import { decisionModel } from "../../decision";
+export default defineAgent({ description: "Review evidence", model: auto({ model: decisionModel, options: { reviewer: { model: anthropic("sonnet-5"), reasoning: "low", description: "Investigations" } } }) });`,
+    },
+  });
+
+  const built = await runPnpmCommand({
+    args: ["exec", "corax", "build"],
+    cwd: app.appRoot,
+    env: {
+      ...process.env,
+      AI_GATEWAY_API_KEY: "",
+      VERCEL_OIDC_TOKEN: "",
+    },
+  });
+  expect(built.stdout).toContain("built output");
+  await access(join(app.appRoot, ".output/server/index.mjs"));
+  await expect(access(join(app.appRoot, "node_modules/corax/src"))).rejects.toThrow();
+});

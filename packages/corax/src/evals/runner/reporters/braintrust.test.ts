@@ -1,0 +1,282 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Braintrust, type BraintrustReporterConfig } from "#evals/reporters/index.js";
+import type { CoraxEval, CoraxEvalResult, CoraxEvalTarget } from "#evals/types.js";
+
+const braintrustMocks = vi.hoisted(() => ({
+  close: vi.fn(),
+  flush: vi.fn(),
+  init: vi.fn(),
+  log: vi.fn(),
+  summarize: vi.fn(),
+}));
+
+vi.mock("braintrust", () => ({
+  flush: braintrustMocks.flush,
+  init: braintrustMocks.init,
+}));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeTarget(kind: "local" | "remote" = "local"): CoraxEvalTarget {
+  const url = kind === "local" ? "http://127.0.0.1:3000" : "https://test.vercel.app";
+  return {
+    capabilities: { devRoutes: kind === "local" },
+    kind,
+    url,
+  };
+}
+
+function makeConfig(overrides: Partial<BraintrustReporterConfig> = {}): BraintrustReporterConfig {
+  return {
+    projectName: "test-project",
+    ...overrides,
+  };
+}
+
+function makeEvalResult(overrides: Partial<CoraxEvalResult> = {}): CoraxEvalResult {
+  return {
+    id: "eval-1",
+    result: {
+      output: "actual output",
+      finalMessage: "actual output",
+      status: "completed",
+      events: [],
+      derived: {
+        toolCalls: [
+          {
+            name: "search",
+            input: { query: "test" },
+            output: null,
+            status: "completed",
+            turnIndex: 0,
+            sessionId: "session-123",
+          },
+        ],
+        toolCallCount: 1,
+        skillLoads: [],
+        subagentCalls: [],
+        subagentCallCount: 0,
+        inputRequests: [],
+        parked: false,
+        messageCount: 1,
+        reasoningBlockCount: 0,
+        models: [],
+      },
+      sessionId: "session-123",
+      traceContexts: [],
+    },
+    assertions: [
+      { name: "succeeded", score: 1, severity: "gate", passed: true, errored: false },
+      {
+        name: "similarity",
+        score: 1,
+        severity: "soft",
+        threshold: 0.6,
+        passed: true,
+        errored: false,
+      },
+    ],
+    verdict: "passed",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    completedAt: "2026-01-01T00:00:01.000Z",
+    ...overrides,
+  };
+}
+
+function makeEval(): CoraxEval {
+  return {
+    _tag: "CoraxEval",
+    id: "eval-1",
+    test: async () => {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("Braintrust", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    braintrustMocks.init.mockResolvedValue({
+      close: braintrustMocks.close,
+      log: braintrustMocks.log,
+      summarize: braintrustMocks.summarize,
+    });
+  });
+
+  it("onEvalComplete is a no-op when experiment is not initialized", () => {
+    const reporter = Braintrust(makeConfig());
+
+    // Should not throw when called before onRunStart
+    reporter.onEvalComplete(makeEvalResult());
+  });
+
+  it("onRunComplete is a no-op when experiment is not initialized", async () => {
+    const reporter = Braintrust(makeConfig());
+
+    // Should not throw when called before onRunStart
+    await reporter.onRunComplete({
+      target: makeTarget(),
+      results: [],
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: "2026-01-01T00:01:00.000Z",
+      passed: 0,
+      failed: 0,
+      scored: 0,
+      skipped: 0,
+      errored: 0,
+    });
+  });
+
+  it("uploads complete failed assertion diagnostics", async () => {
+    const reporter = Braintrust(makeConfig());
+    await reporter.onRunStart([makeEval()], makeTarget());
+
+    reporter.onEvalComplete(
+      makeEvalResult({
+        assertions: [
+          {
+            message: 'prompt: "Name the source."',
+            metadata: {
+              criteria: "cites a source",
+              input: "Name the source.",
+              rationale: "No source was cited.",
+            },
+            name: "judge.boolean",
+            passed: false,
+            errored: false,
+            score: 0,
+            severity: "soft",
+            threshold: 0.8,
+          },
+        ],
+        verdict: "scored",
+      }),
+    );
+
+    expect(braintrustMocks.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          coraxFailedAssertions: [
+            {
+              message: 'prompt: "Name the source."',
+              metadata: {
+                criteria: "cites a source",
+                input: "Name the source.",
+                rationale: "No source was cited.",
+              },
+              name: "judge.boolean",
+              passed: false,
+              errored: false,
+              score: 0,
+              severity: "soft",
+              threshold: 0.8,
+            },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("uploads corax trace ids and contexts", async () => {
+    const reporter = Braintrust(makeConfig());
+    await reporter.onRunStart([makeEval()], makeTarget());
+    const result = makeEvalResult();
+    const traceContext = {
+      primary: true,
+      sessionId: "session-123",
+      spanId: "0123456789abcdef",
+      traceFlags: 1,
+      traceId: "0123456789abcdef0123456789abcdef",
+    };
+
+    reporter.onEvalComplete({
+      ...result,
+      result: { ...result.result, traceContexts: [traceContext] },
+    });
+
+    expect(braintrustMocks.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          coraxTraceContexts: [traceContext],
+          coraxTraceIds: [traceContext.traceId],
+        }),
+      }),
+    );
+  });
+
+  it("logs an empty output for an eval that produced no agent output", async () => {
+    const reporter = Braintrust(makeConfig());
+    await reporter.onRunStart([makeEval()], makeTarget());
+    const result = makeEvalResult();
+
+    reporter.onEvalComplete({
+      ...result,
+      result: { ...result.result, finalMessage: null, output: null },
+    });
+
+    // Braintrust rejects a null or undefined output with "output must be specified".
+    expect(braintrustMocks.log).toHaveBeenCalledWith(expect.objectContaining({ output: "" }));
+  });
+
+  it("scores repeated assertions by their lowest member and keeps each score in metadata", async () => {
+    const reporter = Braintrust(makeConfig());
+    await reporter.onRunStart([makeEval()], makeTarget());
+
+    reporter.onEvalComplete(
+      makeEvalResult({
+        assertions: [
+          { name: "similarity", passed: true, score: 0.8, severity: "soft", errored: false },
+          { name: "similarity", passed: true, score: 0.6, severity: "soft", errored: false },
+          { name: "similarity", passed: true, score: 1, severity: "gate", errored: false },
+        ],
+      }),
+    );
+
+    expect(braintrustMocks.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scores: { similarity: 0.6, "gate:similarity": 1 },
+        metadata: expect.objectContaining({
+          coraxAssertionScores: [
+            { name: "similarity", severity: "soft", score: 0.8 },
+            { name: "similarity", severity: "soft", score: 0.6 },
+            { name: "similarity", severity: "gate", score: 1 },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("logs labeled assertions under their label", async () => {
+    const reporter = Braintrust(makeConfig());
+    await reporter.onRunStart([makeEval()], makeTarget());
+
+    reporter.onEvalComplete(
+      makeEvalResult({
+        assertions: [
+          {
+            name: "score [grounding]",
+            key: "grounding",
+            score: 0.8,
+            severity: "soft",
+            errored: false,
+          },
+          {
+            name: "judge.boolean [citation]",
+            key: "citation",
+            score: 1,
+            severity: "gate",
+            errored: false,
+          },
+        ],
+      }),
+    );
+
+    expect(braintrustMocks.log).toHaveBeenCalledWith(
+      expect.objectContaining({ scores: { grounding: 0.8, "gate:citation": 1 } }),
+    );
+  });
+});

@@ -1,0 +1,1688 @@
+import {
+  openConversationInputs,
+  type ConversationInput,
+  type ConversationState,
+} from "#client/conversation-state.js";
+import {
+  attachCoraxAgentStore,
+  detachCoraxAgentStore,
+  CoraxAgentStore,
+} from "#client/corax-agent-store.js";
+import { isAbortError } from "#client/corax-agent-store-helpers.js";
+import { formatStrandedSessionNotice } from "./stranded-session.js";
+import { normalizeActionRequest, normalizeActionResult } from "#client/message-action-parts.js";
+import { isTerminalToolCallPart } from "./terminal-tool-part.js";
+import { userText } from "./transcript-parts.js";
+import { isTaskRetryRefusal } from "#protocol/task-tools.js";
+import type { SendTurnPayload } from "#client/types.js";
+import type { ModelAccessChange } from "#shared/model-connection.js";
+import type {
+  AgentInfoResult,
+  Client,
+  InputOption,
+  InputRequest,
+  InputResponse,
+  MessageStreamEvent,
+} from "#client/index.js";
+import { renderApplicationInfo } from "#cli/commands/info.js";
+import type { CoraxCliSetupStepEvent, CoraxCliSetupTerminalEvent } from "#cli/telemetry/index.js";
+import type { OnboardingScreenEvent } from "./setup-commands.js";
+import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
+import {
+  createDevelopmentRuntimeArtifactRefresher,
+  type DevelopmentRuntimeArtifactRefresher,
+} from "#services/dev-client.js";
+import { inspectApplication } from "#services/inspect-application.js";
+import { toErrorMessage } from "#shared/errors.js";
+import {
+  conversationView,
+  isWorking,
+  tuiSessionReducer,
+  type AgentTUIConversationView,
+  type TuiSessionData,
+} from "./conversation-view.js";
+import { devBootPhase, type DevBootProgressReporter } from "#internal/dev-boot-progress.js";
+
+import {
+  failureKey,
+  formatFailureDetail,
+  formatFailureHint,
+  formatFailureMessage,
+  interruptedError,
+  isInterruptedError,
+  localFailureHint,
+} from "./errors.js";
+
+import { probeAgentInfo } from "#services/dev-client/agent-info-probe.js";
+import { parseLogDisplayMode } from "./log-display-mode.js";
+import {
+  formatPromptCommandHelp,
+  parsePromptCommand,
+  PROMPT_COMMANDS,
+  type PromptCommand,
+  type PromptCommandSpec,
+  type ArgumentTypeaheadCommand,
+} from "./prompt-commands.js";
+import type { PromptArgumentSuggestion } from "./argument-typeahead.js";
+import {
+  createRemoteConnectionController,
+  type RemoteConnectionController,
+  type RemoteConnectionControllerOptions,
+  type RemoteConnectionSnapshot,
+} from "./remote-connection.js";
+import type { RemoteAuthFlow } from "./remote-auth.js";
+import { describeRemoteAuthCompletedMutations } from "./remote-auth-result.js";
+import { prepareRemoteTuiAccess } from "./remote-startup.js";
+import type { DevelopmentCredentialGate } from "#services/dev-client/credential-gate.js";
+import {
+  BOOT_DETECTIONS,
+  detectSetupIssues,
+  formatSetupIssuesLine,
+  normalizeLocalModelEndpoint,
+  type BootDetection,
+  type BootDetectionContext,
+  type SetupIssue,
+} from "./setup-issues.js";
+import type { SetupFlowRenderer } from "./setup-flow.js";
+import type { TraceViewerRenderer } from "./traces/trace-viewer-session.js";
+import type { RemoteDevelopmentTarget } from "./target.js";
+import type { LogDisplayMode, TuiDisplayOptions } from "./types.js";
+import { TerminalRenderer, type TerminalInput, type TerminalOutput } from "./terminal-renderer.js";
+import type { VercelStatusEffect, VercelStatusSnapshot } from "./vercel-status.js";
+import {
+  createMcpConnectionStatusTracker,
+  type McpConnectionProbe,
+  type McpConnectionStatusTracker,
+} from "./mcp-connection-status.js";
+import type { DevDiagnostics } from "../diagnostics.js";
+import type { CommandLifecycle } from "../../shutdown.js";
+
+const idleRuntimeArtifactPollMs = 500;
+const idleChatGptAuthPollMs = 5_000;
+
+export type AgentTUISessionOptions = {
+  title?: string;
+  /**
+   * Text to seed the composer's draft with before the user types. Set by the
+   * runner for the first prompt when `corax dev --input` is used.
+   */
+  initialDraft?: string;
+  /** Closes the composer without discarding its draft. */
+  signal?: AbortSignal;
+};
+
+/** One user action from the composer. */
+export type AgentTUIInput =
+  /** A message or slash command. Messages sent while work runs steer it. */
+  | { type: "submit"; text: string }
+  /** `Esc` or `Ctrl+C` while work runs. */
+  | { type: "cancel" }
+  /** `Ctrl+C` again while cancellation is pending: stop following the turn. */
+  | { type: "interrupt" };
+
+/** Where a prompt sits among the requests being answered, and who asked, when that helps. */
+export type AgentTUIInputContext = {
+  /** 1-based position among the requests answered in a row; the total grows as more arrive. */
+  position?: { index: number; total: number };
+  /** The task that asked, named as its transcript lines are. */
+  requester?: string;
+  /** The task whose run asked; the renderer names it as its task lines do. */
+  taskId?: string;
+};
+
+export type AgentTUIToolApprovalRequest = {
+  approvalId: string;
+  toolCallId: string;
+  toolName: string;
+  /** The server's question for this approval, such as `Approve Deploy release?`. */
+  prompt: string;
+  input: unknown;
+  context?: AgentTUIInputContext;
+};
+
+export type AgentTUIToolApprovalResponse = {
+  approved: boolean;
+  reason?: string;
+};
+
+export type AgentTUIInputOption = {
+  id: string;
+  label: string;
+  description?: string;
+  style?: "primary" | "danger" | "default";
+};
+
+export type AgentTUIInputQuestion = {
+  requestId: string;
+  prompt: string;
+  display: "select" | "text";
+  options?: ReadonlyArray<AgentTUIInputOption>;
+  allowFreeform?: boolean;
+  context?: AgentTUIInputContext;
+};
+
+export type AgentTUIInputQuestionResponse = {
+  optionId?: string;
+  text?: string;
+};
+
+export type AgentTUIAgentHeader = {
+  name: string;
+  serverUrl: string;
+  info?: AgentInfoResult;
+  localDevelopment?: boolean;
+};
+
+export type AgentTUIRenderer = {
+  /**
+   * Commits the startup card to the transcript before the first prompt and
+   * refreshes it after local dev artifact changes. Optional — renderers
+   * without a header simply skip it.
+   */
+  renderAgentHeader?(header: AgentTUIAgentHeader): void;
+  /** Keeps preliminary connection diagnostics out of the startup presentation. */
+  setStartupPhase?(phase: "starting" | "connecting" | "updating" | undefined): void;
+  /**
+   * Commits a single informational line to the transcript. Used for session
+   * recovery and slash-command results. Optional.
+   */
+  renderNotice?(text: string): void;
+  /**
+   * Puts back a message whose turn was cancelled from outside this prompt, such as `/cancel` from
+   * another client, when the composer is empty. Optional.
+   */
+  restoreDraft?(text: string): void;
+  /**
+   * Commits the session boundary (`┌── Session restarted, clear context.`)
+   * when a dead session is replaced mid-conversation. The old conversation's
+   * transcript settles as shown; the next `renderConversation` starts fresh.
+   * Optional; renderers without it get the plain notice.
+   */
+  renderSessionBoundary?(): void;
+  /**
+   * Commits one development sandbox lifecycle line to the transcript.
+   * Optional so non-terminal renderers can ignore local prewarm progress.
+   */
+  renderSetupWarning?(text: string): void;
+  /** Clears the setup attention line once its issue is resolved. */
+  clearSetupWarning?(): void;
+  /** Commits the startup `/deploy` invocation to the transcript. */
+  renderCommandInvocation?(text: string): void;
+  finishCommand?(outcome: CommandPresentation): void;
+  choosePromptCommand?(commands: readonly PromptCommandSpec[]): Promise<string | undefined>;
+  showInfoPanel?(text: string): Promise<void>;
+  readonly setupFlow?: SetupFlowRenderer;
+  /**
+   * The renderer's full-screen local trace viewer, opened by `/traces`.
+   * The returned promise resolves when the user closes the viewer.
+   */
+  readonly traceViewer?: TraceViewerRenderer;
+  /**
+   * Reads the next composer action. Resolves `undefined` when `signal`
+   * aborts and rejects with an interrupt when the user leaves.
+   */
+  readInput?(options?: AgentTUISessionOptions): Promise<AgentTUIInput | undefined>;
+  /** Draws the session's transcript from one conversation snapshot. */
+  renderConversation?(view: AgentTUIConversationView): void;
+  /** Commits one error block, such as a message the session did not accept. */
+  renderError?(title: string, message: string): void;
+  /**
+   * Reports the server session id backing the conversation — pushed by the
+   * runner once a send is accepted, and overwritten when a later session's
+   * turn is accepted. Deliberately sticky across `/new` and interrupt
+   * recovery: the terminal renderer echoes the LAST session this TUI talked
+   * to in the parting line on exit, so an interrupted conversation (whose
+   * replacement session never ran a turn) can still be found again
+   * (`corax logs`, the session store). Optional.
+   */
+  setSessionId?(sessionId: string): void;
+  readToolApproval?(
+    request: AgentTUIToolApprovalRequest,
+    options?: AgentTUISessionOptions,
+  ): Promise<AgentTUIToolApprovalResponse>;
+  readInputQuestion?(
+    question: AgentTUIInputQuestion,
+    options?: AgentTUISessionOptions,
+  ): Promise<AgentTUIInputQuestionResponse | undefined>;
+  /**
+   * The log display mode currently in effect. Paired with
+   * {@link setLogDisplayMode}; both are absent on renderers that do not
+   * capture process output.
+   */
+  logDisplayMode?(): LogDisplayMode;
+  /**
+   * Switches which captured log sources (stdout/stderr) the transcript
+   * shows. Captured output is buffered regardless of mode, so a change
+   * applies retroactively: hiding removes already-rendered log lines from
+   * the transcript and showing restores buffered ones at their original
+   * positions. Used by the `/loglevel` command.
+   */
+  setLogDisplayMode?(mode: LogDisplayMode): void;
+  /**
+   * Commits any delayed local dev build errors immediately before dispatching
+   * a user prompt. Renderers without process-log capture ignore it.
+   */
+  flushDelayedDevBuildErrors?(): void;
+  /**
+   * Sets the workspace-scoped Vercel segment of the persistent bottom
+   * status line. Pushed by the runner at startup and after Vercel-related
+   * setup outcomes. Renderers without a status line ignore it.
+   */
+  setVercelStatus?(status: VercelStatusSnapshot): void;
+  /** Sets the remote deployment badge and its current connection/authentication state. */
+  setRemoteConnectionStatus?(status: RemoteConnectionSnapshot): void;
+  /**
+   * Clears the rendered transcript and resets per-conversation display
+   * state, leaving the UI interactive on a fresh screen. Used by the
+   * `/new` command to start a new session with a clean slate.
+   */
+  reset?(): void;
+  /**
+   * Tears down interactive mode and restores the terminal when the runner's
+   * lifecycle ends.
+   */
+  shutdown?(): void;
+  requestInterrupt?(): void;
+  exitRequested?(): boolean;
+};
+
+export interface PromptCommandHandlerContext {
+  readonly renderer: AgentTUIRenderer;
+  readonly title: string;
+  /** Provider entry authorized by confirmed boot-time model-access evidence. */
+  readonly initialModelStep?: "provider";
+  readonly onOnboardingScreen?: (input: OnboardingScreenEvent) => void;
+  /** Live ChatGPT identity shown only inside model configuration UI. */
+  readonly chatGptAccountLabel?: string;
+  /** Settles runtime changes before the setup panel releases the screen. */
+  readonly settleOutcome?: (outcome: PromptCommandOutcome) => Promise<PromptCommandOutcome>;
+  readonly withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
+  readonly disabledConnectionReasons?: Readonly<Record<string, string>>;
+}
+
+/** One atomic transcript decision for an invocation, including no-output commands. */
+export type CommandPresentation =
+  | { kind: "dismiss" }
+  | { kind: "result"; message?: string; summary?: string };
+
+/** What one handled slash command leaves behind for the runner to apply. */
+export interface PromptCommandOutcome {
+  /** Outcome line rendered under the echoed command; absent renders nothing. */
+  message?: string;
+  /** The command failed; completed and cancelled commands share the normal settled presentation. */
+  failed?: true;
+  /** Replaces the echoed invocation once the command settles. */
+  summary?: string;
+  /** Post-command work after setup settles. */
+  effect?: VercelStatusEffect | ModelAccessChange;
+  cancelled?: true;
+}
+
+export interface PromptCommandHandler {
+  handle(
+    command: Extract<PromptCommand, { type: "extension" }>,
+    context: PromptCommandHandlerContext,
+  ): Promise<PromptCommandOutcome | undefined>;
+}
+
+type TuiStartup = {
+  finish(): { draft: string; queuedPrompt: string | undefined };
+};
+
+export type CoraxTUIRunnerOptions = TuiDisplayOptions & {
+  /** Production TUI probe injected by the launcher; omitted in hermetic runners. */
+  probeMcpConnection?: McpConnectionProbe;
+  /** Configured client for the conversation's sessions and their subagent streams. */
+  client: Client;
+  renderer?: AgentTUIRenderer;
+  screen?: TerminalOutput;
+  userInput?: TerminalInput;
+  /**
+   * Formats a session error (a failed send — e.g. a transport failure or a
+   * Vercel Deployment Protection challenge) into the text rendered in the
+   * inline error region. Defaults to the error's message. Callers that know
+   * about transport-specific challenges (the `corax dev` glue) inject a richer
+   * formatter here.
+   */
+  formatTransportError?: (error: unknown) => string;
+  /**
+   * Local `corax dev` server URL. When present, normal prompts refresh the
+   * runtime artifacts after HMR so the next prompt uses the latest authored
+   * artifacts while retaining its logical session.
+   */
+  serverUrl?: string;
+  /** Absolute local application root; omitted for remote `--url` sessions. */
+  appRoot?: string;
+  /** Seeds the editable prompt buffer for the first prompt. */
+  initialInput?: string;
+  /** Explicit fresh-agent onboarding handoff from `corax init`. */
+  onboard?: boolean;
+  /** Reports timestamped steps and terminal result for fresh-agent onboarding. */
+  onOnboardingStep?: (input: CoraxCliSetupStepEvent) => void;
+  onOnboardingTerminal?: (input: CoraxCliSetupTerminalEvent) => void;
+  /** Handles non-core slash commands without adding feature branches to the runner. */
+  promptCommandHandler?: PromptCommandHandler;
+  /** Commands shown in discovery for this local or remote session. */
+  availablePromptCommands?: readonly PromptCommandSpec[];
+  /** Catalog entries available to inline `/model`, `/add`, and `/login` completion. */
+  argumentSuggestions?: (
+    command: ArgumentTypeaheadCommand,
+  ) => Promise<readonly PromptArgumentSuggestion[]>;
+  /** Gives setup subprocesses exclusive terminal and development-host ownership. */
+  withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
+  /** Remote target and mutable OIDC token source, when connected through `--url`. */
+  remote?: {
+    readonly target: RemoteDevelopmentTarget;
+    readonly credentials: DevelopmentCredentialGate;
+    readonly resolveOidcToken: NonNullable<RemoteConnectionControllerOptions["resolveOidcToken"]>;
+    readonly resolveDeployment: NonNullable<RemoteConnectionControllerOptions["resolveDeployment"]>;
+    /** Test seam for consented deployment access repair. */
+    readonly runAuthFlow?: RemoteAuthFlow;
+  };
+  /** Boot-time installation-state checks; defaults to the built-ins. */
+  bootDetections?: readonly BootDetection[];
+  /** Test seam for `/info`; defaults to the filesystem application inspector. */
+  inspectApplication?: typeof inspectApplication;
+  /** Reports phases from this runner's initial local-dev connection. */
+  onBootProgress?: DevBootProgressReporter;
+  /** Parent-owned diagnostics recorder; omitted for remote and test renderers. */
+  diagnostics?: DevDiagnostics;
+  lifecycle?: CommandLifecycle;
+  /** Editing-only startup state retained until the final agent header is ready to paint. */
+  startup?: TuiStartup;
+};
+
+export class CoraxTUIRunner {
+  readonly #client: Client;
+  /** Owns the conversation's sessions, root stream, turns, and subagent streams. */
+  readonly #store: CoraxAgentStore<TuiSessionData>;
+  readonly #renderer: AgentTUIRenderer;
+  readonly #diagnostics?: DevDiagnostics;
+  readonly #name: string;
+  readonly #formatTransportError: (error: unknown) => string;
+  readonly #runtimeArtifacts?: DevelopmentRuntimeArtifactRefresher;
+  readonly #serverUrl?: string;
+  readonly #appRoot?: string;
+  /** Seeds the first prompt's editable buffer. */
+  readonly #initialInput?: string;
+  readonly #startup?: TuiStartup;
+  #startupPrompt?: string;
+  /** Explicit fresh-agent onboarding handoff from `corax init`. */
+  readonly #onboard: boolean;
+  #reportedFirstResponse = false;
+  readonly #onOnboardingStep?: CoraxTUIRunnerOptions["onOnboardingStep"];
+  readonly #onOnboardingTerminal?: CoraxTUIRunnerOptions["onOnboardingTerminal"];
+  #startupActive = true;
+  readonly #promptCommandHandler?: PromptCommandHandler;
+  readonly #availablePromptCommands: readonly PromptCommandSpec[];
+  readonly #withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
+  readonly #remoteConnection?: RemoteConnectionController;
+  readonly #remoteAuthFlow?: RemoteAuthFlow;
+  readonly #bootDetections: readonly BootDetection[];
+  readonly #inspectApplication: typeof inspectApplication;
+  #onBootProgress?: DevBootProgressReporter;
+  /** Set when the run loop unwinds, so late refreshes cannot paint into a torn-down terminal. */
+  #disposed = false;
+  /** The message this TUI last sent, until its turn settles. */
+  #sentMessage?: string;
+  /** Whether this TUI asked to cancel the turn of {@link #sentMessage}. */
+  #cancelRequested = false;
+  #setupAttentionRevision = 0;
+  #agentInfoRevision = 0;
+  /** Cheap-and-local boot detection issues. */
+  #bootIssues: SetupIssue[] = [];
+  readonly #mcpConnectionStatus?: McpConnectionStatusTracker;
+  #agentInfo?: AgentInfoResult;
+  /** Closes the composer when something else needs the keyboard. */
+  #inputController?: AbortController;
+  /** Questions the user skipped; they stay open for the server to resolve. */
+  readonly #dismissedInputs = new Set<string>();
+  /** Registry setups queued by tool results on root or child streams. */
+  readonly #pendingRegistrySetups: string[] = [];
+  #activeRegistrySetup?: string;
+  /** Tool calls whose registry handoff was already queued. */
+  readonly #handledHandoffs = new Set<string>();
+  /** The last session error shown, so each renders once. */
+  #reportedError?: Error;
+  /** Failure cascades already recorded in diagnostics this turn. */
+  readonly #recordedFailures = new Set<string>();
+  readonly #recordedAgentToolFailures = new Set<string>();
+  readonly #lifecycle?: CommandLifecycle;
+
+  constructor(options: CoraxTUIRunnerOptions) {
+    this.#client = options.client;
+    if (options.lifecycle !== undefined) this.#lifecycle = options.lifecycle;
+    if (options.diagnostics !== undefined) this.#diagnostics = options.diagnostics;
+    this.#renderer = createRenderer(options);
+    this.#store = new CoraxAgentStore({
+      client: options.client,
+      followSubagents: true,
+      reducer: tuiSessionReducer,
+    });
+    this.#store.setCallbacks({
+      onEvent: (event) => this.#recordDiagnostics(event),
+      onSessionChange: (session) => {
+        if (session !== undefined) this.#renderer.setSessionId?.(session.sessionId);
+      },
+      prepareSend: (input) => this.#prepareSend(input),
+    });
+    this.#name = options.name ?? "corax";
+    this.#withExclusiveTerminal = options.withExclusiveTerminal;
+    this.#formatTransportError = options.formatTransportError ?? toErrorMessage;
+    if (options.initialInput !== undefined) this.#initialInput = options.initialInput;
+    if (options.startup !== undefined) this.#startup = options.startup;
+    this.#onboard = options.onboard === true;
+    this.#onOnboardingStep = options.onOnboardingStep;
+    this.#onOnboardingTerminal = options.onOnboardingTerminal;
+    if (options.appRoot !== undefined) {
+      this.#appRoot = options.appRoot;
+      if (options.probeMcpConnection !== undefined) {
+        this.#mcpConnectionStatus = createMcpConnectionStatusTracker({
+          onChange: () => {},
+          probe: options.probeMcpConnection,
+        });
+      }
+    }
+    if (options.promptCommandHandler !== undefined) {
+      this.#promptCommandHandler = options.promptCommandHandler;
+    }
+    this.#availablePromptCommands = options.availablePromptCommands ?? PROMPT_COMMANDS;
+    if (options.remote !== undefined) {
+      this.#remoteAuthFlow = options.remote.runAuthFlow;
+      this.#remoteConnection = createRemoteConnectionController({
+        client: this.#client,
+        credentials: options.remote.credentials,
+        target: options.remote.target,
+        onChange: (snapshot) => this.#renderer.setRemoteConnectionStatus?.(snapshot),
+        resolveOidcToken: options.remote.resolveOidcToken,
+        resolveDeployment: options.remote.resolveDeployment,
+      });
+    }
+    this.#bootDetections = options.bootDetections ?? BOOT_DETECTIONS;
+    this.#inspectApplication = options.inspectApplication ?? inspectApplication;
+    if (options.onBootProgress !== undefined) this.#onBootProgress = options.onBootProgress;
+    if (options.serverUrl !== undefined) this.#serverUrl = options.serverUrl;
+    if (options.serverUrl !== undefined && options.remote === undefined) {
+      this.#runtimeArtifacts = createDevelopmentRuntimeArtifactRefresher({
+        serverUrl: options.serverUrl,
+      });
+    }
+  }
+
+  /**
+   * Fetches the agent inspection payload (best-effort) and renders the startup
+   * header. Never throws: a missing or unauthorized `/corax/v1/info` simply
+   * yields a header without the agent's configuration detail.
+   */
+  async #loadInitialAgentInfo(): Promise<void> {
+    const serverUrl = this.#serverUrl;
+    if (serverUrl === undefined) {
+      this.#reportBeforeFirstPaint();
+      if (!this.#onboard) await this.#renderSetupIssues(undefined);
+      return;
+    }
+
+    let info: AgentInfoResult | undefined;
+    if (this.#remoteConnection !== undefined) {
+      const connection = await this.#remoteConnection.check();
+      if (connection.state === "ready") info = connection.info;
+    } else {
+      const client = this.#client;
+      if (client !== undefined) {
+        try {
+          const probe = await devBootPhase(
+            "connecting to agent",
+            () => probeAgentInfo({ client, timeoutMs: 2000 }),
+            this.#onBootProgress,
+          );
+          if (probe.kind === "ready") info = probe.info;
+        } catch {
+          info = undefined;
+        }
+      }
+    }
+    this.#reportBeforeFirstPaint();
+    const headerInfo = this.#replaceAgentInfo(info);
+    if (!this.#onboard) await this.#renderSetupIssues(headerInfo);
+  }
+
+  #finishStartup(): string | undefined {
+    const startup = this.#startup?.finish();
+    this.#startupPrompt = startup?.queuedPrompt;
+    return startup?.draft ?? this.#initialInput;
+  }
+
+  #replaceAgentInfo(info: AgentInfoResult | undefined): AgentInfoResult | undefined {
+    const headerInfo =
+      this.#appRoot === undefined ? info : normalizeLocalModelEndpoint(info, process.env);
+    this.#agentInfo = headerInfo;
+    const serverUrl = this.#serverUrl;
+    if (serverUrl === undefined || this.#startupActive) return headerInfo;
+
+    const header: AgentTUIAgentHeader = {
+      name: this.#name,
+      serverUrl,
+      localDevelopment: this.#appRoot !== undefined,
+    };
+    if (headerInfo !== undefined) header.info = headerInfo;
+    this.#renderer.renderAgentHeader?.(header);
+    return headerInfo;
+  }
+
+  #reportBeforeFirstPaint(): void {
+    const report = this.#onBootProgress;
+    this.#onBootProgress = undefined;
+    report?.({ type: "before-first-paint" });
+  }
+
+  async run() {
+    const onStop = () => this.#renderer.requestInterrupt?.();
+    if (this.#lifecycle?.signal.aborted === true) onStop();
+    else this.#lifecycle?.signal.addEventListener("abort", onStop, { once: true });
+    const unsubscribe = this.#store.subscribe(() => this.#renderSnapshot());
+    attachCoraxAgentStore(this.#store);
+    try {
+      await this.#run();
+    } catch (error) {
+      if (!isInterruptedError(error)) throw error;
+    } finally {
+      this.#lifecycle?.signal.removeEventListener("abort", onStop);
+      this.#disposed = true;
+      this.#inputController?.abort();
+      unsubscribe();
+      detachCoraxAgentStore(this.#store);
+      // Restore captured stdout/stderr before a fatal error reaches the CLI.
+      this.#renderer.shutdown?.();
+      this.#mcpConnectionStatus?.dispose();
+      this.#remoteConnection?.dispose();
+    }
+  }
+
+  async #run() {
+    const title = this.#name;
+    let prompt: string | undefined;
+    this.#renderer.setStartupPhase?.("starting");
+    await this.#loadInitialAgentInfo();
+    this.#mcpConnectionStatus?.refresh();
+
+    const initialAgentOnboarding =
+      (this.#onboard ||
+        (this.#agentInfo?.agent.model.endpoint?.kind === "gateway" &&
+          !this.#agentInfo.agent.model.endpoint.connected)) &&
+      this.#appRoot !== undefined &&
+      this.#promptCommandHandler !== undefined &&
+      this.#renderer.setupFlow !== undefined;
+    let startupOutcome: PromptCommandOutcome | undefined;
+    if (this.#remoteConnection !== undefined && this.#renderer.setupFlow !== undefined) {
+      const access = await prepareRemoteTuiAccess({
+        connection: this.#remoteConnection,
+        renderer: this.#renderer.setupFlow,
+        signal: this.#lifecycle?.signal,
+        runAuthFlow: this.#remoteAuthFlow,
+      });
+      if (access?.kind === "authenticated") {
+        const connection = this.#remoteConnection.current().connection;
+        if (connection.state === "ready") this.#replaceAgentInfo(connection.info);
+      } else if (access?.kind === "failed" || access?.kind === "unavailable") {
+        startupOutcome = {
+          failed: true,
+          message: access.kind === "failed" ? access.message : access.failure.message,
+        };
+      } else if (access?.kind === "cancelled") {
+        startupOutcome = { cancelled: true };
+        if (access.completedMutations.length > 0) {
+          startupOutcome.message = `Completed before cancellation: ${describeRemoteAuthCompletedMutations(access.completedMutations).join(", ")}.`;
+        }
+      }
+    }
+    if (initialAgentOnboarding) {
+      this.#renderer.setStartupPhase?.("connecting");
+      startupOutcome = await this.#runInitialAgentOnboarding(title);
+    }
+
+    let initialDraft = this.#finishStartup();
+    if (startupOutcome?.cancelled || startupOutcome?.failed) {
+      initialDraft = [this.#startupPrompt, initialDraft].filter(Boolean).join("\n\n") || undefined;
+    } else {
+      prompt = this.#startupPrompt;
+    }
+    this.#startupActive = false;
+    this.#replaceAgentInfo(this.#agentInfo);
+    this.#paintSetupAttention();
+    this.#renderer.setStartupPhase?.(undefined);
+    if (!initialAgentOnboarding || startupOutcome?.cancelled || startupOutcome?.failed) {
+      if (startupOutcome?.message !== undefined)
+        this.#finishCommand({ kind: "result", message: startupOutcome.message });
+    }
+
+    // One loop for everything that takes the keyboard. The store streams the
+    // session throughout, so the composer stays open while work runs.
+    while (this.#lifecycle?.signal.aborted !== true && this.#renderer.exitRequested?.() !== true) {
+      if (this.#store.snapshot.data.sessionFailed) {
+        this.#replaceSession();
+        continue;
+      }
+      // Answering first lets the agent continue while setup owns the terminal.
+      if (this.#answerableInputs().length > 0) {
+        await this.#answerInputs(title);
+        continue;
+      }
+      // Setup takes the terminal, so it waits for the session to settle.
+      const registrySetup = isWorking(this.#store.snapshot.status)
+        ? undefined
+        : this.#pendingRegistrySetups.shift();
+      if (registrySetup !== undefined) {
+        this.#activeRegistrySetup = registrySetup;
+        try {
+          await this.#openRegistrySetup(registrySetup);
+        } finally {
+          this.#activeRegistrySetup = undefined;
+        }
+        continue;
+      }
+      if (prompt === undefined) {
+        const input = await this.#readInput({ title, initialDraft });
+        initialDraft = undefined;
+        if (input === undefined) continue;
+        if (input.type === "cancel") {
+          this.#cancelTurn();
+          continue;
+        }
+        if (input.type === "interrupt") {
+          this.#replaceSession(
+            "Stopped following the turn and started a new session. Earlier context was cleared; the interrupted turn may still be running on the server.",
+          );
+          continue;
+        }
+        prompt = input.text;
+      }
+      const text = prompt;
+      prompt = undefined;
+      const command = parsePromptCommand(text);
+      if (command === null) {
+        this.#submitMessage(text);
+        continue;
+      }
+      const outcome = await this.#runCommand(command, title);
+      if (outcome === "exit") return;
+      if (outcome !== undefined) initialDraft = outcome.draft;
+    }
+  }
+
+  /** Runs one slash command; returns `"exit"` or a draft for the next prompt. */
+  async #runCommand(
+    command: PromptCommand,
+    title: string,
+  ): Promise<"exit" | { draft: string } | undefined> {
+    switch (command.type) {
+      case "exit":
+        this.#finishCommand({ kind: "dismiss" });
+        this.#lifecycle?.requestStop();
+        return "exit";
+      case "cancel": {
+        const working = isWorking(this.#store.snapshot.status);
+        if (working) this.#cancelTurn();
+        this.#finishCommand({
+          kind: "result",
+          summary: working ? "Cancellation requested" : "No active turn to cancel",
+        });
+        return;
+      }
+      case "new":
+        await this.#resetSession();
+        return;
+      case "compact":
+        await this.#runSessionCommand({
+          absent: "No active session to compact",
+          accepted: "Compaction requested",
+          failed: "Couldn't compact the session",
+          invoke: () => this.#store.compact(),
+        });
+        return;
+      case "clear":
+        await this.#runSessionCommand({
+          absent: "No active session to clear",
+          accepted: "Session context cleared",
+          failed: "Couldn't clear the session",
+          invoke: () => this.#store.clear(),
+        });
+        return;
+      // Help renders locally; unlike extension commands it must work even
+      // without a prompt-command handler (e.g. remote --url sessions).
+      case "help": {
+        if (this.#renderer.choosePromptCommand === undefined) {
+          this.#finishCommand({
+            kind: "result",
+            message: formatPromptCommandHelp(this.#availablePromptCommands),
+          });
+          return;
+        }
+        const selected = await this.#renderer.choosePromptCommand(this.#availablePromptCommands);
+        return selected === undefined ? undefined : { draft: selected };
+      }
+      case "info":
+        await this.#showApplicationInfo();
+        return;
+      // Like /help, /loglevel renders locally: it adjusts the renderer's own
+      // log filter, so it works without a prompt-command handler.
+      case "loglevel": {
+        const outcome = this.#applyLogLevelCommand(command.argument);
+        const error =
+          outcome.startsWith("/loglevel is not available") ||
+          outcome.startsWith("Unknown log level");
+        this.#finishCommand(
+          error ? { kind: "result", message: outcome } : { kind: "result", summary: outcome },
+        );
+        return;
+      }
+      // /traces is renderer-local too: the viewer reads the local spool from
+      // disk and owns the screen until the user closes it.
+      case "traces":
+        await this.#openTraceViewer(command.argument);
+        return;
+      case "extension":
+        await this.#executeExtensionCommand(command, title, { trigger: "command" });
+        return;
+    }
+  }
+
+  /** Sends a message; while work runs it steers the active turn instead. */
+  #submitMessage(message: string): void {
+    const snapshot = this.#store.snapshot;
+    const steering = isWorking(snapshot.status);
+    this.#sentMessage = message;
+    if (!steering) this.#cancelRequested = false;
+    const input: SendTurnPayload = steering
+      ? { message, turnPolicy: "steer" }
+      : snapshot.session === undefined
+        ? { message }
+        : { message, turnPolicy: "queue" };
+    void this.#store.send(input).catch((error: unknown) => {
+      if (this.#disposed || isAbortError(error)) return;
+      this.#renderSendError(steering ? "Steering failed" : "Error", error);
+    });
+  }
+
+  /** Refreshes local dev artifacts so a new turn runs the latest authored code. */
+  async #prepareSend(input: SendTurnPayload): Promise<SendTurnPayload> {
+    // A steered message joins the running turn, which keeps its artifacts.
+    if (input.turnPolicy === "steer") return input;
+    if (this.#runtimeArtifacts !== undefined) {
+      await this.#runtimeArtifacts.refresh({
+        inputResponses: input.inputResponses,
+        message: typeof input.message === "string" ? input.message : undefined,
+        onRuntimeArtifactsChanged: () => this.#handleRuntimeArtifactsChanged(),
+      });
+    }
+    if (input.message !== undefined) this.#renderer.flushDelayedDevBuildErrors?.();
+    return input;
+  }
+
+  #renderSnapshot(): void {
+    const snapshot = this.#store.snapshot;
+    this.#renderer.renderConversation?.(
+      conversationView(snapshot, this.#appRoot === undefined ? undefined : localFailureHint),
+    );
+    this.#reportSessionError(snapshot.error, snapshot.data.sessionFailed);
+    this.#recordAgentToolFailures(snapshot.conversation);
+    this.#reportFirstResponse(snapshot.conversation);
+    this.#queueRegistryHandoffs(snapshot.conversation);
+    this.#restoreCancelledMessage(snapshot.conversation);
+    if (
+      snapshot.data.sessionFailed ||
+      this.#answerableInputs().length > 0 ||
+      (!isWorking(snapshot.status) && this.#pendingRegistrySetups.length > 0)
+    ) {
+      this.#inputController?.abort();
+    }
+  }
+
+  /** A turn cancelled from outside this prompt hands its message back instead of losing it. */
+  #restoreCancelledMessage(conversation: ConversationState): void {
+    const sent = this.#sentMessage;
+    if (sent === undefined) return;
+    const message = conversation.messages.findLast((candidate) => candidate.role === "user");
+    const turnId = message?.metadata?.turnId;
+    if (message === undefined || turnId === undefined || userText(message) !== sent) return;
+    const status = conversation.turns[turnId]?.status;
+    if (status === undefined || status === "active") return;
+    this.#sentMessage = undefined;
+    if (status === "cancelled" && !this.#cancelRequested) this.#renderer.restoreDraft?.(sent);
+  }
+
+  /** Session failures render from the conversation; other errors get one block each. */
+  #reportSessionError(error: Error | undefined, sessionFailed: boolean): void {
+    if (error === undefined || error === this.#reportedError) return;
+    this.#reportedError = error;
+    if (sessionFailed) return;
+    // A stranded session is a property of that session, not of the connection.
+    if (!this.#renderStrandedSession(error)) {
+      this.#remoteConnection?.reportFailure(error);
+      this.#renderer.renderError?.("Error", this.#formatTransportError(error));
+    }
+  }
+
+  #renderSendError(title: string, error: unknown): void {
+    if (this.#renderStrandedSession(error)) return;
+    this.#renderer.renderError?.(title, this.#formatTransportError(error));
+  }
+
+  #strandedSessionNotice(error: unknown): string | undefined {
+    return formatStrandedSessionNotice(error, {
+      localServer: this.#appRoot !== undefined,
+      sessionId: this.#store.snapshot.session?.sessionId,
+    });
+  }
+
+  /** Renders a stranded-session notice; false when `error` is anything else. */
+  #renderStrandedSession(error: unknown): boolean {
+    const notice = this.#strandedSessionNotice(error);
+    if (notice === undefined) return false;
+    this.#renderer.renderError?.("Session stranded", notice);
+    return true;
+  }
+
+  #reportFirstResponse(conversation: ConversationState): void {
+    if (!this.#onboard || this.#reportedFirstResponse) return;
+    const responded = conversation.messages.some(
+      (message) =>
+        message.role === "assistant" &&
+        message.parts.some((part) => part.type === "text" && part.text.length > 0),
+    );
+    if (!responded) return;
+    this.#reportedFirstResponse = true;
+    this.#onOnboardingStep?.({ flow: "onboarding", step: "first_response" });
+  }
+
+  /** Open requests the user can answer now, including while other work runs. */
+  #answerableInputs(): readonly ConversationInput[] {
+    return openConversationInputs(this.#store.snapshot.conversation).filter(
+      (input) => !this.#dismissedInputs.has(input.request.requestId),
+    );
+  }
+
+  /**
+   * Prompts for open requests one at a time and sends each answer as it is given, so an agent
+   * waiting on one answer resumes without waiting for the rest.
+   */
+  async #answerInputs(title: string): Promise<void> {
+    for (let answered = 0; ; answered += 1) {
+      const inputs = this.#answerableInputs();
+      const input = inputs[0];
+      if (input === undefined) return;
+      const context = inputContext(input, answered + 1, answered + inputs.length);
+      const response = await this.#readInputResponse(input.request, context, title);
+      if (response === undefined) {
+        // A skipped question stays open; the server decides whether the
+        // user's next message answers, dismisses, or leaves it.
+        this.#dismissedInputs.add(input.request.requestId);
+        continue;
+      }
+      void this.#store.send({ inputResponses: [response] }).catch((error: unknown) => {
+        if (this.#disposed || isAbortError(error)) return;
+        this.#renderSendError("Error", error);
+      });
+    }
+  }
+
+  async #readInputResponse(
+    request: InputRequest,
+    context: AgentTUIInputContext | undefined,
+    title: string,
+  ): Promise<InputResponse | undefined> {
+    if (request.kind === "tool-approval") {
+      if (!this.#renderer.readToolApproval) {
+        throw new Error(
+          "Tool approval was requested, but the renderer does not support tool approval input.",
+        );
+      }
+      const response = await this.#renderer.readToolApproval(
+        toAgentTUIToolApprovalRequest(request, context),
+        { title },
+      );
+      return { requestId: request.requestId, optionId: response.approved ? "approve" : "cancel" };
+    }
+    if (!this.#renderer.readInputQuestion) {
+      throw new Error(
+        "An interactive question was requested, but the renderer does not support input questions.",
+      );
+    }
+    const response = await this.#renderer.readInputQuestion(
+      toAgentTUIInputQuestion(request, context),
+      { title },
+    );
+    if (response === undefined) return undefined;
+    const inputResponse: InputResponse = { requestId: request.requestId };
+    if (response.optionId !== undefined) inputResponse.optionId = response.optionId;
+    if (response.text !== undefined) inputResponse.text = response.text;
+    return inputResponse;
+  }
+
+  /**
+   * Starts a fresh session after the current one ended or was abandoned. The
+   * transcript stays on screen; server-side context is gone with the old
+   * session.
+   */
+  #replaceSession(notice?: string): void {
+    if (this.#renderer.renderSessionBoundary !== undefined) {
+      this.#renderer.renderSessionBoundary();
+    } else if (notice === undefined) {
+      this.#renderer.renderNotice?.(
+        "Session ended — started a new session. Earlier context was cleared.",
+      );
+    }
+    if (notice !== undefined) this.#renderer.renderNotice?.(notice);
+    this.#resetConversation();
+  }
+
+  #resetConversation(): void {
+    this.#store.reset();
+    this.#clearRunnerState();
+  }
+
+  #clearRunnerState(): void {
+    this.#dismissedInputs.clear();
+    this.#handledHandoffs.clear();
+    this.#recordedFailures.clear();
+    this.#runtimeArtifacts?.clear();
+  }
+
+  /** Cancels the running turn without holding the composer; the store waits for its turn ID. */
+  #cancelTurn(): void {
+    this.#cancelRequested = true;
+    void this.#store.cancel().catch((error: unknown) => {
+      this.#renderer.renderNotice?.(`Couldn't cancel the turn: ${toErrorMessage(error)}`);
+    });
+  }
+
+  /** Runs a session mutation and gives every control command one completion policy. */
+  async #runSessionCommand(input: {
+    readonly absent: string;
+    readonly accepted: string;
+    readonly failed: string;
+    readonly invoke: () => Promise<{ status: string }>;
+  }): Promise<void> {
+    if (this.#store.snapshot.session === undefined) {
+      this.#finishCommand({ kind: "result", summary: input.absent });
+      return;
+    }
+    try {
+      const result = await input.invoke();
+      if (result.status !== "accepted") {
+        this.#finishCommand({ kind: "result", summary: input.absent });
+        return;
+      }
+      this.#finishCommand({ kind: "result", summary: input.accepted });
+    } catch (error) {
+      this.#finishCommand({
+        kind: "result",
+        message: this.#strandedSessionNotice(error) ?? toErrorMessage(error),
+        summary: input.failed,
+      });
+    }
+  }
+
+  /** Retires the durable session before clearing the local conversation view. */
+  async #resetSession(): Promise<void> {
+    try {
+      await this.#store.retire();
+    } catch (error) {
+      this.#finishCommand({
+        kind: "result",
+        message: `Couldn't reset the session: ${toErrorMessage(error)}`,
+      });
+      return;
+    }
+    this.#clearRunnerState();
+    this.#renderer.reset?.();
+    this.#finishCommand({ kind: "dismiss" });
+  }
+
+  /**
+   * Reads the composer, closing it when a request or setup needs the keyboard.
+   * Resolves `undefined` only for that runner-owned close; a renderer that
+   * ends input on its own ends the session.
+   */
+  async #readInput(options: AgentTUISessionOptions): Promise<AgentTUIInput | undefined> {
+    if (!this.#renderer.readInput) {
+      throw new Error("The renderer does not support prompt input.");
+    }
+    const controller = new AbortController();
+    this.#inputController = controller;
+    try {
+      const input = await this.#withIdleRefresh(
+        this.#renderer.readInput({ ...options, signal: controller.signal }),
+      );
+      if (input === undefined && !controller.signal.aborted) throw interruptedError();
+      return input;
+    } finally {
+      if (this.#inputController === controller) this.#inputController = undefined;
+    }
+  }
+
+  /** Polls local dev artifacts while the composer is open, so HMR stays current. */
+  async #withIdleRefresh<T>(prompt: Promise<T>): Promise<T> {
+    const runtimeArtifacts = this.#runtimeArtifacts;
+    if (runtimeArtifacts === undefined) {
+      return await prompt;
+    }
+
+    let stopped = false;
+    let refreshing = false;
+    let inFlightRefresh: Promise<void> | undefined;
+    let agentInfoRefreshPending = false;
+    let lastChatGptAuthRefresh = 0;
+    const refresh = async () => {
+      if (stopped || refreshing) {
+        return;
+      }
+
+      refreshing = true;
+      try {
+        await runtimeArtifacts.refreshIdle({
+          onRuntimeArtifactsChanged: () => this.#handleRuntimeArtifactsChanged(),
+        });
+        if (
+          this.#appRoot !== undefined &&
+          this.#agentInfo === undefined &&
+          !agentInfoRefreshPending
+        ) {
+          agentInfoRefreshPending = true;
+          void this.#refreshAgentInfo().finally(() => {
+            agentInfoRefreshPending = false;
+          });
+        }
+        const endpoint = this.#agentInfo?.agent.model.endpoint;
+        const shouldRefreshChatGptAuth =
+          endpoint?.kind === "chatgpt" &&
+          (endpoint.state === "signed-out" || endpoint.state === "reauth-required");
+        const now = Date.now();
+        if (shouldRefreshChatGptAuth && now - lastChatGptAuthRefresh >= idleChatGptAuthPollMs) {
+          lastChatGptAuthRefresh = now;
+          void this.#refreshAgentInfo();
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const startRefresh = () => {
+      if (stopped || refreshing) {
+        return;
+      }
+
+      const nextRefresh = refresh().finally(() => {
+        if (inFlightRefresh !== nextRefresh) {
+          return;
+        }
+        inFlightRefresh = undefined;
+      });
+      inFlightRefresh = nextRefresh;
+    };
+
+    startRefresh();
+    const timer = setInterval(() => {
+      startRefresh();
+    }, idleRuntimeArtifactPollMs);
+    timer.unref?.();
+
+    try {
+      return await prompt;
+    } finally {
+      stopped = true;
+      clearInterval(timer);
+      await inFlightRefresh;
+    }
+  }
+
+  /** Queues setup for registry items whose install needs the terminal. */
+  #queueRegistryHandoffs(conversation: ConversationState): void {
+    if (this.#appRoot === undefined) return;
+    for (const { callId, address } of registryHandoffs(conversation)) {
+      if (this.#handledHandoffs.has(callId)) continue;
+      this.#handledHandoffs.add(callId);
+      if (this.#activeRegistrySetup === address || this.#pendingRegistrySetups.includes(address)) {
+        continue;
+      }
+      this.#pendingRegistrySetups.push(address);
+    }
+  }
+
+  async #openRegistrySetup(address: string): Promise<void> {
+    this.#renderer.renderCommandInvocation?.(`/add ${address}`);
+    await this.#executeExtensionCommand(
+      { type: "extension", name: "add", argument: address },
+      "Add to your agent",
+      { trigger: "command" },
+    );
+  }
+
+  async #renderSetupIssues(info: AgentInfoResult | undefined): Promise<void> {
+    if (this.#appRoot === undefined) return;
+    const context: BootDetectionContext = {
+      appRoot: this.#appRoot,
+      env: process.env,
+    };
+    if (info !== undefined) context.info = info;
+    this.#bootIssues = await detectSetupIssues(context, this.#bootDetections);
+    if (this.#renderer.renderSetupWarning === undefined) return;
+    this.#paintSetupAttention();
+  }
+
+  /** Repaints local setup issues, or clears the attention line. */
+  #paintSetupAttention(): void {
+    if (this.#startupActive) return;
+    const issues = this.#bootIssues;
+    if (issues.length > 0) {
+      this.#renderer.renderSetupWarning?.(formatSetupIssuesLine(issues));
+    } else {
+      this.#renderer.clearSetupWarning?.();
+    }
+  }
+
+  /**
+   * Re-evaluates the attention line after a setup command changed local state,
+   * so resolved model or connection issues do not linger in the prompt.
+   */
+  async #refreshSetupAttention(info: AgentInfoResult | undefined): Promise<void> {
+    const appRoot = this.#appRoot;
+    if (appRoot === undefined) return;
+    if (this.#renderer.renderSetupWarning === undefined) return;
+    const revision = ++this.#setupAttentionRevision;
+    const context: BootDetectionContext = { appRoot, env: process.env };
+    if (info !== undefined) context.info = info;
+    try {
+      const issues = await detectSetupIssues(context, this.#bootDetections);
+      if (this.#disposed || revision !== this.#setupAttentionRevision) return;
+      this.#bootIssues = issues;
+      this.#paintSetupAttention();
+    } catch {
+      return;
+    }
+  }
+
+  #finishCommand(outcome: CommandPresentation): void {
+    if (this.#renderer.finishCommand !== undefined) {
+      this.#renderer.finishCommand(outcome);
+      return;
+    }
+    if (outcome.kind === "result") {
+      const notice = [outcome.summary, outcome.message].filter(Boolean).join("\n");
+      if (notice !== "") this.#renderer.renderNotice?.(notice);
+    }
+  }
+
+  async #handleExtensionCommand(
+    command: Extract<PromptCommand, { type: "extension" }>,
+    input: Pick<PromptCommandHandlerContext, "initialModelStep" | "title">,
+  ): Promise<PromptCommandOutcome | undefined> {
+    const handler = this.#promptCommandHandler;
+    if (handler === undefined)
+      return { message: `/${command.name} is not available in this session.` };
+
+    const endpoint = this.#agentInfo?.agent.model.endpoint;
+    const baseContext: PromptCommandHandlerContext = {
+      ...input,
+      renderer: this.#renderer,
+      settleOutcome: (outcome) => this.#settleCommandOutcome(outcome),
+      chatGptAccountLabel:
+        endpoint?.kind === "chatgpt" && endpoint.state === "ready"
+          ? endpoint.accountLabel
+          : undefined,
+      withExclusiveTerminal: this.#withExclusiveTerminal,
+    };
+    const disabledConnectionReasons = this.#mcpConnectionStatus?.current();
+    const context: PromptCommandHandlerContext =
+      disabledConnectionReasons !== undefined && Object.keys(disabledConnectionReasons).length > 0
+        ? { ...baseContext, disabledConnectionReasons }
+        : baseContext;
+    return await handler.handle(command, context);
+  }
+
+  async #applyCommandEffect(effect: PromptCommandOutcome["effect"]): Promise<void> {
+    if (effect?.kind === "model-access-changed") {
+      await this.#refreshModelAccess(effect);
+      return;
+    }
+    if (effect === undefined) return;
+
+    void this.#refreshSetupAttention(this.#agentInfo);
+  }
+
+  async #settleCommandOutcome(outcome: PromptCommandOutcome): Promise<PromptCommandOutcome> {
+    if (outcome.effect === undefined) return outcome;
+    const refreshTimer =
+      outcome.effect.kind === "model-access-changed" && outcome.effect.reload
+        ? setTimeout(() => {
+            if (this.#startupActive) this.#renderer.setStartupPhase?.("updating");
+            this.#renderer.setupFlow?.setStatus("Loading selected model…");
+          }, 150)
+        : undefined;
+    try {
+      await this.#applyCommandEffect(outcome.effect);
+      const { effect: _effect, ...settled } = outcome;
+      return settled;
+    } catch {
+      return {
+        failed: true,
+        message:
+          "Settings were saved, but the agent could not reload. Retry the command or restart corax dev.",
+      };
+    } finally {
+      clearTimeout(refreshTimer);
+    }
+  }
+
+  async #executeExtensionCommand(
+    command: Extract<PromptCommand, { type: "extension" }>,
+    title: string,
+    input: {
+      readonly trigger: "startup" | "command";
+      readonly initialModelStep?: "provider";
+      readonly onOnboardingScreen?: PromptCommandHandlerContext["onOnboardingScreen"];
+      readonly suppressSuccessfulTranscript?: true;
+      readonly suppressCancelledTranscript?: true;
+    },
+  ): Promise<PromptCommandOutcome | undefined> {
+    const pendingOutcome = await this.#handleExtensionCommand(command, { ...input, title });
+    const outcome =
+      pendingOutcome === undefined ? undefined : await this.#settleCommandOutcome(pendingOutcome);
+    const suppressTranscript =
+      (input.suppressSuccessfulTranscript === true && outcome?.failed !== true) ||
+      (input.suppressCancelledTranscript === true && outcome?.cancelled === true);
+    if (!suppressTranscript && input.trigger !== "startup") {
+      if (outcome === undefined) this.#finishCommand({ kind: "result" });
+      else
+        this.#finishCommand({ kind: "result", message: outcome.message, summary: outcome.summary });
+    }
+    this.#refreshHeaderFromRemoteConnection();
+    return outcome;
+  }
+
+  async #runInitialAgentOnboarding(title: string): Promise<PromptCommandOutcome | undefined> {
+    this.#onOnboardingStep?.({ flow: "onboarding", step: "model_provider" });
+    const outcome = await this.#executeExtensionCommand(
+      { type: "extension", name: "login", argument: "" },
+      title,
+      { trigger: "startup", initialModelStep: "provider" },
+    );
+    if (!outcome?.cancelled && outcome?.failed !== true)
+      this.#onOnboardingStep?.({ flow: "onboarding", step: "connection_ready" });
+    this.#onOnboardingTerminal?.({
+      flow: "onboarding",
+      step: "model_provider",
+      result: outcome?.cancelled ? "cancelled" : outcome?.failed === true ? "error" : "completed",
+    });
+    return outcome;
+  }
+
+  #refreshHeaderFromRemoteConnection(): void {
+    if (this.#startupActive) return;
+    const connection = this.#remoteConnection?.current().connection;
+    if (connection?.state !== "ready" || connection.info === this.#agentInfo) return;
+    this.#agentInfo = connection.info;
+    if (this.#serverUrl === undefined) return;
+    this.#renderer.renderAgentHeader?.({
+      info: connection.info,
+      name: this.#name,
+      serverUrl: this.#serverUrl,
+    });
+  }
+
+  /**
+   * Opens the renderer's trace viewer on the local spool. The viewer owns the
+   * screen until the user closes it; sessions without the capability (or
+   * without a local app root) get a one-line notice instead.
+   */
+  async #openTraceViewer(argument: string): Promise<void> {
+    if (this.#appRoot === undefined || this.#renderer.traceViewer === undefined) {
+      this.#finishCommand({
+        kind: "result",
+        message: "/traces is only available in local dev sessions.",
+      });
+      return;
+    }
+    try {
+      await this.#renderer.traceViewer.open({
+        appRoot: this.#appRoot,
+        sessionId: this.#store.snapshot.session?.sessionId,
+        reference: argument === "" ? undefined : argument,
+      });
+    } catch (error) {
+      if (isInterruptedError(error)) return;
+      throw error;
+    } finally {
+      this.#finishCommand({ kind: "dismiss" });
+    }
+  }
+
+  async #showApplicationInfo(): Promise<void> {
+    const appRoot = this.#appRoot;
+    if (appRoot === undefined) {
+      this.#finishCommand({
+        kind: "result",
+        message: "/info is only available in local dev sessions.",
+      });
+      return;
+    }
+    try {
+      const info = renderApplicationInfo(await this.#inspectApplication(appRoot));
+      if (this.#renderer.showInfoPanel !== undefined) await this.#renderer.showInfoPanel(info);
+      else this.#finishCommand({ kind: "result", message: info });
+    } catch (error) {
+      this.#finishCommand({
+        kind: "result",
+        message: `Couldn't inspect the application: ${toErrorMessage(error)}`,
+      });
+    }
+  }
+
+  /**
+   * Applies `/loglevel [none|error|warn|debug|all]` against the renderer's buffered
+   * log filter and returns the one-line outcome. A bare `/loglevel` reports
+   * the current mode instead of changing it.
+   */
+  #applyLogLevelCommand(argument: string): string {
+    const renderer = this.#renderer;
+    if (renderer.logDisplayMode === undefined || renderer.setLogDisplayMode === undefined) {
+      return "/loglevel is not available in this session.";
+    }
+    if (argument === "") {
+      return `Logs: ${renderer.logDisplayMode()}. Use /loglevel none|error|warn|debug|all — logs stay buffered, so switching also hides or restores past lines.`;
+    }
+    const mode = parseLogDisplayMode(argument);
+    if (mode === undefined) {
+      return `Unknown log level "${argument}". Use none, error, warn, debug, or all.`;
+    }
+    if (mode === renderer.logDisplayMode()) {
+      return `Logs already set to ${mode}.`;
+    }
+    renderer.setLogDisplayMode(mode);
+    switch (mode) {
+      case "none":
+        return "Logs hidden. Output stays buffered — /loglevel all restores it.";
+      case "error":
+        return "Showing errors.";
+      case "warn":
+        return "Showing warnings and errors.";
+      case "debug":
+        return "Showing all severity-tagged logs.";
+      case "all":
+        return "Showing all logs.";
+    }
+  }
+
+  async #refreshModelAccess(effect: ModelAccessChange): Promise<void> {
+    const appRoot = this.#appRoot;
+    if (appRoot === undefined) return;
+    // Invalidate inspections started before this selection, including watcher notifications.
+    ++this.#agentInfoRevision;
+    ++this.#setupAttentionRevision;
+    await loadDevelopmentEnvironmentFiles(appRoot);
+    if (effect.reload) await this.#runtimeArtifacts?.refreshAfterSourceChange({});
+    if (effect.model && this.#agentInfo) {
+      this.#replaceAgentInfo({
+        ...this.#agentInfo,
+        agent: {
+          ...this.#agentInfo.agent,
+          model: { ...this.#agentInfo.agent.model, ...effect.model },
+        },
+      });
+    } else this.#replaceAgentInfo(this.#agentInfo);
+    this.#bootIssues = [];
+    this.#paintSetupAttention();
+    void this.#refreshAgentInfo();
+  }
+
+  async #refreshAgentInfo(notify = false): Promise<void> {
+    const previousInfo = this.#agentInfo;
+    const revision = ++this.#agentInfoRevision;
+    const nextInfo = await this.#readAgentInfo();
+    if (this.#disposed || revision !== this.#agentInfoRevision || nextInfo === undefined) return;
+    this.#replaceAgentInfo(nextInfo);
+    if (notify && !this.#renderer.renderAgentHeader)
+      this.#renderer.renderNotice?.(formatAgentUpdateNotice(previousInfo, nextInfo));
+    void this.#refreshSetupAttention(this.#agentInfo);
+  }
+
+  async #readAgentInfo(): Promise<AgentInfoResult | undefined> {
+    const client = this.#client;
+    if (client === undefined) return;
+
+    const probe = await probeAgentInfo({ client });
+    return probe.kind === "ready" ? probe.info : undefined;
+  }
+
+  #handleRuntimeArtifactsChanged(): void {
+    void this.#refreshAgentInfo(true);
+  }
+
+  /** Agents' own tool failures reach the diagnostics log whatever the subagent display mode. */
+  #recordAgentToolFailures(conversation: ConversationState): void {
+    const diagnostics = this.#diagnostics;
+    if (diagnostics === undefined) return;
+    for (const agent of Object.values(conversation.agents)) {
+      if (agent.observation.status === "not-followed") continue;
+      for (const message of agent.observation.conversation?.messages ?? []) {
+        for (const part of message.parts) {
+          if (part.type !== "dynamic-tool" || part.state !== "output-error") continue;
+          if (this.#recordedAgentToolFailures.has(part.toolCallId)) continue;
+          this.#recordedAgentToolFailures.add(part.toolCallId);
+          diagnostics.append({
+            source: "tool",
+            summary: `${part.toolName} failed (subagent ${agent.name})`,
+            detail: part.errorText,
+          });
+        }
+      }
+    }
+  }
+
+  /** Records session activity that the diagnostics log keeps regardless of display. */
+  #recordDiagnostics(event: MessageStreamEvent): void {
+    const diagnostics = this.#diagnostics;
+    if (diagnostics === undefined) return;
+    switch (event.type) {
+      case "turn.started":
+        this.#recordedFailures.clear();
+        break;
+      case "actions.requested":
+        for (const action of event.data.actions) {
+          const descriptor = normalizeActionRequest(action);
+          if (descriptor.kind === "tool-call") diagnostics.recordToolCall(descriptor.toolName);
+        }
+        break;
+      case "action.result":
+        if (isTaskRetryRefusal(event)) {
+          diagnostics.append({
+            source: "tool",
+            summary: `${normalizeActionResult(event.data.result).toolName} was refused for the model to retry`,
+            detail: event.data.error?.message ?? "Refused.",
+          });
+        } else if (event.data.status === "failed") {
+          diagnostics.append({
+            source: "tool",
+            summary: `${normalizeActionResult(event.data.result).toolName} failed`,
+            detail: event.data.error?.message ?? "Tool failed.",
+          });
+        }
+        break;
+      // A task call's receipt never fails; its task's outcome does.
+      case "task.settled":
+        if (event.data.status === "failed") {
+          diagnostics.append({
+            source: "tool",
+            summary: `${this.#store.snapshot.conversation.tasks[event.data.taskId]?.name ?? "A task"} failed`,
+            detail: event.data.error?.message ?? "Task failed.",
+          });
+        }
+        break;
+      case "agent.started":
+        diagnostics.recordSubagentDispatch(event.data.callId);
+        break;
+      case "step.completed":
+        diagnostics.recordStepUsage(event.data.usage);
+        break;
+      case "step.failed":
+      case "turn.failed":
+      case "session.failed": {
+        const key = failureKey(event);
+        if (this.#recordedFailures.has(key)) break;
+        this.#recordedFailures.add(key);
+        const message = formatFailureMessage(event);
+        const detail = formatFailureDetail(event) ?? message;
+        const hint = formatFailureHint(event);
+        diagnostics.append(
+          hint === undefined
+            ? { source: "workflow", summary: `Error: ${message}`, detail }
+            : { source: "workflow", summary: `Error: ${message}`, detail, hint },
+        );
+        break;
+      }
+    }
+  }
+}
+
+function createRenderer(options: CoraxTUIRunnerOptions): AgentTUIRenderer {
+  if (options.renderer) {
+    return options.renderer;
+  }
+
+  // `TerminalRenderer` defaults every omitted field, so explicit `undefined`s
+  // are equivalent to leaving them out. Omitted input/output fall back to the
+  // real process stdio.
+  return new TerminalRenderer({
+    tools: options.tools,
+    reasoning: options.reasoning,
+    subagents: options.subagents,
+    connectionAuth: options.connectionAuth,
+    assistantResponseStats: options.assistantResponseStats,
+    contextSize: options.contextSize,
+    logs: options.logs,
+    availablePromptCommands: options.availablePromptCommands,
+    argumentSuggestions: options.argumentSuggestions,
+    input: options.userInput,
+    output: options.screen,
+    diagnostics: options.diagnostics,
+    onExitRequest: options.lifecycle?.requestStop,
+  });
+}
+
+function formatAgentUpdateNotice(
+  previousInfo: AgentInfoResult | undefined,
+  nextInfo: AgentInfoResult | undefined,
+): string {
+  const previousModel = previousInfo?.agent.model.id;
+  const nextModel = nextInfo?.agent.model.id;
+
+  if (previousModel !== undefined && nextModel !== undefined && previousModel !== nextModel) {
+    return `Agent updated: Model ${previousModel} -> ${nextModel}`;
+  }
+
+  return "Agent updated.";
+}
+
+/** Tool results in the conversation that hand a registry install to the terminal. */
+function registryHandoffs(
+  conversation: ConversationState,
+): Array<{ readonly callId: string; readonly address: string }> {
+  const handoffs: Array<{ callId: string; address: string }> = [];
+  const collect = (state: ConversationState, subagentName: string | undefined) => {
+    for (const message of state.messages) {
+      for (const part of message.parts) {
+        if (!isTerminalToolCallPart(part) || part.state !== "output-available" || part.partial) {
+          continue;
+        }
+        const address = registryHandoffAddress(subagentName, part.toolName, part.output);
+        if (address !== undefined) handoffs.push({ callId: part.toolCallId, address });
+      }
+    }
+  };
+  collect(conversation, undefined);
+  for (const agent of Object.values(conversation.agents)) {
+    if (agent.observation.status === "not-followed") continue;
+    const child = agent.observation.conversation;
+    if (child !== undefined) collect(child, agent.name);
+  }
+  return handoffs;
+}
+
+/** Returns the registry address carried by a packaged self-modification terminal handoff. */
+export function registryHandoffAddress(
+  subagentName: string | undefined,
+  toolName: string | undefined,
+  output: unknown,
+): string | undefined {
+  const isPackagedChild =
+    subagentName === "self-modification__agent" && toolName === "registry_add";
+  const isLegacyRoot = subagentName === undefined && toolName === "selfmod__registry_add";
+  if ((!isPackagedChild && !isLegacyRoot) || typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const result = output as { address?: unknown; status?: unknown };
+  return result.status === "needs-terminal" && typeof result.address === "string"
+    ? result.address
+    : undefined;
+}
+
+function inputContext(
+  input: ConversationInput,
+  index: number,
+  total: number,
+): AgentTUIInputContext | undefined {
+  const context: AgentTUIInputContext = {};
+  if (total > 1) context.position = { index, total };
+  if (input.taskId !== undefined) context.taskId = input.taskId;
+  return context.position === undefined && context.taskId === undefined ? undefined : context;
+}
+
+function toAgentTUIToolApprovalRequest(
+  request: InputRequest,
+  context: AgentTUIInputContext | undefined,
+): AgentTUIToolApprovalRequest {
+  const approval: AgentTUIToolApprovalRequest = {
+    approvalId: request.requestId,
+    toolCallId: request.action.callId,
+    toolName: request.action.toolName,
+    prompt: request.prompt,
+    input: request.action.input,
+  };
+  if (context !== undefined) approval.context = context;
+  return approval;
+}
+
+function toAgentTUIInputQuestion(
+  request: InputRequest,
+  context: AgentTUIInputContext | undefined,
+): AgentTUIInputQuestion {
+  const display: "select" | "text" =
+    request.display === "text"
+      ? "text"
+      : request.display === "select"
+        ? "select"
+        : request.options !== undefined && request.options.length > 0
+          ? "select"
+          : "text";
+
+  const question: AgentTUIInputQuestion = {
+    requestId: request.requestId,
+    prompt: request.prompt,
+    display,
+  };
+
+  if (request.options !== undefined) {
+    question.options = request.options.map((option: InputOption) => {
+      const out: AgentTUIInputOption = { id: option.id, label: option.label };
+      if (option.description !== undefined) out.description = option.description;
+      if (option.style !== undefined) out.style = option.style;
+      return out;
+    });
+  }
+
+  if (request.allowFreeform !== undefined) {
+    question.allowFreeform = request.allowFreeform;
+  }
+  if (context !== undefined) question.context = context;
+
+  return question;
+}

@@ -1,0 +1,818 @@
+import { type PromptQueueState, promptQueueEvents } from "#channel/prompt-queue.js";
+import type { UserContent } from "ai";
+
+import type {
+  ChannelFrom,
+  ChannelRespondOptions,
+  ChannelSendOptions,
+} from "#channel/channel-operations.js";
+import { defaultDeliverResult } from "#channel/adapter.js";
+import type { SessionHandle } from "#channel/session.js";
+import type { DeliverPayload, SessionAuthContext, TurnPolicy } from "#channel/types.js";
+import { ContextContainer, contextStorage } from "#context/container.js";
+import { ContextKey } from "#context/key.js";
+import { CoraxAttachmentError } from "#internal/attachments/errors.js";
+import { assertWithinLimit } from "#internal/attachments/limited-read.js";
+import { createLogger, extractErrorId, formatErrorHint } from "#internal/logging.js";
+import type { InputResolution, UnstampedMessageStreamEvent } from "#protocol/message.js";
+import type { FetchFileResult } from "#shared/channel-definition.js";
+import { actionLabel, visibleActions } from "#shared/action-label.js";
+import type { InputRequest } from "#shared/input.js";
+import {
+  type InputResponse,
+  parseInputResponses,
+  type StrictInputResponses,
+} from "#shared/input.js";
+import type {
+  ActionEvent,
+  Adapter,
+  ChatConfig,
+  SerializedThread,
+  Thread,
+  WebhookOptions,
+} from "#compiled/chat/index.js";
+import { Chat, Message, ThreadImpl } from "#compiled/chat/index.js";
+import { defaultAuthorizationEvents } from "#public/channels/chat-sdk/authorization.js";
+import { parseChatSdkFileRef } from "#public/channels/chat-sdk/attachment-refs.js";
+import { decodeInputAction, renderInputRequests } from "#public/channels/chat-sdk/input-actions.js";
+import { DEFAULT_UPLOAD_POLICY } from "#public/channels/upload-policy.js";
+import { isNotImplemented } from "#public/channels/chat-sdk/notImplemented.js";
+import {
+  defineChannel,
+  GET,
+  POST,
+  type Channel,
+  type ChannelEvents,
+  type ChannelContinuationOps,
+  type RouteHandlerArgs,
+  type Session,
+} from "#public/definitions/channel.js";
+import { chatSdkInstrumentation } from "#public/channels/chat-sdk/audience.js";
+
+const log = createLogger("chat-sdk.channel");
+const DEFAULT_ROUTE = "/corax/v1";
+const DEFAULT_INPUT_ACTION_PREFIX = "corax_input:";
+const DEFAULT_STREAMING_EDIT_INTERVAL_MS = 1_000;
+const MAX_TYPING_STATUS = 80;
+const streamTextByState = new WeakMap<ChatSdkChannelState, string>();
+
+type ChatSdkAdapters = Record<string, Adapter>;
+type EventData<T extends UnstampedMessageStreamEvent["type"]> =
+  Extract<UnstampedMessageStreamEvent, { type: T }> extends { data: infer D } ? D : undefined;
+
+interface ActiveWebhookContext {
+  readonly from: ChannelFrom<ChatSdkChannelState>;
+}
+
+const ActiveWebhookKey = new ContextKey<ActiveWebhookContext>("chat-sdk.active-webhook");
+
+/** Durable Chat SDK thread state plus default-handler streaming bookkeeping. */
+export interface ChatSdkChannelState extends Record<string, unknown>, PromptQueueState {
+  thread: SerializedThread | null;
+  /** Message id of the in-flight streamed assistant post (edit fallback). */
+  anchorMessageId?: string | null;
+  /**
+   * Whether `adapter.editMessage` works for this session. Set to `false` once
+   * an edit throws {@link isNotImplemented}, which disables streaming edits for
+   * the rest of the session.
+   */
+  editSupported?: boolean;
+  /** Epoch ms of the last streaming edit, used to throttle edits. */
+  lastEditAtMs?: number | null;
+  /** Buffered first line of a tool-call message, surfaced as typing status. */
+  pendingToolCallMessage?: string | null;
+  /** Authorization status messages, keyed by connection name. */
+  pendingAuthMessageIds?: Record<string, string>;
+  /**
+   * The Chat SDK user behind each principal that sent a message, so a sign-in
+   * reaches them privately. `null` once more than one person sent as it.
+   */
+  usersByPrincipal?: Record<string, string | null>;
+  /** Posted input request cards, keyed by message id, until corax resolves every request on them. */
+  pendingInputCards?: Record<string, ChatSdkPendingInputCard>;
+  streamStepIndex?: number | null;
+}
+
+/** One posted card's requests and the resolutions corax has reported for them so far. */
+export interface ChatSdkPendingInputCard {
+  readonly requests: readonly InputRequest[];
+  readonly resolved: Readonly<Record<string, InputResolution>>;
+}
+
+/**
+ * Thread selector accepted by `chatSdkChannel().receive`. Pass a serialized
+ * Chat SDK thread when possible; `threadId` plus `adapterName` is supported for
+ * proactive sends that only have a provider-native thread id.
+ */
+export interface ChatSdkReceiveTarget {
+  readonly adapterName?: string;
+  readonly thread?: SerializedThread;
+  readonly threadId?: string;
+}
+
+/**
+ * Channel-owned metadata exposed to corax instrumentation.
+ */
+export interface ChatSdkInstrumentationMetadata extends Record<string, unknown> {
+  readonly adapterName: string | null;
+  readonly channelId: string | null;
+  readonly isDM: boolean | null;
+  readonly threadId: string | null;
+}
+
+/**
+ * Per-session context passed to `chatSdkChannel({ events })` handlers. `thread`
+ * is rebuilt from persisted channel state using the configured Chat SDK
+ * adapter, so default handlers can post back to the originating chat thread.
+ */
+export interface ChatSdkChannelContext<TAdapters extends ChatSdkAdapters = ChatSdkAdapters> {
+  readonly bot: Chat<TAdapters>;
+  readonly thread: Thread | null;
+  state: ChatSdkChannelState;
+  /** Whether streamed deltas are delivered via a post+edit fallback. */
+  readonly streaming: boolean;
+  /** Minimum interval between streaming edits, in ms. */
+  readonly streamingEditIntervalMs: number;
+}
+
+/** Event-handler context for `chatSdkChannel`, including continuation routing. */
+export interface ChatSdkEventContext<TAdapters extends ChatSdkAdapters = ChatSdkAdapters>
+  extends ChatSdkChannelContext<TAdapters>, ChannelContinuationOps {}
+
+/**
+ * Per-event handlers for `chatSdkChannel({ events })`. Each supplied handler
+ * replaces the built-in default for that event.
+ */
+export type ChatSdkChannelEvents<TAdapters extends ChatSdkAdapters = ChatSdkAdapters> =
+  ChannelEvents<ChatSdkChannelContext<TAdapters>>;
+
+/** Selects the Chat SDK thread that owns the corax continuation token. */
+interface ChatSdkThreadOptions {
+  readonly auth?: SessionAuthContext | null;
+  readonly thread: SerializedThread | Thread | string;
+  /**
+   * Required when `thread` is a string that does not include the Chat SDK
+   * adapter prefix. Prefer passing the `Thread` object from the Chat SDK handler
+   * when possible.
+   */
+  readonly adapterName?: string;
+}
+
+/**
+ * Options for `bridge.send`: channel send options plus the thread. The thread
+ * determines the corax continuation token and persisted channel state.
+ */
+export interface ChatSdkSendOptions extends ChatSdkThreadOptions, Omit<ChannelSendOptions, "auth"> {
+  /**
+   * Controls how this input interacts with an active corax turn on the same
+   * thread. Defaults to the channel's `turnPolicy`, then `"steer"`.
+   */
+  readonly turnPolicy?: TurnPolicy;
+}
+
+/** Options for `bridge.respond`: channel respond options plus the thread. */
+export interface ChatSdkRespondOptions
+  extends ChatSdkThreadOptions, Omit<ChannelRespondOptions, "auth" | "state"> {}
+
+/**
+ * Configuration for {@link chatSdkChannel}. It accepts normal Chat SDK
+ * `ChatConfig` fields, plus corax route and event settings.
+ */
+export interface ChatSdkChannelConfig<
+  TAdapters extends ChatSdkAdapters = ChatSdkAdapters,
+> extends Omit<ChatConfig<TAdapters>, "adapters"> {
+  /** Map of Chat SDK adapter name to adapter instance. */
+  readonly adapters: TAdapters;
+  /**
+   * Base route for generated adapter webhooks. Defaults to `/corax/v1`, so an
+   * adapter named `slack` mounts at `/corax/v1/slack`.
+   */
+  readonly route?: string;
+  /**
+   * Per-adapter route overrides. Use when a provider requires a fixed webhook
+   * URL or when migrating an existing endpoint without changing provider
+   * settings.
+   */
+  readonly routes?: Partial<Record<Extract<keyof TAdapters, string>, string>>;
+  /** Policy for accepted messages that arrive while a turn is active. */
+  readonly turnPolicy?: TurnPolicy;
+  /** Extra Chat SDK webhook options. corax owns `waitUntil`. */
+  readonly webhook?: Omit<WebhookOptions, "waitUntil">;
+  /** Optional corax event handlers. Supplied handlers replace built-in defaults. */
+  readonly events?: ChatSdkChannelEvents<TAdapters>;
+  /**
+   * Prefix for default corax HITL button action ids. Change this if your Chat SDK
+   * app already uses the `corax_input:` prefix.
+   */
+  readonly inputActionPrefix?: string;
+  /**
+   * Auth resolver for default HITL button clicks. Defaults to `null`; provide a
+   * resolver when continued sessions should keep user or tenant auth.
+   */
+  readonly resolveInputAuth?: (
+    event: ActionEvent,
+  ) => SessionAuthContext | null | Promise<SessionAuthContext | null>;
+  /**
+   * Whether the default handlers stream assistant output by posting an initial
+   * message and editing it as deltas arrive. Defaults to `true`. Set to `false`
+   * for adapters that only deliver a single message per turn (e.g. email), so
+   * replies post once on completion.
+   */
+  readonly streaming?: boolean;
+  /**
+   * Minimum interval between streaming edits, in ms. Defaults to `1000`. Only
+   * used when `streaming` is enabled and the adapter supports editing.
+   */
+  readonly streamingEditIntervalMs?: number;
+}
+
+/** Concrete channel value returned on `bridge.channel`. */
+export interface ChatSdkChannel extends Channel<
+  ChatSdkChannelState,
+  ChatSdkReceiveTarget,
+  ChatSdkInstrumentationMetadata
+> {}
+
+/**
+ * Return value of {@link chatSdkChannel}. Export `channel` from
+ * `agent/channels/<name>.ts`, then register handlers on `bot` and call `send`
+ * from those handlers to hand work to corax.
+ */
+export interface ChatSdkChannelBridge<TAdapters extends ChatSdkAdapters = ChatSdkAdapters> {
+  readonly bot: Chat<TAdapters>;
+  readonly channel: ChatSdkChannel;
+  /**
+   * Starts or resumes an corax session from inside a Chat SDK webhook handler.
+   * Use `channel.receive(...)` for proactive sends that are not handling an
+   * inbound Chat SDK webhook.
+   */
+  send(message: string | UserContent, options: ChatSdkSendOptions): Promise<Session>;
+  /**
+   * Answers pending input requests on the thread's session from inside a Chat
+   * SDK webhook handler. Never creates a session.
+   */
+  respond<const TResponses extends readonly InputResponse[]>(
+    inputResponses: StrictInputResponses<TResponses>,
+    options: ChatSdkRespondOptions,
+  ): Promise<Session>;
+}
+
+/**
+ * Creates an corax channel backed by one Chat SDK runtime and its adapters.
+ *
+ * @example
+ * ```ts
+ * import { createSlackAdapter } from "@chat-adapter/slack";
+ * import { createMemoryState } from "@chat-adapter/state-memory";
+ * import { chatSdkChannel } from "corax/channels/chat-sdk";
+ *
+ * export const { bot, channel, send } = chatSdkChannel({
+ *   userName: "acme",
+ *   adapters: { slack: createSlackAdapter() },
+ *   state: createMemoryState(),
+ * });
+ *
+ * bot.onNewMention(async (thread, message) => {
+ *   await send(message.text, { thread });
+ * });
+ * ```
+ */
+export function chatSdkChannel<TAdapters extends ChatSdkAdapters>(
+  config: ChatSdkChannelConfig<TAdapters>,
+): ChatSdkChannelBridge<TAdapters> {
+  const bot = new Chat<TAdapters>(config as ChatConfig<TAdapters>);
+  const inputActionPrefix = config.inputActionPrefix ?? DEFAULT_INPUT_ACTION_PREFIX;
+  const streaming = config.streaming ?? true;
+  const streamingEditIntervalMs =
+    config.streamingEditIntervalMs ?? DEFAULT_STREAMING_EDIT_INTERVAL_MS;
+  const mergedEvents: ChatSdkChannelEvents<TAdapters> = {
+    ...defaultEvents<TAdapters>(inputActionPrefix),
+    ...config.events,
+  };
+
+  bot.onAction(async (event: ActionEvent) => {
+    const response = decodeInputAction(event.actionId, inputActionPrefix, event.value);
+    if (!response) return;
+    if (!event.thread) {
+      throw new Error(
+        "chatSdkChannel input actions require a thread on the Chat SDK action event.",
+      );
+    }
+    await bridgeRespond(bot, [response], {
+      auth: config.resolveInputAuth ? await config.resolveInputAuth(event) : null,
+      thread: event.thread.toJSON(),
+    });
+  });
+
+  const channel = defineChannel<
+    ChatSdkChannelState,
+    ChatSdkChannelContext<TAdapters>,
+    ChatSdkReceiveTarget,
+    ChatSdkInstrumentationMetadata
+  >({
+    kindHint: "chat-sdk",
+    turnPolicy: config.turnPolicy,
+    fetchFile: (url) => fetchAttachment(bot, url),
+    state: initialState(),
+    ...chatSdkInstrumentation,
+    context(state) {
+      return {
+        bot,
+        state,
+        streaming,
+        streamingEditIntervalMs,
+        thread: threadFromState(bot, state),
+      };
+    },
+    // Register both methods on each adapter's webhook path. Providers such as X
+    // verify ownership with a GET challenge (CRC) and deliver events via POST;
+    // the adapter dispatches on request.method, so one handler serves both.
+    routes: adapterNames(config.adapters).flatMap((adapterName) => {
+      const path = routeForAdapter(adapterName, config);
+      const handler = async (
+        request: Request,
+        args: RouteHandlerArgs<ChatSdkChannelState>,
+      ): Promise<Response> => {
+        const webhook = bot.webhooks[adapterName];
+        const ctx = new ContextContainer();
+        ctx.setVirtualContext(ActiveWebhookKey, { from: args.from });
+        return contextStorage.run(ctx, () =>
+          webhook(request, {
+            ...config.webhook,
+            waitUntil(task: Promise<unknown>) {
+              args.waitUntil(task);
+            },
+          }),
+        );
+      };
+      return [GET<ChatSdkChannelState>(path, handler), POST<ChatSdkChannelState>(path, handler)];
+    }),
+    async receive(input, { from }) {
+      const thread = serializeReceiveTarget(bot, input.target);
+      return from(thread.id).send(input.message, {
+        auth: input.auth,
+        state: { thread },
+      });
+    },
+    // `session.auth.current` is the caller of this delivery.
+    deliver(
+      payload,
+      channel: ChatSdkChannelContext<TAdapters> & { readonly session: SessionHandle },
+    ) {
+      recordPrincipalUser(channel.state, channel.session.auth.current, payload);
+      return defaultDeliverResult(payload);
+    },
+    events: mergedEvents,
+  });
+
+  return {
+    bot,
+    channel,
+    send(message, options) {
+      return bridgeSend(bot, message, options);
+    },
+    respond(inputResponses, options) {
+      return bridgeRespond(bot, inputResponses, options);
+    },
+  };
+}
+
+function defaultEvents<TAdapters extends ChatSdkAdapters>(
+  inputActionPrefix: string,
+): ChatSdkChannelEvents<TAdapters> {
+  type EventChannel = Parameters<
+    NonNullable<ChatSdkChannelEvents<TAdapters>["input.requested"]>
+  >[1];
+
+  async function showPrompt(channel: EventChannel, request: InputRequest) {
+    if (!channel.thread) return false;
+    const posted = await channel.thread.post(renderInputRequests([request], inputActionPrefix));
+    if (!posted.id || channel.state.editSupported === false) return;
+    channel.state.pendingInputCards = {
+      ...channel.state.pendingInputCards,
+      [posted.id]: { requests: [request], resolved: {} },
+    };
+  }
+
+  async function clearAnsweredCards(
+    event: { readonly resolutions: readonly InputResolution[] },
+    channel: EventChannel,
+  ) {
+    const thread = channel.thread;
+    if (!thread) return;
+    for (const [messageId, card] of Object.entries(channel.state.pendingInputCards ?? {})) {
+      const resolutions = event.resolutions.filter((resolution) =>
+        card.requests.some((request) => request.requestId === resolution.requestId),
+      );
+      if (resolutions.length === 0) continue;
+      const resolved = {
+        ...card.resolved,
+        ...Object.fromEntries(resolutions.map((resolution) => [resolution.requestId, resolution])),
+      };
+      const { [messageId]: _, ...rest } = channel.state.pendingInputCards ?? {};
+      channel.state.pendingInputCards = card.requests.every(
+        (request) => resolved[request.requestId] !== undefined,
+      )
+        ? rest
+        : { ...rest, [messageId]: { requests: card.requests, resolved } };
+      try {
+        await thread.adapter.editMessage(
+          thread.id,
+          messageId,
+          renderInputRequests(card.requests, inputActionPrefix, resolved),
+        );
+      } catch (error) {
+        if (!isNotImplemented(error)) {
+          log.warn("answered input card edit failed", { error, messageId });
+          continue;
+        }
+        channel.state.editSupported = false;
+        channel.state.pendingInputCards = {};
+        return;
+      }
+    }
+  }
+
+  const prompts = promptQueueEvents(showPrompt);
+  return {
+    ...defaultAuthorizationEvents(),
+    async "turn.started"(_event, channel, _ctx) {
+      channel.state.pendingToolCallMessage = null;
+      clearStream(channel.state);
+      await safeStartTyping(channel.thread, "Working...");
+    },
+    async "actions.requested"(event, channel, _ctx) {
+      const buffered = channel.state.pendingToolCallMessage;
+      channel.state.pendingToolCallMessage = null;
+      if (buffered) {
+        await safeStartTyping(channel.thread, truncate(buffered));
+        return;
+      }
+      const labels = visibleActions(event.actions).map((action) =>
+        actionLabel(action, event.presentation),
+      );
+      if (labels.length === 0) return;
+      await safeStartTyping(channel.thread, truncate(`${labels.join(", ")}...`));
+    },
+    async "message.appended"(event, channel, _ctx) {
+      if (!channel.thread || !canStream(channel)) return;
+      const currentText =
+        channel.state.streamStepIndex === event.stepIndex
+          ? streamTextByState.get(channel.state)
+          : undefined;
+      const message = (currentText ?? "") + event.messageDelta;
+      if (!message) return;
+      streamTextByState.set(channel.state, message);
+      const anchor = channel.state.anchorMessageId;
+      if (!anchor || channel.state.streamStepIndex !== event.stepIndex) {
+        const sent = await channel.thread.post({ markdown: message });
+        channel.state.anchorMessageId = sent.id;
+        channel.state.streamStepIndex = event.stepIndex;
+        channel.state.lastEditAtMs = Date.now();
+        return;
+      }
+      const lastEdit = channel.state.lastEditAtMs ?? 0;
+      if (Date.now() - lastEdit < channel.streamingEditIntervalMs) return;
+      try {
+        await editMessage(channel.thread, anchor, message);
+        channel.state.lastEditAtMs = Date.now();
+      } catch (error) {
+        if (!isNotImplemented(error)) throw error;
+        channel.state.editSupported = false;
+        clearStream(channel.state);
+      }
+    },
+    // Some adapters show only text, where a reply can answer only the request
+    // it sees, so cards post one at a time.
+    ...prompts,
+    // Covers every way a request ends: a press, a typed answer, or a withdrawal.
+    async "input.resolved"(event, channel, _ctx) {
+      await clearAnsweredCards(event, channel);
+      await prompts["input.resolved"](event, channel);
+    },
+    async "message.completed"(event, channel, _ctx) {
+      if (event.finishReason === "tool-calls") {
+        channel.state.pendingToolCallMessage = event.message
+          ? (firstNonEmptyLine(event.message) ?? null)
+          : null;
+        // Finalize the streamed anchor so it shows the complete pre-tool-call
+        // text rather than the last throttled edit. Pass `false` so nothing new
+        // is posted when nothing was streamed — intermediate tool-call narration
+        // must not become a standalone message on non-streaming surfaces.
+        if (event.message) {
+          await finalizeStreamedMessage(channel, event.message, false);
+        } else {
+          clearStream(channel.state);
+        }
+        return;
+      }
+      channel.state.pendingToolCallMessage = null;
+      if (!event.message) {
+        clearStream(channel.state);
+        return;
+      }
+      await finalizeStreamedMessage(channel, event.message, true);
+    },
+    async "turn.failed"(event, channel, _ctx) {
+      if (event.terminal) return;
+      await postFailure(
+        channel.thread,
+        "I hit an error while handling your request",
+        "Please try again, rephrase, or reach out if it keeps failing.",
+        event,
+      );
+    },
+    async "session.failed"(event, channel) {
+      await postFailure(
+        channel.thread,
+        "This session could not recover from an error",
+        "Start a new conversation to continue.",
+        event,
+      );
+    },
+  };
+}
+
+/**
+ * Posts a typing indicator without failing the turn when the adapter does not
+ * support one. Swallows {@link isNotImplemented} errors (e.g. email adapters)
+ * and rethrows anything else.
+ */
+async function safeStartTyping(thread: Thread | null, status?: string): Promise<void> {
+  if (!thread) return;
+  try {
+    await thread.startTyping(status);
+  } catch (error) {
+    if (!isNotImplemented(error)) throw error;
+  }
+}
+
+/**
+ * Edits a previously posted message in place via the adapter. Rendered as
+ * markdown so streamed edits match the completed-message formatting. Callers
+ * handle {@link isNotImplemented} to fall back to a fresh post.
+ */
+async function editMessage(thread: Thread, messageId: string, markdown: string): Promise<void> {
+  await thread.adapter.editMessage(thread.id, messageId, { markdown });
+}
+
+/**
+ * Finalizes a completed assistant message. When a streamed anchor exists, edits
+ * it in place so it shows the complete text instead of the last throttled
+ * delta. When no anchor was streamed and `postWhenNoAnchor` is `true`, posts the
+ * message fresh (the normal path for a final reply on a non-streaming surface);
+ * when `false`, leaves the surface untouched so intermediate tool-call narration
+ * does not become a standalone message. Clears the stream anchor either way.
+ */
+async function finalizeStreamedMessage(
+  channel: ChatSdkChannelContext,
+  message: string,
+  postWhenNoAnchor: boolean,
+): Promise<void> {
+  const thread = channel.thread;
+  if (!thread) {
+    clearStream(channel.state);
+    return;
+  }
+  const anchor = channel.state.anchorMessageId;
+  if (canStream(channel) && anchor) {
+    try {
+      await editMessage(thread, anchor, message);
+    } catch (error) {
+      if (!isNotImplemented(error)) throw error;
+      channel.state.editSupported = false;
+      if (postWhenNoAnchor) await thread.post({ markdown: message });
+    }
+  } else if (postWhenNoAnchor) {
+    await thread.post({ markdown: message });
+  }
+  clearStream(channel.state);
+}
+
+/** Whether streamed edits are enabled and still supported by the adapter. */
+function canStream(channel: ChatSdkChannelContext): boolean {
+  return channel.streaming && channel.state.editSupported !== false;
+}
+
+/** Resets the streaming anchor so the next step starts a fresh message. */
+function clearStream(state: ChatSdkChannelState): void {
+  state.anchorMessageId = null;
+  state.lastEditAtMs = null;
+  state.streamStepIndex = null;
+  streamTextByState.delete(state);
+}
+
+/** First non-blank line of `text`, used as a compact typing status. */
+function firstNonEmptyLine(text: string): string | undefined {
+  for (const line of text.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return undefined;
+}
+
+/** Caps `text` at `max` characters with a trailing ellipsis. */
+function truncate(text: string, max = MAX_TYPING_STATUS): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+}
+
+async function postFailure(
+  thread: Thread | null,
+  prefix: string,
+  nextStep: string,
+  event: EventData<"turn.failed"> | EventData<"session.failed">,
+): Promise<void> {
+  if (!thread) return;
+  const hint = formatErrorHint(event);
+  const errorId = extractErrorId(event.details);
+  await thread.post(
+    [`${prefix}${hint}.`, nextStep, ...(errorId ? [`Error id: ${errorId}`] : [])].join("\n\n"),
+  );
+}
+
+async function bridgeSend<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  message: string | UserContent,
+  options: ChatSdkSendOptions,
+): Promise<Session> {
+  const from = activeFrom("send");
+  const { adapterName, auth, thread: threadInput, ...sendOptions } = options;
+  const thread = serializeThread(bot, threadInput, adapterName);
+  return from(thread.id).send(message, {
+    ...sendOptions,
+    auth: auth ?? null,
+    state: { thread },
+  });
+}
+
+async function bridgeRespond<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  inputResponses: readonly InputResponse[],
+  options: ChatSdkRespondOptions,
+): Promise<Session> {
+  const from = activeFrom("respond");
+  const { adapterName, auth, thread: threadInput, ...respondOptions } = options;
+  const thread = serializeThread(bot, threadInput, adapterName);
+  return from(thread.id).respond(parseInputResponses(inputResponses), {
+    ...respondOptions,
+    auth: auth ?? null,
+  });
+}
+
+/**
+ * Records the author of the delivery's message as the Chat SDK user behind its
+ * caller. A principal several people send as, such as tenant auth, names no one
+ * person, so it records `null` rather than whoever spoke last.
+ */
+function recordPrincipalUser(
+  state: ChatSdkChannelState,
+  caller: SessionAuthContext | null,
+  payload: DeliverPayload,
+): void {
+  if (caller === null) return;
+  const thread = (payload.state as Partial<ChatSdkChannelState> | undefined)?.thread;
+  const author = thread?.currentMessage?.author;
+  if (author === undefined || author.isBot === true || author.isMe) return;
+  const recorded = state.usersByPrincipal?.[caller.principalId];
+  if (recorded === author.userId || recorded === null) return;
+  state.usersByPrincipal = {
+    ...state.usersByPrincipal,
+    [caller.principalId]: recorded === undefined ? author.userId : null,
+  };
+}
+
+function activeFrom(operation: "respond" | "send"): ChannelFrom<ChatSdkChannelState> {
+  const active = contextStorage.getStore()?.get(ActiveWebhookKey);
+  if (!active) {
+    throw new Error(
+      `chatSdkChannel().${operation} can only run during a Chat SDK webhook handler for this bridge.`,
+    );
+  }
+  return active.from;
+}
+
+function initialState(): ChatSdkChannelState {
+  return { pendingAuthMessageIds: {}, thread: null };
+}
+
+/**
+ * Downloads an attachment `messageToUserContent` deferred to the step: rebuilds
+ * the download with the adapter's `rehydrateAttachment`, since the message's
+ * own `fetchData` didn't survive the queue.
+ */
+async function fetchAttachment<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  url: string,
+): Promise<FetchFileResult | null> {
+  const ref = parseChatSdkFileRef(new URL(url));
+  if (ref === null) return null;
+  // The step may run where the webhook didn't, so the adapters may not be initialized yet.
+  await bot.initialize();
+  const rehydrated = bot.getAdapter(ref.adapter).rehydrateAttachment?.(ref.attachment);
+  if (rehydrated?.fetchData === undefined) {
+    throw new CoraxAttachmentError({
+      adapterKind: "chat-sdk",
+      kind: "resolver-threw",
+      message: `the ${ref.adapter} adapter can't download it after the webhook returns.`,
+    });
+  }
+  let data: Buffer | ArrayBuffer;
+  try {
+    data = await rehydrated.fetchData();
+  } catch (cause) {
+    if (cause instanceof CoraxAttachmentError) throw cause;
+    throw new CoraxAttachmentError({
+      adapterKind: "chat-sdk",
+      cause,
+      kind: "resolver-threw",
+      message: `the ${ref.adapter} download failed.`,
+    });
+  }
+  const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  assertWithinLimit(bytes, DEFAULT_UPLOAD_POLICY.maxBytes, "chat-sdk");
+  return { bytes, mediaType: ref.attachment.mimeType };
+}
+
+function threadFromState<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  state: ChatSdkChannelState,
+): Thread | null {
+  if (!state.thread) return null;
+  try {
+    const serialized = state.thread;
+    return new ThreadImpl({
+      adapter: bot.getAdapter(serialized.adapterName),
+      channelId: serialized.channelId,
+      channelVisibility: serialized.channelVisibility,
+      currentMessage: serialized.currentMessage
+        ? Message.fromJSON(serialized.currentMessage)
+        : undefined,
+      id: serialized.id,
+      isDM: serialized.isDM,
+      stateAdapter: bot.getState(),
+    });
+  } catch (error) {
+    log.warn("failed to rebuild Chat SDK thread from channel state", { error });
+    return null;
+  }
+}
+
+function serializeReceiveTarget<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  target: ChatSdkReceiveTarget,
+): SerializedThread {
+  if (target.thread) return target.thread;
+  if (!target.threadId) {
+    throw new Error("chatSdkChannel().receive requires target.thread or target.threadId.");
+  }
+  return serializeThread(bot, target.threadId, target.adapterName);
+}
+
+function serializeThread<TAdapters extends ChatSdkAdapters>(
+  bot: Chat<TAdapters>,
+  thread: SerializedThread | Thread | string,
+  adapterName?: string,
+): SerializedThread {
+  if (typeof thread === "string") {
+    const resolvedAdapterName = adapterName ?? inferAdapterName(thread);
+    const adapter = bot.getAdapter(resolvedAdapterName);
+    return {
+      _type: "chat:Thread",
+      adapterName: resolvedAdapterName,
+      channelId: adapter.channelIdFromThreadId(thread),
+      channelVisibility: adapter.getChannelVisibility?.(thread),
+      id: thread,
+      isDM: false,
+    };
+  }
+  if (isSerializedThread(thread)) return thread;
+  return thread.toJSON();
+}
+
+function isSerializedThread(value: SerializedThread | Thread): value is SerializedThread {
+  return "_type" in value && value._type === "chat:Thread";
+}
+
+function inferAdapterName(threadId: string): string {
+  const separator = threadId.indexOf(":");
+  if (separator <= 0) {
+    throw new Error("chatSdkChannel string thread references require options.adapterName.");
+  }
+  return threadId.slice(0, separator);
+}
+
+function adapterNames<TAdapters extends ChatSdkAdapters>(
+  adapters: TAdapters,
+): Extract<keyof TAdapters, string>[] {
+  return Object.keys(adapters) as Extract<keyof TAdapters, string>[];
+}
+
+function routeForAdapter<TAdapters extends ChatSdkAdapters>(
+  adapterName: Extract<keyof TAdapters, string>,
+  config: ChatSdkChannelConfig<TAdapters>,
+): string {
+  const override = config.routes?.[adapterName];
+  if (override) return override;
+  const route = config.route ?? DEFAULT_ROUTE;
+  return `${route.replace(/\/$/u, "")}/${adapterName}`;
+}

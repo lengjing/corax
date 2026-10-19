@@ -1,0 +1,6 @@
+{
+  "name": "corax-example-memory",
+  "private": true,
+  "type": "module",
+  "dependencies": { "corax": "workspace:*", "@ai-sdk/openai": "catalog:" }
+}

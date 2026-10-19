@@ -1,0 +1,93 @@
+const INLINE_DIAGNOSTIC_MAX_LINES = 4;
+const INLINE_DIAGNOSTIC_MAX_CHARACTERS = 600;
+const DIAGNOSTIC_SUMMARY_MAX_CHARACTERS = 240;
+
+/**
+ * A line that names the failure inside a collapsed dump: the pinned
+ * `message:` / `name:` fields of a `formatError` object dump, or the
+ * `SomeError: …` headline of a raw stack trace.
+ */
+const ERROR_HEADLINE_PATTERN = /^\s*(?:message|name):\s*\S|^\s*[A-Z][\w$]*Error\b/u;
+
+/** A bracket-tagged line such as `[corax:dev] …`, which starts a new log record. */
+const TAGGED_LOG_LINE_PATTERN = /^\[[^\]\s]+\]/u;
+
+/** Tags the vendored Workflow SDK packages put on their console output. */
+const WORKFLOW_LOG_LINE_PATTERN = /^\[(?:workflow(?:-sdk|:[\w:-]+)?|world-[\w-]+)\]/u;
+
+type DiagnosticPresentation =
+  | { readonly kind: "inline"; readonly text: string }
+  | {
+      readonly kind: "stored";
+      readonly summary: string;
+      /** First error-naming line of the collapsed body, when one exists. */
+      readonly headline?: string;
+      readonly omittedLines: number;
+      readonly path: string;
+    };
+
+/**
+ * Splits captured output into ordered Workflow SDK and other segments. A
+ * Workflow SDK record runs until the next tagged line, so its field rows and
+ * stack stay with it. Pass `continuesWorkflow` when the previous chunk ended
+ * inside a Workflow SDK record: pipes can split one record across chunks.
+ */
+export function splitWorkflowLogs(
+  text: string,
+  continuesWorkflow = false,
+): { text: string; workflow: boolean }[] {
+  const segments: { text: string; workflow: boolean }[] = [];
+  let workflow = continuesWorkflow;
+  for (const line of text.split("\n")) {
+    if (TAGGED_LOG_LINE_PATTERN.test(line)) workflow = WORKFLOW_LOG_LINE_PATTERN.test(line);
+    const last = segments.at(-1);
+    if (last?.workflow === workflow) last.text += `\n${line}`;
+    else segments.push({ text: line, workflow });
+  }
+  return segments;
+}
+
+/** Chooses whether process diagnostics stay inline or collapse to the local sink. */
+export function presentDiagnostic(text: string, path: string): DiagnosticPresentation {
+  const lines = text.split("\n");
+  if (
+    lines.length <= INLINE_DIAGNOSTIC_MAX_LINES &&
+    text.length <= INLINE_DIAGNOSTIC_MAX_CHARACTERS
+  ) {
+    return { kind: "inline", text };
+  }
+
+  const firstIndex = lines.findIndex((line) => line.trim().length > 0);
+  const first = firstIndex === -1 ? "Diagnostic output" : lines[firstIndex]!.trim();
+  const headline = lines
+    .slice(firstIndex + 1)
+    .find((line) => ERROR_HEADLINE_PATTERN.test(line))
+    ?.trim();
+
+  const shown = 1 + (headline === undefined ? 0 : 1);
+  const presentation: DiagnosticPresentation = {
+    kind: "stored",
+    summary: clip(first),
+    omittedLines: Math.max(0, lines.length - shown),
+    path,
+  };
+  return headline === undefined ? presentation : { ...presentation, headline: clip(headline) };
+}
+
+export function formatStoredDiagnostic(
+  presentation: Extract<DiagnosticPresentation, { kind: "stored" }>,
+): string {
+  const count = presentation.omittedLines;
+  const omitted =
+    count === 0 ? "diagnostic details" : `${count} diagnostic line${count === 1 ? "" : "s"}`;
+  const rows = [presentation.summary];
+  if (presentation.headline !== undefined) rows.push(presentation.headline);
+  rows.push(`… ${omitted} · details: ${presentation.path}`);
+  return rows.join("\n");
+}
+
+function clip(line: string): string {
+  return line.length <= DIAGNOSTIC_SUMMARY_MAX_CHARACTERS
+    ? line
+    : `${line.slice(0, DIAGNOSTIC_SUMMARY_MAX_CHARACTERS - 1)}…`;
+}

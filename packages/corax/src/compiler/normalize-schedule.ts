@@ -1,0 +1,59 @@
+import { stripLogicalPathExtension } from "#discover/filesystem.js";
+import type { ScheduleSourceRef } from "#discover/manifest.js";
+import { normalizeScheduleDefinition } from "#internal/authored-definition/core.js";
+import type { ScheduleDefinition } from "#public/definitions/schedule.js";
+import type { CompiledScheduleDefinition } from "#compiler/manifest.js";
+import { readWorkflowFunctionId } from "#internal/workflow/reference.js";
+import { workflowCallbackErrorMessage } from "#shared/workflow-tool-context.js";
+import type { AgentSourceOwner } from "#compiler/source-graph.js";
+
+/**
+ * Compiles one authored schedule into the normalized shape consumed by
+ * the runtime scheduler.
+ *
+ * Schedules are single files: `schedules/<name>.{ts,md}`. The markdown
+ * form always produces a fire-and-forget schedule (`markdown` body, no
+ * `run`). The TypeScript form may declare either `markdown` or `run`
+ * (exactly one). The schedule name is derived from the relative file
+ * path under `schedules/` minus the extension
+ * (`schedules/billing/invoice-sweep.ts` → `"billing/invoice-sweep"`).
+ */
+export function compileScheduleDefinition(
+  _agentRoot: string,
+  source: ScheduleSourceRef,
+  value: unknown,
+  owner: AgentSourceOwner,
+): CompiledScheduleDefinition {
+  const definition: ScheduleDefinition = normalizeScheduleDefinition(
+    value,
+    source.sourceKind === "markdown"
+      ? `Expected the compiled schedule definition at "${source.logicalPath}" to match the public corax shape.`
+      : `Expected the schedule export "${source.exportName ?? "default"}" from "${source.logicalPath}" to match the public corax shape.`,
+  );
+
+  if (readWorkflowFunctionId(definition.run) !== undefined) {
+    throw new Error(`${source.logicalPath}: ${workflowCallbackErrorMessage("schedule")}`);
+  }
+
+  const compiled = {
+    cron: definition.cron,
+    hasRun: definition.run !== undefined,
+    logicalPath: source.logicalPath,
+    name: deriveScheduleName(source.logicalPath),
+    sourceId: source.sourceId,
+    sourceKind: source.sourceKind,
+  };
+
+  const withMarkdown =
+    definition.markdown === undefined
+      ? compiled
+      : { ...compiled, markdown: definition.markdown.trim() };
+
+  return source.sourceKind === "module"
+    ? { ...withMarkdown, sourceKind: "module" }
+    : { ...withMarkdown, owner, sourceKind: "markdown" };
+}
+
+function deriveScheduleName(logicalPath: string): string {
+  return stripLogicalPathExtension(logicalPath).replace(/^schedules\//, "");
+}

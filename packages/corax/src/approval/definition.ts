@@ -1,0 +1,169 @@
+import type { SessionAuthContext } from "#channel/types.js";
+import type { SessionParent, SessionTurn } from "#context/keys.js";
+import type { ToolAuthOptions, ToolAuthProvider } from "#tools/auth.js";
+import type { SessionContext } from "#context/session-context.js";
+import type { TokenResult } from "#shared/connection-types.js";
+
+type ApprovalToolInput<TInput> = TInput extends object ? Readonly<TInput> : TInput;
+
+/** Context passed to an approval prompt callback. */
+export interface ApprovalPromptContext<TInput = Record<string, unknown>> {
+  /** Id of the tool call awaiting approval. */
+  readonly callId: string;
+  /** Validated input proposed for the tool call. */
+  readonly input: TInput;
+  /** Final runtime name of the tool. */
+  readonly toolName: string;
+}
+
+/** Builds the human-readable prompt shown when a tool call requires approval. */
+export type ApprovalPrompt<TInput = Record<string, unknown>> = (
+  context: ApprovalPromptContext<TInput>,
+) => string;
+
+/**
+ * Context passed to an {@link ApprovalPolicy} function.
+ *
+ * Extends {@link SessionContext} so approval policies can make decisions from
+ * the active session, current caller, and turn.
+ */
+export interface ApprovalContext<TInput = Record<string, unknown>> extends SessionContext {
+  /** Cancels policy work when the active model generation is cancelled. */
+  readonly abortSignal: AbortSignal;
+  readonly approvedTools: ReadonlySet<string>;
+  readonly callId: string;
+  /**
+   * Behavior hints the connection's server declared for this tool, such as
+   * MCP's `readOnlyHint` and `destructiveHint`. Absent for authored tools and
+   * for servers that declare none. Hints are only as trustworthy as the server.
+   */
+  readonly toolAnnotations?: ConnectionToolAnnotations;
+  readonly toolInput?: ApprovalToolInput<TInput>;
+  readonly toolName: string;
+}
+
+/**
+ * Behavior hints a connection's server declares for one of its tools. The
+ * named fields follow MCP's `ToolAnnotations`; other keys pass through as the
+ * server sent them.
+ */
+export interface ConnectionToolAnnotations {
+  /** Human-readable tool title. */
+  readonly title?: string;
+  /** The tool does not modify its environment. */
+  readonly readOnlyHint?: boolean;
+  /** The tool may perform destructive updates. Meaningful only when not read-only. */
+  readonly destructiveHint?: boolean;
+  /** Repeating a call with the same arguments has no additional effect. */
+  readonly idempotentHint?: boolean;
+  /** The tool may interact with an open world of external entities. */
+  readonly openWorldHint?: boolean;
+  readonly [key: string]: unknown;
+}
+
+/** Request-time approval decision returned by an {@link ApprovalPolicy}. */
+export type ApprovalStatus =
+  | undefined
+  | boolean
+  | "not-applicable"
+  | "approved"
+  | "denied"
+  | "user-approval"
+  | { readonly type: "not-applicable"; readonly reason?: never }
+  | { readonly type: "approved"; readonly reason?: string }
+  | { readonly type: "denied"; readonly reason?: string }
+  | { readonly type: "user-approval"; readonly reason?: never };
+
+/** Request-time approval policy shared by authored tools and connections. */
+export type ApprovalPolicy<TInput = Record<string, unknown>> = (
+  ctx: ApprovalContext<TInput>,
+) => ApprovalStatus | Promise<ApprovalStatus>;
+
+/** Stable tool request passed to a response authorizer. */
+export interface ApprovalRequest<TInput = Record<string, unknown>> {
+  readonly callId: string;
+  readonly requestId: string;
+  /**
+   * Who requested the tool call: the auth of the caller whose turn made it,
+   * captured when the approval was requested. It stays the same while the
+   * request is pending, however many people continue the session, and is
+   * `null` when that caller was unauthenticated or anonymous.
+   */
+  readonly principal: SessionAuthContext | null;
+  readonly toolInput?: ApprovalToolInput<TInput>;
+  readonly toolName: string;
+}
+
+/** Read-only session identity and lineage available to a response authorizer. */
+export interface ApprovalResponseSession {
+  readonly id: string;
+  readonly initiator: SessionAuthContext | null;
+  readonly parent?: SessionParent;
+  readonly turn: SessionTurn;
+}
+
+/** Narrow authorization capability available while validating a responder. */
+export interface ApprovalResponseAuth {
+  getToken(provider: ToolAuthProvider, options?: ToolAuthOptions): Promise<TokenResult>;
+  requireAuth(provider: ToolAuthProvider, options?: ToolAuthOptions): never;
+}
+
+/** Submitted response passed to an approval response policy. */
+export interface ApprovalResponse {
+  readonly decision: "approve" | "cancel";
+  /**
+   * Who submitted the response: the authenticated principal, including its
+   * `principalId`, `principalType`, `authenticator`, and `attributes`.
+   */
+  readonly principal: SessionAuthContext;
+}
+
+/** Context passed to an approval response policy. */
+export interface ApprovalResponseContext<TInput = Record<string, unknown>> {
+  readonly auth: ApprovalResponseAuth;
+  readonly request: ApprovalRequest<TInput>;
+  readonly response: ApprovalResponse;
+  readonly session: ApprovalResponseSession;
+}
+
+/**
+ * Response policy decision. Rejection keeps the shared request pending, so
+ * another responder can still settle it.
+ */
+export type ApprovalResponseDecision =
+  | { readonly status: "allowed" }
+  | { readonly reason: string; readonly status: "rejected" };
+
+/** Decides whether an authenticated responder may approve or cancel one request. */
+export type ApprovalResponsePolicy<TInput = Record<string, unknown>> = (
+  ctx: ApprovalResponseContext<TInput>,
+) => ApprovalResponseDecision | Promise<ApprovalResponseDecision>;
+
+/** Approval definition with request- and response-time policy. */
+export interface ApprovalConfiguration<TInput = Record<string, unknown>> {
+  readonly request: ApprovalPolicy<TInput>;
+  readonly response?: ApprovalResponsePolicy<TInput>;
+}
+
+/** Shared approval definition used by authored tools and connections. */
+export type Approval<TInput = Record<string, unknown>> =
+  | ApprovalPolicy<TInput>
+  | ApprovalConfiguration<TInput>;
+
+/** Approval configuration for a tool, including its optional presentation prompt. */
+export interface ToolApprovalConfiguration<
+  TInput = Record<string, unknown>,
+> extends ApprovalConfiguration<TInput> {
+  /** Optional human-readable prompt shown when this tool requires approval. */
+  readonly prompt?: ApprovalPrompt<TInput>;
+}
+
+/** Approval definition used by authored tools. */
+export type ToolApproval<TInput = Record<string, unknown>> =
+  | ApprovalPolicy<TInput>
+  | ToolApprovalConfiguration<TInput>;
+
+/** Returns the request-time policy from either approval authoring shape. */
+export function resolveApprovalPolicy<TInput>(approval: Approval<TInput>): ApprovalPolicy<TInput> {
+  return typeof approval === "function" ? approval : approval.request;
+}

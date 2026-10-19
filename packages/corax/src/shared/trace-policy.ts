@@ -1,0 +1,62 @@
+import { shouldCaptureInstrumentationContent } from "#shared/instrumentation-content.js";
+import type { ConversationContext } from "#shared/conversation-context.js";
+
+// Keep sampled-flag checks free of OTel imports for workflow driver bundles.
+export function isSampledTrace(context: { readonly traceFlags: number }): boolean {
+  return (context.traceFlags & 1) !== 0;
+}
+import {
+  DROP_INSTRUMENTATION,
+  type InstrumentationDecision,
+} from "#shared/instrumentation-decision.js";
+
+export type TraceCaptureContext = { readonly agentName: string } & ConversationContext;
+
+export type TracePolicyDecision =
+  | { readonly emit: false }
+  | {
+      readonly emit: true;
+      readonly recordInputs: boolean;
+      readonly recordOutputs: boolean;
+    };
+
+export type TraceCapturePolicy = (trace: TraceCaptureContext) => TracePolicyDecision | boolean;
+
+export function resolveTracePolicy(
+  policy: TraceCapturePolicy | undefined,
+  trace: TraceCaptureContext,
+  onError?: (error: unknown) => void,
+): InstrumentationDecision {
+  try {
+    const decision = policy?.(trace);
+    return resolveTracePolicyDecision(decision ?? true, trace);
+  } catch (error) {
+    try {
+      onError?.(error);
+    } catch {}
+    return DROP_INSTRUMENTATION;
+  }
+}
+
+export function resolveTracePolicyDecision(
+  decision: TracePolicyDecision | boolean,
+  context: {
+    readonly audience: TraceCaptureContext["audience"];
+    readonly environment: TraceCaptureContext["environment"];
+  },
+): InstrumentationDecision {
+  if (decision === false) return DROP_INSTRUMENTATION;
+  if (decision === true) {
+    const content = shouldCaptureInstrumentationContent(context);
+    return { action: "record", recordInputs: content, recordOutputs: content };
+  }
+  if (!decision.emit) return DROP_INSTRUMENTATION;
+  return {
+    action: "record",
+    recordInputs: decision.recordInputs,
+    recordOutputs: decision.recordOutputs,
+    ...(decision.recordInputs || decision.recordOutputs
+      ? { explicitContentAudience: context.audience }
+      : undefined),
+  };
+}

@@ -1,0 +1,10 @@
+{
+  "name": "corax-example-sandbox",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "corax": "workspace:*",
+    "@ai-sdk/openai": "catalog:",
+    "just-bash": "3.1.0"
+  }
+}

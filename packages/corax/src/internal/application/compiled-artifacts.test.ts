@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  createDevelopmentWorkflowWorldPluginSource,
+  createWorkflowWorldPluginSource,
+} from "#internal/application/compiled-artifacts.js";
+
+describe("createWorkflowWorldPluginSource", () => {
+  it("imports a configured world package and delegates its construction to Workflow", () => {
+    const source = createWorkflowWorldPluginSource({
+      compiledArtifactsBootstrapPath: "/app/.corax/compile/compiled-artifacts-bootstrap.mjs",
+      configuredWorld: "@acme/corax-world",
+      defaultWorld: "vercel",
+    });
+
+    expect(source).toContain('import "/app/.corax/compile/compiled-artifacts-bootstrap.mjs";');
+    expect(source).toContain('import * as workflowWorldModule from "@acme/corax-world";');
+    expect(source).toContain("import { installWorkflowWorld } from ");
+    expect(source).toContain(
+      "const workflowWorld = await createWorldFromModule(workflowWorldModule);",
+    );
+    expect(source).toContain(
+      'await installWorkflowWorld({ packageName: "@acme/corax-world", world: workflowWorld });',
+    );
+    expect(source).not.toContain("resolveLocalWorkflowWorldDataDirectory");
+  });
+
+  it("configures the vendored local World with corax's app-local data resolver", () => {
+    const source = createWorkflowWorldPluginSource({
+      compiledArtifactsBootstrapPath: "/app/.corax/compile/bootstrap.mjs",
+      configuredWorld: undefined,
+      defaultWorld: "local",
+    });
+
+    expect(source).toContain("/compiled/@workflow/world-local/index.js");
+    expect(source).toContain("resolveLocalWorkflowWorldDataDirectory(process.cwd())");
+    expect(source).toContain("applyLocalWorkflowWorldDeliveryTimeoutDefaults");
+    expect(source.indexOf("applyLocalWorkflowWorldDeliveryTimeoutDefaults();")).toBeLessThan(
+      source.indexOf("workflowWorldModule.createWorld"),
+    );
+    expect(source).not.toContain("createWorldFromModule(workflowWorldModule)");
+  });
+
+  it("selects the vendored Vercel World with Workflow's selector", () => {
+    const source = createWorkflowWorldPluginSource({
+      compiledArtifactsBootstrapPath: "/app/.corax/compile/bootstrap.mjs",
+      configuredWorld: undefined,
+      defaultWorld: "vercel",
+    });
+
+    expect(source).toContain("/compiled/@workflow/world-vercel/index.js");
+    expect(source).toMatch(/headers: \{ "User-Agent": "corax\/.+" \}/);
+    expect(source).toContain("applyVercelWorkflowWorldDefaults(workflowWorld);");
+    expect(source.indexOf("applyVercelWorkflowWorldDefaults(workflowWorld);")).toBeLessThan(
+      source.indexOf("await installWorkflowWorld("),
+    );
+  });
+});
+
+describe("createDevelopmentWorkflowWorldPluginSource", () => {
+  it("installs the parent-backed World without starting a local World in the worker", () => {
+    const source = createDevelopmentWorkflowWorldPluginSource({
+      compiledArtifactsBootstrapPath: "/app/.corax/host/bootstrap.mjs",
+      configuredWorld: undefined,
+    });
+
+    expect(source).toContain("createDevelopmentWorkflowWorld");
+    expect(source).toContain(
+      "await installWorkflowWorld({ world: createDevelopmentWorkflowWorld() });",
+    );
+    expect(source).not.toContain("@workflow/world-local");
+  });
+
+  it("keeps explicitly configured remote Worlds inside the worker", () => {
+    const source = createDevelopmentWorkflowWorldPluginSource({
+      compiledArtifactsBootstrapPath: "/app/.corax/host/bootstrap.mjs",
+      configuredWorld: "@acme/corax-world",
+    });
+
+    expect(source).toContain('import * as workflowWorldModule from "@acme/corax-world";');
+    expect(source).toContain("await installWorkflowWorld({");
+  });
+});

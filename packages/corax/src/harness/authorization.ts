@@ -1,0 +1,301 @@
+import {
+  sessionCommandHookToken,
+  sessionInboxHookToken,
+} from "#execution/session-inbox/address.js";
+/**
+ * Authorization request/result API for tool execution.
+ *
+ * Public API:
+ * - {@link requestAuthorization} — return from execute to suspend for auth
+ * - {@link getAuthorizationResult} — read the callback on resume
+ * - {@link createAuthorizationAttempt} — mint one correlated callback URL
+ * - {@link isAuthorizationSignal} — type guard
+ *
+ * ## Resume lifecycle
+ *
+ * `attemptId` binds the callback to one challenge generation, while `resume`
+ * carries strategy data from
+ * `startAuthorization` to `completeAuthorization` across the park:
+ *
+ * 1. `startAuthorization` returns `{ challenge, resume? }`. The runtime
+ *    stores `resume` on the {@link AuthorizationChallenge} and journals it
+ *    onto `session.state` when the turn
+ *    parks — so it survives the suspend/resume across a `"use step"`
+ *    boundary.
+ * 2. The IdP redirect hits the framework callback route, which parses it
+ *    (see `projectAuthorizationCallback` — params only, no headers) and
+ *    resumes the workflow.
+ * 3. On resume the journaled `resume` is paired with the parsed callback
+ *    into an {@link AuthorizationResult} and handed back to
+ *    `completeAuthorization({ resume, callback })`.
+ *
+ * `resume` is serialized across workflow steps to survive the park.
+ * Provider-owned strategies (Vercel Connect) omit it so nothing crosses
+ * the boundary; a custom PKCE strategy uses it to carry the verifier (or a
+ * nonce that re-derives it) from start to finish.
+ */
+
+import { loadContext } from "#context/container.js";
+import { ContextKey } from "#context/key.js";
+import { SessionIdKey, type SessionAuthContext } from "#context/keys.js";
+import { createBrowserCallbackUrl } from "#execution/workflow-callback-url.js";
+import type { ConnectionAuthorizationChallenge } from "#connections/errors.js";
+import type { AuthorizationCallback, ConnectionPrincipal } from "#shared/connection-types.js";
+import type { JsonValue } from "#shared/json.js";
+import { createCoraxConnectionCallbackRoutePath } from "#protocol/routes.js";
+import { createUlid } from "#shared/ulid.js";
+
+const AUTHORIZATION_BRAND = "__coraxAuthorization" as const;
+const AUTHORIZATION_PENDING_BRAND = "__coraxAuthorizationPending" as const;
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+export interface AuthorizationChallenge {
+  /** Opaque identity of this exact authorization attempt. */
+  readonly attemptId?: string;
+  readonly candidateId?: string;
+  /**
+   * Credential this sign-in grants, shared by every scope that uses it (the
+   * Vercel Connect connector). Attempts for the same grant and principal are
+   * one sign-in, so only one is shown.
+   */
+  readonly grant?: string;
+  /** Opaque resolved connection identity; omitted for tool-hosted authorization. */
+  readonly instanceId?: string;
+  readonly name: string;
+  readonly challenge: ConnectionAuthorizationChallenge;
+  readonly hookUrl: string;
+  /** Principal passed to `startAuthorization`; omitted from model-facing copies. */
+  readonly principal?: ConnectionPrincipal;
+  /** Session principal that started this attempt; projected onto authorization events. */
+  readonly principalId?: string;
+  /**
+   * Session identity that started this attempt. The callback carries no
+   * identity, so the resumed turn runs as this caller. Never projected onto
+   * events or model-facing output.
+   */
+  readonly requester?: SessionAuthContext;
+  /**
+   * Opaque resume value from the strategy's `startAuthorization`,
+   * journaled across the park. Absent for provider-owned flows.
+   */
+  readonly resume?: JsonValue;
+}
+
+export interface AuthorizationSignal {
+  readonly [AUTHORIZATION_BRAND]: true;
+  readonly challenges: readonly AuthorizationChallenge[];
+}
+
+/**
+ * Opaque tool output the model sees while authorization is pending.
+ * Contains connection names only — no OAuth URLs, user codes, or hook URLs.
+ */
+export interface AuthorizationPendingModelOutput {
+  readonly [AUTHORIZATION_PENDING_BRAND]: true;
+  readonly connections: readonly string[];
+}
+
+export interface AuthorizationResult {
+  readonly attemptId?: string;
+  readonly instanceId?: string;
+  readonly resume?: JsonValue;
+  readonly callback: AuthorizationCallback;
+  readonly hookUrl: string;
+  readonly principal?: ConnectionPrincipal;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates an authorization signal. Return this from a tool's execute
+ * to suspend the session for OAuth or other external authorization.
+ *
+ * The harness emits `authorization.required` events for each challenge
+ * and parks the session. Channels render sign-in buttons.
+ */
+export function requestAuthorization(
+  challenges: readonly AuthorizationChallenge[],
+): AuthorizationSignal {
+  return { [AUTHORIZATION_BRAND]: true, challenges };
+}
+
+/**
+ * Reads the authorization callback on resume. Returns `undefined` if
+ * not resuming from an authorization request.
+ *
+ * When `name` is omitted, returns the first result (convenience for
+ * single-challenge tools).
+ */
+export function getAuthorizationResult(name?: string): AuthorizationResult | undefined {
+  const results = loadContext().get(PendingAuthorizationResultKey);
+  if (!results || results.length === 0) return undefined;
+  if (name === undefined) return results[0];
+  return results.find((r) => r.name === name);
+}
+
+/** Returns every callback result available to the active step. */
+export function getAuthorizationResults(): readonly NamedAuthorizationResult[] {
+  return loadContext().get(PendingAuthorizationResultKey) ?? [];
+}
+
+/**
+ * Removes and returns one authorization callback result.
+ *
+ * Callback results are one-shot inputs to `completeAuthorization`. Consuming
+ * before completion prevents a failed or replayed callback from poisoning
+ * every later tool call in the same step.
+ */
+export function consumeAuthorizationResult(
+  name: string,
+  instanceId?: string,
+): AuthorizationResult | undefined {
+  const ctx = loadContext();
+  const results = ctx.get(PendingAuthorizationResultKey);
+  if (!results || results.length === 0) return undefined;
+
+  const index = results.findIndex(
+    (result) => result.name === name && result.instanceId === instanceId,
+  );
+  if (
+    index === -1 &&
+    instanceId !== undefined &&
+    results.some((result) => result.name === name && result.instanceId !== undefined)
+  ) {
+    throw new Error(
+      `Authorization for "${name}" cannot complete because its resolved connection changed while sign-in was pending. Start sign-in again.`,
+    );
+  }
+  if (index === -1) return undefined;
+
+  const result = results[index]!;
+  const remaining = results.filter((_, resultIndex) => resultIndex !== index);
+  ctx.delete(PendingAuthorizationResultKey);
+  if (remaining.length > 0) {
+    ctx.set(PendingAuthorizationResultKey, remaining);
+  }
+  return result;
+}
+
+/**
+ * Builds a callback URL for external systems. `name` and `attemptId` identify
+ * the exact challenge in the URL path.
+ *
+ * By default the URL embeds the session's stable inbox token.
+ * A runtime with its own continuation supplies that hook through AuthorizationHookKey.
+ * It is independent of the continuation token, so channel aliasing mid-turn
+ * does not invalidate the callback URL.
+ *
+ * The URL reaches the user's browser and the IdP, so it never carries the
+ * deployment's protection bypass secret.
+ *
+ * Returns `undefined` if no callback address is available.
+ */
+export function getHookUrl(name: string, attemptId: string): string | undefined {
+  const ctx = loadContext();
+  const sessionId = ctx.get(SessionIdKey);
+  const baseUrl = ctx.get(CallbackBaseUrlKey);
+  const token = ctx.get(AuthorizationHookKey) ?? (sessionId ? authHookToken(sessionId) : undefined);
+  if (!token || !baseUrl) return undefined;
+  return createBrowserCallbackUrl(
+    baseUrl,
+    createCoraxConnectionCallbackRoutePath(name, attemptId, token),
+  );
+}
+
+/** Mints the identity and callback URL for one interactive authorization attempt. */
+export function createAuthorizationAttempt(
+  name: string,
+): { readonly attemptId: string; readonly hookUrl: string } | undefined {
+  const attemptId = createUlid();
+  const hookUrl = getHookUrl(name, attemptId);
+  return hookUrl === undefined ? undefined : { attemptId, hookUrl };
+}
+
+export function isAuthorizationSignal(value: unknown): value is AuthorizationSignal {
+  if (typeof value !== "object" || value === null) return false;
+  return (value as Record<string, unknown>)[AUTHORIZATION_BRAND] === true;
+}
+
+export function isAuthorizationPendingModelOutput(
+  value: unknown,
+): value is AuthorizationPendingModelOutput {
+  if (typeof value !== "object" || value === null) return false;
+  return (value as Record<string, unknown>)[AUTHORIZATION_PENDING_BRAND] === true;
+}
+
+/**
+ * JSON-safe pending authorization output for model-facing tool results and
+ * wire surfaces (`action.result`, telemetry). Omits OAuth URLs and user
+ * codes — connection names only.
+ */
+export function authorizationPendingAsJsonObject(input: {
+  readonly connections: readonly string[];
+}): AuthorizationPendingModelOutput {
+  return {
+    [AUTHORIZATION_PENDING_BRAND]: true,
+    connections: [...input.connections],
+  };
+}
+
+/**
+ * Projects a full {@link AuthorizationSignal} to the opaque shape recorded
+ * in model-facing tool results and session history.
+ */
+export function modelFacingAuthorizationOutput(
+  signal: AuthorizationSignal,
+): AuthorizationPendingModelOutput {
+  return authorizationPendingAsJsonObject({
+    connections: signal.challenges.map((entry) => entry.name),
+  });
+}
+
+/** Human-readable tool output for {@link modelFacingAuthorizationOutput}. */
+export function authorizationPendingModelText(connections: readonly string[]): string {
+  if (connections.length === 0) {
+    return "Authorization required. Waiting for the user to sign in.";
+  }
+  if (connections.length === 1) {
+    return `Authorization required for ${connections[0]}. Waiting for the user to sign in.`;
+  }
+  return `Authorization required for ${connections.join(", ")}. Waiting for the user to sign in.`;
+}
+
+export function isPendingAuthorizationToolOutput(value: unknown): boolean {
+  return isAuthorizationPendingModelOutput(value) || isAuthorizationSignal(value);
+}
+
+/**
+ * Physical hook token embedded in a session's authorization callback URLs.
+ * The callback route resumes exactly this hook, so it is the stable inbox's
+ * physical address rather than its logical session token.
+ */
+export function authHookToken(sessionId: string): string {
+  return sessionInboxHookToken(sessionCommandHookToken(sessionId));
+}
+
+// ---------------------------------------------------------------------------
+// Context keys
+// ---------------------------------------------------------------------------
+
+interface NamedAuthorizationResult extends AuthorizationResult {
+  readonly name: string;
+}
+
+export const PendingAuthorizationResultKey = new ContextKey<readonly NamedAuthorizationResult[]>(
+  "corax.pendingAuthorizationResult",
+);
+
+/**
+ * Deployment base URL for building callback URLs. Set by the
+ * framework (turnStep) at the start of each step from workflow
+ * metadata.
+ */
+export const CallbackBaseUrlKey = new ContextKey<string>("corax.callbackBaseUrl");
+
+/** Hook token of a runtime that owns its callback instead of using the session hook. */
+export const AuthorizationHookKey = new ContextKey<string>("corax.authorizationHook");

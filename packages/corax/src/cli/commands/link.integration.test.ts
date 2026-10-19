@@ -1,0 +1,286 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import { createFakePrompter } from "#internal/testing/fake-prompter.js";
+import type { ApplyAiGatewayCredentialDeps } from "#setup/boxes/apply-ai-gateway-credential.js";
+import type { LinkProjectDeps } from "#setup/boxes/link-project.js";
+import type { ResolveProvisioningDeps } from "#setup/boxes/resolve-provisioning.js";
+import type { LinkFlowDeps } from "#setup/flows/link.js";
+import { isCoraxProject } from "#setup/scaffold/index.js";
+import { readVercelCliToken } from "#internal/model-auth/vercel-cli.js";
+
+import { runLinkCommand, type LinkCliLogger } from "./link.js";
+import type { NonInteractiveLinkDependencies } from "./vercel-non-interactive.js";
+
+vi.mock("#internal/model-auth/vercel-cli.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#internal/model-auth/vercel-cli.js")>()),
+  readVercelCliToken: vi.fn(),
+}));
+
+class TestLogger implements LinkCliLogger {
+  readonly errors: string[] = [];
+  readonly logs: string[] = [];
+
+  error(message: string): void {
+    this.errors.push(message);
+  }
+
+  log(message: string): void {
+    this.logs.push(message);
+  }
+}
+
+async function createWorkspaceProject(): Promise<string> {
+  const projectRoot = await mkdtemp(join(tmpdir(), "corax-link-workspace-"));
+  await mkdir(join(projectRoot, "agents/support/agent"), { recursive: true });
+  await writeFile(
+    join(projectRoot, "package.json"),
+    JSON.stringify({ dependencies: { corax: "*" }, private: true }),
+    "utf8",
+  );
+  return projectRoot;
+}
+
+async function createAgentProject(): Promise<string> {
+  const projectRoot = await mkdtemp(join(tmpdir(), "corax-link-command-"));
+  await mkdir(join(projectRoot, "agent"), { recursive: true });
+  await writeFile(join(projectRoot, "agent/agent.ts"), "export default {};\n", "utf8");
+  await writeFile(
+    join(projectRoot, "package.json"),
+    `${JSON.stringify({ name: "my-agent", dependencies: { corax: "*" } }, null, 2)}\n`,
+    "utf8",
+  );
+  return projectRoot;
+}
+
+function createFlowDeps(): Partial<LinkFlowDeps> {
+  return {
+    detectProjectIdentity: vi.fn(async () => undefined),
+    findEnvFileWithKey: vi.fn(async (_root: string, key: string) =>
+      key === "VERCEL_OIDC_TOKEN" ? (".env.local" as const) : undefined,
+    ),
+    resolveProvisioning: {
+      requireAuth: vi.fn<ResolveProvisioningDeps["requireAuth"]>(async () => {}),
+      isVercelAuthenticated: vi.fn<ResolveProvisioningDeps["isVercelAuthenticated"]>(
+        async () => true,
+      ),
+      detectProjectResolution: vi.fn<ResolveProvisioningDeps["detectProjectResolution"]>(
+        async () => ({ kind: "unresolved" }),
+      ),
+      pathExists: vi.fn<ResolveProvisioningDeps["pathExists"]>(async () => false),
+      validateTeam: vi.fn<ResolveProvisioningDeps["validateTeam"]>(async () => {}),
+      resolveTeam: vi.fn<ResolveProvisioningDeps["resolveTeam"]>(async () => "acme"),
+      pickTeam: vi.fn<ResolveProvisioningDeps["pickTeam"]>(async () => "acme"),
+      resolveProjectByNameOrId: vi.fn<ResolveProvisioningDeps["resolveProjectByNameOrId"]>(
+        async () => ({
+          projectId: "prj_existing",
+          projectName: "existing-project",
+        }),
+      ),
+      pickProject: vi.fn<ResolveProvisioningDeps["pickProject"]>(async () => ({
+        kind: "existing",
+        project: {
+          projectId: "prj_1",
+          projectName: "my-agent",
+        },
+        team: "acme",
+      })),
+      pickNewProjectName: vi.fn<ResolveProvisioningDeps["pickNewProjectName"]>(
+        async () => "my-agent",
+      ),
+      assertNewProjectNameAvailable: vi.fn<
+        ResolveProvisioningDeps["assertNewProjectNameAvailable"]
+      >(async () => {}),
+    },
+    linkProject: {
+      linkProject: vi.fn<LinkProjectDeps["linkProject"]>(async () => ({
+        projectId: "prj_1",
+        projectName: "my-agent",
+      })),
+      detectProjectResolution: vi.fn<LinkProjectDeps["detectProjectResolution"]>(async () => ({
+        kind: "linked",
+        projectId: "prj_1",
+      })),
+      unresolvedProject: vi.fn<LinkProjectDeps["unresolvedProject"]>(() => ({
+        kind: "unresolved",
+      })),
+    },
+    applyAiGatewayCredential: {
+      appendEnv: vi.fn<ApplyAiGatewayCredentialDeps["appendEnv"]>(async () => ({
+        written: [],
+        skipped: [],
+      })),
+      runVercelEnvPull: vi.fn<ApplyAiGatewayCredentialDeps["runVercelEnvPull"]>(async () => true),
+      detectAiGatewayResolution: vi.fn<ApplyAiGatewayCredentialDeps["detectAiGatewayResolution"]>(
+        async () => ({ kind: "api-key", envFile: ".env.local" }),
+      ),
+    },
+  };
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+  process.exitCode = undefined;
+});
+
+describe("runLinkCommand", () => {
+  test.each([
+    { existing: false, expectedRequests: 1 },
+    { existing: true, expectedRequests: 0 },
+    { existing: "unknown", expectedRequests: 0 },
+  ])(
+    "non-interactive link configures sampling only for a new project: $existing",
+    async ({ existing, expectedRequests }) => {
+      const projectRoot = await createAgentProject();
+      const logger = new TestLogger();
+      const fake = createFakePrompter();
+      const lookup = vi.fn<NonInteractiveLinkDependencies["resolveProjectByNameOrId"]>();
+      if (existing === "unknown") lookup.mockRejectedValue(new Error("Access denied"));
+      else
+        lookup.mockResolvedValue(
+          existing ? { projectId: "prj_existing", projectName: "my-agent" } : null,
+        );
+      const linkDeps: NonInteractiveLinkDependencies = {
+        runVercel: vi.fn(async () => true),
+        runVercelEnvPull: vi.fn(async () => true),
+        resolveTeam: vi.fn(async () => "acme"),
+        resolveProjectByNameOrId: lookup,
+        readProjectLink: vi.fn(async () => ({
+          orgId: "team_123",
+          projectId: "prj_new",
+          projectName: "my-agent",
+        })),
+      };
+      vi.mocked(readVercelCliToken).mockResolvedValue("vercel-token");
+      const fetch = vi.fn(async () => new Response(null, { status: 200 }));
+      vi.stubGlobal("fetch", fetch);
+
+      await runLinkCommand(
+        logger,
+        projectRoot,
+        {
+          createPrompter: () => fake.prompter,
+          hasInteractiveTerminal: () => false,
+          nonInteractiveLinkDeps: linkDeps,
+        },
+        { nonInteractive: true, project: "my-agent", team: "acme" },
+      );
+
+      expect(logger.errors).toEqual([]);
+      expect(logger.logs).toContain("Project linked.");
+      expect(fetch).toHaveBeenCalledTimes(expectedRequests);
+      if (expectedRequests > 0) {
+        expect(fetch).toHaveBeenCalledWith(
+          "https://api.vercel.com/v1/drains/tracing/config?projectId=prj_new&teamId=team_123",
+          expect.objectContaining({
+            method: "PUT",
+            body: JSON.stringify({ enabled: true, sampling: [{ type: "head_sampling", rate: 1 }] }),
+          }),
+        );
+      }
+    },
+  );
+
+  test("refuses a directory without an corax agent", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "corax-link-empty-"));
+    const logger = new TestLogger();
+
+    await runLinkCommand(logger, projectRoot, {
+      isCoraxProject,
+      hasInteractiveTerminal: () => true,
+    });
+
+    expect(logger.errors).toEqual([
+      "No corax agent in this directory. Run `corax init <name>`, then run this command from inside the new project.",
+    ]);
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("refuses to link one member of a workspace", async () => {
+    const projectRoot = await createWorkspaceProject();
+    const logger = new TestLogger();
+
+    await runLinkCommand(logger, join(projectRoot, "agents/support"), {
+      isCoraxProject,
+      hasInteractiveTerminal: () => true,
+    });
+
+    expect(logger.errors[0]).toContain("workspace root");
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("links a workspace root non-interactively", async () => {
+    const projectRoot = await createWorkspaceProject();
+    const logger = new TestLogger();
+    const linkDeps: NonInteractiveLinkDependencies = {
+      runVercel: vi.fn(async () => true),
+      runVercelEnvPull: vi.fn(async () => true),
+      resolveTeam: vi.fn(async () => "acme"),
+      resolveProjectByNameOrId: vi.fn(async () => ({
+        projectId: "prj_existing",
+        projectName: "workspace",
+      })),
+      readProjectLink: vi.fn(async () => undefined),
+    };
+
+    await runLinkCommand(
+      logger,
+      projectRoot,
+      {
+        createPrompter: () => createFakePrompter().prompter,
+        hasInteractiveTerminal: () => false,
+        nonInteractiveLinkDeps: linkDeps,
+      },
+      { nonInteractive: true, project: "workspace" },
+    );
+
+    expect(logger.errors).toEqual([]);
+    expect(linkDeps.runVercel).toHaveBeenCalledWith(["link", "--project", "workspace", "--yes"], {
+      cwd: projectRoot,
+      nonInteractive: true,
+    });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  test("refuses without an interactive terminal", async () => {
+    const projectRoot = await createAgentProject();
+    const logger = new TestLogger();
+
+    await runLinkCommand(logger, projectRoot, {
+      hasInteractiveTerminal: () => false,
+    });
+
+    expect(logger.errors[0]).toContain("interactive terminal");
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("creates a project through the shared flow and reports success", async () => {
+    const projectRoot = await createAgentProject();
+    const logger = new TestLogger();
+    const fake = createFakePrompter({
+      single: (opts) => {
+        if (opts.message === "Vercel project") return "new";
+        throw new Error(`Unexpected select: ${opts.message}`);
+      },
+    });
+    const flowDeps = createFlowDeps();
+
+    await runLinkCommand(logger, projectRoot, {
+      createPrompter: () => fake.prompter,
+      hasInteractiveTerminal: () => true,
+      flowDeps,
+    });
+
+    expect(logger.errors).toEqual([]);
+    expect(process.exitCode).toBeUndefined();
+    expect(fake.prompter.intro).toHaveBeenCalledWith("Link your corax agent to Vercel");
+    expect(fake.prompter.outro).toHaveBeenCalledWith("Project linked.");
+    expect(flowDeps.resolveProvisioning?.pickNewProjectName).toHaveBeenCalled();
+    expect(flowDeps.resolveProvisioning?.pickProject).not.toHaveBeenCalled();
+    expect(flowDeps.linkProject?.linkProject).toHaveBeenCalled();
+  });
+});

@@ -1,0 +1,339 @@
+import { type ApplicationInspection, inspectApplication } from "#services/inspect-application.js";
+import type {
+  CompiledInstructionsDefinition,
+  CompiledSubagentNode,
+  CompiledToolDefinition,
+} from "#compiler/manifest.js";
+import type { JsonObject } from "#shared/json.js";
+import { type CliRow, createCliTheme, renderCliSection } from "#cli/ui/output.js";
+
+interface CliInfoLogger {
+  log(message: string): void;
+}
+
+/** Options accepted by {@link printApplicationInfo}. */
+export interface PrintApplicationInfoOptions {
+  /** Emit a machine-readable JSON document instead of the human table. */
+  json?: boolean;
+}
+
+/** Machine-readable view of an application inspection, emitted by `corax info --json`. */
+export interface ApplicationInfoJson {
+  appRoot: string;
+  agentRoot: string | null;
+  layout: string | null;
+  status: string;
+  diagnostics: { errors: number; warnings: number } | null;
+  model: string | null;
+  instructions: string | null;
+  skills: string[];
+  tools: string[];
+  /** Each static tool's input schema as corax sends it to a model, keyed by tool name. */
+  toolInputSchemas: {
+    /** The root agent's tools, including tools from mounted extensions. */
+    root: Record<string, JsonObject>;
+    /**
+     * Each declared subagent's own tools, keyed by the subagent's path of names
+     * from the root agent, such as `researcher` or `researcher/reviewer`.
+     */
+    subagents: Record<string, Record<string, JsonObject>>;
+  };
+  subagents: string[];
+  schedules: string[];
+  channels: { name: string; kind: string | null; method: string | null; urlPath: string | null }[];
+  messaging: { create: string; messages: string; stream: string };
+  artifacts: {
+    compiledManifest: string;
+    discoveryManifest: string;
+    diagnostics: string;
+    moduleMap: string;
+    metadata: string;
+  } | null;
+}
+
+function formatInstructions(instructions: readonly CompiledInstructionsDefinition[]): string {
+  return instructions
+    .map((instructions) => `${instructions.logicalPath} (${instructions.role})`)
+    .join(", ");
+}
+
+/**
+ * Projects a structured inspection into the stable `corax info --json` contract.
+ * Tools and channels an agent relies on to verify setup come straight from the
+ * compiled manifest, so this stays in sync with what the runtime actually serves.
+ */
+export function buildApplicationInfoJson(inspection: ApplicationInspection): ApplicationInfoJson {
+  const { application: info, compiledState, messaging } = inspection;
+  return {
+    appRoot: info.appRoot,
+    agentRoot: compiledState?.project.agentRoot ?? null,
+    layout: compiledState?.project.layout ?? null,
+    status: compiledState?.metadata.status ?? "unavailable",
+    diagnostics: compiledState
+      ? {
+          errors: compiledState.metadata.discovery.summary.errors,
+          warnings: compiledState.metadata.discovery.summary.warnings,
+        }
+      : null,
+    model: compiledState?.manifest.config.model?.id ?? null,
+    instructions:
+      compiledState === null || compiledState.manifest.instructions.length === 0
+        ? null
+        : formatInstructions(compiledState.manifest.instructions),
+    skills: (compiledState?.manifest.skills ?? []).map((skill) => skill.name),
+    tools: (compiledState?.manifest.tools ?? []).map((tool) => tool.name),
+    toolInputSchemas: {
+      root: modelInputSchemas(compiledState?.manifest.tools ?? []),
+      subagents: subagentModelInputSchemas(compiledState?.manifest.subagents ?? []),
+    },
+    subagents: (compiledState?.manifest.subagents ?? []).map((subagent) => subagent.name),
+    schedules: (compiledState?.manifest.schedules ?? []).map((schedule) => schedule.name),
+    channels: (compiledState?.manifest.channelRoutes.effective ?? []).map((channel) => ({
+      name: channel.name,
+      kind: channel.adapterKind ?? null,
+      method: channel.method,
+      urlPath: channel.urlPath,
+    })),
+    messaging: {
+      create: messaging.createSessionRoutePath,
+      messages: messaging.sessionMessagesRoutePattern,
+      stream: messaging.streamRoutePattern,
+    },
+    artifacts: compiledState
+      ? {
+          compiledManifest: compiledState.paths.compiledManifestPath,
+          discoveryManifest: compiledState.paths.discoveryManifestPath,
+          diagnostics: compiledState.paths.diagnosticsPath,
+          moduleMap: compiledState.paths.moduleMapPath,
+          metadata: compiledState.paths.compileMetadataPath,
+        }
+      : null,
+  };
+}
+
+/** Provider-managed tools, such as `web_search`, have no corax input schema and are omitted. */
+function modelInputSchemas(tools: readonly CompiledToolDefinition[]): Record<string, JsonObject> {
+  return Object.fromEntries(
+    tools.flatMap((tool) =>
+      tool.modelInputSchema === undefined ? [] : [[tool.name, tool.modelInputSchema]],
+    ),
+  );
+}
+
+/** Subagent names are unique only among siblings, so each entry is keyed by its path from the root. */
+function subagentModelInputSchemas(
+  subagents: readonly CompiledSubagentNode[],
+): Record<string, Record<string, JsonObject>> {
+  const subagentsByNodeId = new Map(subagents.map((subagent) => [subagent.nodeId, subagent]));
+  const pathOf = (subagent: CompiledSubagentNode): string => {
+    const parent = subagentsByNodeId.get(subagent.parentNodeId);
+    return parent === undefined ? subagent.name : `${pathOf(parent)}/${subagent.name}`;
+  };
+  return Object.fromEntries(
+    subagents.map((subagent) => [pathOf(subagent), modelInputSchemas(subagent.agent.tools)]),
+  );
+}
+
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function formatDiscoverySummary(errors: number, warnings: number): string {
+  return `${pluralize(errors, "error")}, ${pluralize(warnings, "warning")}`;
+}
+
+function resolveCompileTone(status: string): "danger" | "success" | "warning" {
+  switch (status) {
+    case "ready":
+      return "success";
+    case "failed":
+      return "danger";
+    default:
+      return "warning";
+  }
+}
+
+/**
+ * Writes resolved application details and the active message-route contract.
+ */
+export async function printApplicationInfo(
+  logger: CliInfoLogger,
+  appRoot: string,
+  options: PrintApplicationInfoOptions = {},
+): Promise<void> {
+  const inspection = await inspectApplication(appRoot);
+
+  if (options.json) {
+    logger.log(JSON.stringify(buildApplicationInfoJson(inspection), null, 2));
+    return;
+  }
+
+  logger.log(renderApplicationInfo(inspection));
+}
+
+/** Renders the human-readable `corax info` report for CLI and TUI surfaces. */
+export function renderApplicationInfo(inspection: ApplicationInspection): string {
+  const compiledState = inspection.compiledState;
+  const info = inspection.application;
+  const theme = createCliTheme();
+  const applicationRows: CliRow[] = [
+    {
+      label: "App Root",
+      value: info.appRoot,
+    },
+  ];
+  const artifactRows: CliRow[] = [
+    {
+      label: "Workflow Build",
+      value: info.workflowBuildDir,
+    },
+    {
+      label: "Output",
+      value: info.outputDir,
+    },
+  ];
+  const instructionsRows: CliRow[] = [];
+
+  if (compiledState !== null) {
+    applicationRows.push(
+      {
+        label: "Agent Root",
+        value: compiledState.project.agentRoot,
+      },
+      {
+        label: "Layout",
+        value: compiledState.project.layout,
+      },
+      {
+        label: "Compile",
+        tone: resolveCompileTone(compiledState.metadata.status),
+        value: compiledState.metadata.status,
+      },
+      {
+        label: "Diagnostics",
+        tone:
+          compiledState.metadata.discovery.summary.errors > 0
+            ? "danger"
+            : compiledState.metadata.discovery.summary.warnings > 0
+              ? "warning"
+              : "success",
+        value: formatDiscoverySummary(
+          compiledState.metadata.discovery.summary.errors,
+          compiledState.metadata.discovery.summary.warnings,
+        ),
+      },
+      {
+        label: "Instructions",
+        value:
+          compiledState.manifest.instructions.length === 0
+            ? "none"
+            : formatInstructions(compiledState.manifest.instructions),
+      },
+      {
+        label: "Skills",
+        value: pluralize(compiledState.manifest.skills.length, "skill"),
+      },
+      {
+        label: "Tools",
+        value: pluralize(compiledState.manifest.tools.length, "tool"),
+      },
+      {
+        label: "Subagents",
+        value: pluralize(compiledState.manifest.subagents.length, "subagent"),
+      },
+      {
+        label: "Schedules",
+        value: pluralize(compiledState.manifest.schedules.length, "schedule"),
+      },
+    );
+    artifactRows.unshift(
+      {
+        label: "Compiled Manifest",
+        value: compiledState.paths.compiledManifestPath,
+      },
+      {
+        label: "Discovery Manifest",
+        value: compiledState.paths.discoveryManifestPath,
+      },
+      {
+        label: "Diagnostics",
+        value: compiledState.paths.diagnosticsPath,
+      },
+      {
+        label: "Module Map",
+        value: compiledState.paths.moduleMapPath,
+      },
+      {
+        label: "Metadata",
+        value: compiledState.paths.compileMetadataPath,
+      },
+    );
+    instructionsRows.push(
+      compiledState.manifest.instructions.length === 0
+        ? {
+            label: "Instructions",
+            value: "No instructions prompt discovered.",
+          }
+        : {
+            label: "Instructions",
+            value: formatInstructions(compiledState.manifest.instructions),
+          },
+    );
+  } else {
+    applicationRows.push({
+      label: "Compile",
+      tone: "warning",
+      value: "unavailable",
+    });
+  }
+
+  return [
+    renderCliSection(theme, {
+      rows: applicationRows,
+      title: "Application",
+    }),
+    "",
+    renderCliSection(theme, {
+      rows: artifactRows,
+      title: "Artifacts",
+    }),
+    ...(compiledState === null
+      ? []
+      : [
+          "",
+          renderCliSection(theme, {
+            rows: instructionsRows,
+            title: "Instructions",
+          }),
+        ]),
+    "",
+    renderCliSection(theme, {
+      rows: [
+        {
+          label: "Workflow ID",
+          value: info.workflowId,
+        },
+        {
+          label: "Source Dir",
+          value: info.workflowSourceDir,
+        },
+        {
+          label: "Create",
+          tone: "info",
+          value: `POST ${inspection.messaging.createSessionRoutePath}`,
+        },
+        {
+          label: "Messages",
+          tone: "info",
+          value: `POST ${inspection.messaging.sessionMessagesRoutePattern}`,
+        },
+        {
+          label: "Stream",
+          tone: "info",
+          value: `GET ${inspection.messaging.streamRoutePattern}`,
+        },
+      ],
+      title: "Messaging",
+    }),
+  ].join("\n");
+}

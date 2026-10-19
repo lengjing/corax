@@ -1,0 +1,254 @@
+import type { SessionAuthContext } from "#channel/types.js";
+
+import { resolvedPromptAnswer } from "#channel/resolved-prompt.js";
+import { extractErrorId, formatErrorHint } from "#internal/logging.js";
+import type { ConnectionAuthorizationOutcome } from "#protocol/message.js";
+import {
+  splitTeamsMessageText,
+  type TeamsChannelAccount,
+  type TeamsMention,
+} from "#public/channels/teams/api.js";
+import {
+  renderTeamsAuthorizationPrompt,
+  renderTeamsAuthorizationStatus,
+  teamsAuthorizationDisplayName,
+} from "#public/channels/teams/authorization.js";
+import {
+  renderAnsweredInputRequestMessage,
+  renderInputRequestMessage,
+} from "#public/channels/teams/hitl.js";
+import type { TeamsInvokeActivity, TeamsMessageActivity } from "#public/channels/teams/inbound.js";
+import type {
+  TeamsChannelEvents,
+  TeamsChannelState,
+  TeamsContext,
+  TeamsInboundResult,
+} from "#public/channels/teams/teamsChannel.js";
+import { displayProperName } from "#shared/display-name.js";
+
+/** Default auth projection for Teams message actors. */
+export function defaultTeamsAuth(
+  message: TeamsMessageActivity | TeamsInvokeActivity,
+): SessionAuthContext {
+  const tenantId = message.tenantId;
+  const attributes: Record<string, string> = {
+    activity_id: message.id,
+    conversation_id: message.conversation.id,
+    scope: message.scope,
+    user_id: message.from.id,
+  };
+  if (message.from.name !== undefined) attributes.user_name = message.from.name;
+  if (message.from.aadObjectId !== undefined) attributes.aad_object_id = message.from.aadObjectId;
+  if (tenantId !== undefined) attributes.tenant_id = tenantId;
+  if (message.teamId !== undefined) attributes.team_id = message.teamId;
+  if (message.teamsChannelId !== undefined) attributes.channel_id = message.teamsChannelId;
+
+  const principalId = tenantId
+    ? `teams:${tenantId}:${message.from.id}`
+    : `teams:${message.from.id}`;
+
+  return {
+    attributes,
+    authenticator: "teams-activity",
+    issuer: tenantId ? `teams:${tenantId}` : "teams",
+    principalId,
+    principalType: message.from.role === "bot" ? "service" : "user",
+    subject: message.from.aadObjectId,
+  };
+}
+
+/** Default message hook: mention-gated dispatch with Teams user auth. */
+export async function defaultOnMessage(
+  ctx: TeamsContext,
+  message: TeamsMessageActivity,
+): Promise<TeamsInboundResult> {
+  if (message.from.role === "bot" || message.from.id === message.recipient.id) return null;
+  if (message.scope !== "personal" && !message.isBotMentioned) return null;
+  await ctx.thread.startTyping();
+  return { auth: defaultTeamsAuth(message) };
+}
+
+/** Built-in Teams event handlers for typing, replies, HITL, auth cards, and terminal errors. */
+export const defaultEvents: TeamsChannelEvents = {
+  async "turn.started"(_event, channel, _ctx) {
+    await channel.thread.startTyping();
+  },
+
+  async "actions.requested"(_event, channel, _ctx) {
+    await channel.thread.startTyping();
+  },
+
+  async "input.requested"(event, channel, _ctx) {
+    for (const request of event.requests) {
+      const posted = await channel.thread.post(
+        renderInputRequestMessage(request, {
+          adaptiveCardVersion: channel.adaptiveCardVersion,
+          replyToActivityId: channel.teams.replyToActivityId,
+        }),
+      );
+      if (!posted.id) continue;
+      const card = { activityId: posted.id, prompt: request.prompt };
+      channel.state.pendingPromptCards = {
+        ...channel.state.pendingPromptCards,
+        [request.requestId]:
+          request.kind === "question"
+            ? { ...card, options: (request.options ?? []).map(({ id, label }) => ({ id, label })) }
+            : card,
+      };
+    }
+  },
+
+  async "approval.settled"(event, channel, _ctx) {
+    const cards = channel.state.pendingPromptCards ?? {};
+    const card = cards[event.requestId];
+    if (card === undefined) return;
+    const account = channel.state.approvalResponderAccounts?.[event.responderPrincipalId];
+    const label = event.outcome === "approved" ? "Approved" : "Cancelled";
+    const actor = account?.name ?? account?.id;
+    await channel.thread.update(
+      card.activityId,
+      renderAnsweredInputRequestMessage({
+        includeText: false,
+        label: actor === undefined ? label : `${label} by ${actor}`,
+        prompt: card.prompt,
+      }),
+    );
+    const next = { ...cards };
+    delete next[event.requestId];
+    channel.state.pendingPromptCards = next;
+  },
+
+  // `approval.settled` runs first and retires pressed approvals with their
+  // responder. Cards that end any other way (a typed answer, any question, or a
+  // withdrawal) are retired here.
+  async "input.resolved"(event, channel, _ctx) {
+    for (const resolution of event.resolutions) {
+      const cards = channel.state.pendingPromptCards ?? {};
+      const card = cards[resolution.requestId];
+      if (card === undefined) continue;
+      await channel.thread.update(
+        card.activityId,
+        renderAnsweredInputRequestMessage({
+          includeText: false,
+          label: resolvedPromptAnswer(resolution, card.options),
+          prompt: card.prompt,
+        }),
+      );
+      const { [resolution.requestId]: _, ...rest } = cards;
+      channel.state.pendingPromptCards = rest;
+    }
+  },
+
+  async "message.completed"(event, channel, _ctx) {
+    if (event.finishReason === "tool-calls" || !event.message) return;
+    for (const chunk of splitTeamsMessageText(event.message)) {
+      await channel.thread.post(chunk);
+    }
+  },
+
+  async "session.failed"(event, channel) {
+    const hint = formatErrorHint(event);
+    const errorId = extractErrorId(event.details);
+    await channel.thread.post(
+      [
+        `This session could not recover from an error${hint}.`,
+        "",
+        "Start a new Teams conversation to continue.",
+        ...(errorId ? ["", `Error id: ${errorId}`] : []),
+      ].join("\n"),
+    );
+  },
+
+  async "turn.failed"(event, channel, _ctx) {
+    if (event.terminal) return;
+    const hint = formatErrorHint(event);
+    const errorId = extractErrorId(event.details);
+    await channel.thread.post(
+      [
+        `I hit an error while handling your request${hint}.`,
+        "",
+        "Please try again, rephrase, or reach out if it keeps failing.",
+        ...(errorId ? ["", `Error id: ${errorId}`] : []),
+      ].join("\n"),
+    );
+  },
+
+  async "authorization.required"(event, channel, _ctx) {
+    const user = signInAccount(event, channel.state);
+    const options = {
+      adaptiveCardVersion: channel.adaptiveCardVersion,
+      replyToActivityId: channel.teams.replyToActivityId,
+      requester: user ? (user.name ?? user.id) : undefined,
+    };
+    const posted = await channel.thread.post(
+      channel.state.conversationType === "personal"
+        ? renderTeamsAuthorizationPrompt(event, options)
+        : renderTeamsAuthorizationStatus(event, options),
+    );
+    if (posted.id) {
+      channel.state.pendingAuthActivityId = posted.id;
+    }
+  },
+
+  async "authorization.completed"(event, channel, _ctx) {
+    if (event.outcome === "authorized") {
+      await channel.thread.startTyping();
+    }
+
+    const activityId = channel.state.pendingAuthActivityId;
+    if (!activityId) return;
+    const text = buildAuthCompletedText({
+      displayName: teamsAuthorizationDisplayName(event),
+      outcome: event.outcome as ConnectionAuthorizationOutcome,
+      reason: event.reason,
+    });
+    await channel.thread.update(activityId, renderAnsweredInputRequestMessage({ prompt: text }));
+    channel.state.pendingAuthActivityId = null;
+  },
+};
+
+/**
+ * The Teams account that must sign in. An approver's sign-in names the
+ * approver, recorded when they pressed the approval, not whoever sent the
+ * turn's message.
+ */
+function signInAccount(
+  event: { readonly candidateId?: string; readonly principalId?: string },
+  state: TeamsChannelState,
+): TeamsChannelAccount | null {
+  const responder =
+    event.principalId === undefined
+      ? undefined
+      : state.approvalResponderAccounts?.[event.principalId];
+  if (responder !== undefined) return responder;
+  return event.candidateId === undefined ? state.triggeringUser : null;
+}
+
+/** A connection name for the Teams auth card (`linear` → `Linear`). */
+export function formatConnectionDisplayName(connectionName: string): string {
+  return displayProperName(connectionName);
+}
+
+/** Builds final-state text for a completed connection authorization attempt. */
+export function buildAuthCompletedText(input: {
+  readonly displayName: string;
+  readonly outcome: ConnectionAuthorizationOutcome;
+  readonly reason?: string;
+}): string {
+  if (input.outcome === "authorized") return `${input.displayName} connected.`;
+  const tail = input.reason !== undefined ? ` (${input.reason})` : "";
+  return `${input.displayName} authorization ${input.outcome}${tail}.`;
+}
+
+/** Builds a Teams mention entity and matching text for one channel account. */
+export function teamsMentionUser(user: {
+  readonly id: string;
+  readonly name?: string;
+}): TeamsMention {
+  const label = user.name ?? user.id;
+  return {
+    mentioned: { id: user.id, name: user.name },
+    text: `<at>${label}</at>`,
+    type: "mention",
+  };
+}
