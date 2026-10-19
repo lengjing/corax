@@ -29,5 +29,10 @@ export async function resolveGatewayModelCredential(
     return { kind: "api-key", token: await resolveModelApiKey("ai-gateway-key") };
   if (selected !== "ai-gateway-project" && process.env.AI_GATEWAY_API_KEY?.trim())
     return { kind: "api-key", token: process.env.AI_GATEWAY_API_KEY };
-  return { kind: "oidc", token: await getVercelOidcToken() };
+  // A linked Vercel project is the only case where OIDC is a deliberate choice; never
+  // probe for Vercel deployment credentials as a silent fallback.
+  if (selected === "ai-gateway-project") return { kind: "oidc", token: await getVercelOidcToken() };
+  throw new Error(
+    `AI Gateway credentials are not configured. Set ${MODEL_CONNECTION_ENV}=ai-gateway-key with AI_GATEWAY_API_KEY, or use a provider model instance instead of a bare model id.`,
+  );
 }

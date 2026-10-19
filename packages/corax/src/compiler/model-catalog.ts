@@ -11,6 +11,10 @@ import {
   modelCatalogResponseSchema,
   normalizeCatalogModelId,
 } from "#internal/model-catalog.js";
+import {
+  isGatewayModelRoutingEnabled,
+  modelLimitsRequireGatewayError,
+} from "#shared/model-helper.js";
 const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND = "corax-model-catalog-cache";
 const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_VERSION = 2;
 const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -213,6 +217,11 @@ type CompiledRuntimeModelCatalogCache = z.infer<typeof compiledRuntimeModelCatal
 async function fetchAndPersistModelCatalog(
   appRoot: string,
 ): Promise<CompiledRuntimeModelCatalogCache> {
+  // The catalog is a Vercel service; only contact it when the operator enabled AI Gateway.
+  if (!isGatewayModelRoutingEnabled()) {
+    throw modelLimitsRequireGatewayError("the requested model");
+  }
+
   const response = await vercelGatewayFetch(AI_GATEWAY_MODELS_CATALOG_URL);
 
   if (!response.ok) {

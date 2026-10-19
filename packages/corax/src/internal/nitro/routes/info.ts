@@ -17,6 +17,7 @@ import type { NitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifa
 import { getDefaultCodexTokenBroker } from "#public/models/openai/chatgpt/token-broker.js";
 import type { ModelRouting } from "#shared/agent-definition.js";
 import { isChatGptModelRouting } from "#shared/chatgpt-model.js";
+import { MODEL_CONNECTION_ENV } from "#shared/model-helper.js";
 
 async function createAgentInfoPayload(input: NitroArtifactsConfig) {
   const data = await loadAgentInfoManifestData({
@@ -74,6 +75,12 @@ async function resolveGatewayCredentialPresence(
 
   if (routing.kind === "external" || apiKey) {
     return { apiKey, oidc: false };
+  }
+
+  // Only a linked Vercel project (ai-gateway-project) legitimately relies on OIDC; do not
+  // probe Vercel deployment credentials otherwise.
+  if (process.env[MODEL_CONNECTION_ENV] !== "ai-gateway-project") {
+    return { apiKey: false, oidc: false };
   }
 
   try {

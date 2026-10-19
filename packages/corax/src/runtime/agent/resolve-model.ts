@@ -32,6 +32,11 @@ import {
 } from "#shared/agent-definition.js";
 import { parseJsonObject, type JsonObject } from "#shared/json.js";
 import {
+  bareModelIdRequiresGatewayError,
+  isGatewayModelRoutingEnabled,
+  modelLimitsRequireGatewayError,
+} from "#shared/model-helper.js";
+import {
   createRuntimeModelCatalog,
   type RuntimeModelCatalog,
   type RuntimeModelMetadata,
@@ -72,6 +77,13 @@ export async function resolveRuntimeModelReference(
 
   if (isSourceBackedRuntimeModelReference(reference)) {
     return await loadSourceBackedRuntimeModelReference(reference, scope);
+  }
+
+  // A bare id falls through to the AI SDK default provider, i.e. Vercel AI
+  // Gateway. Refuse unless the operator opted in rather than failing with an
+  // opaque credential error from a service they never configured.
+  if (!isGatewayModelRoutingEnabled()) {
+    throw bareModelIdRequiresGatewayError(reference.id);
   }
 
   return localGatewayModel(reference.id) ?? reference.id;
@@ -179,6 +191,7 @@ export async function resolveRuntimeModelSelection(input: {
   const catalog = input.catalog ?? runtimeModelCatalogForState(input.state);
   if (typeof selectedModel === "string") {
     const id = formatLanguageModelGatewayId(selectedModel);
+    if (!isGatewayModelRoutingEnabled()) throw bareModelIdRequiresGatewayError(id);
     if (promptCache !== undefined) throw gatewayPromptCacheError(id);
     const metadata = await resolveSelectionMetadata({
       cacheKey: `gateway:${id}`,
@@ -277,6 +290,11 @@ async function resolveSelectionMetadata(input: {
   const cached = input.state.get(RuntimeModelMetadataCacheKey)?.[input.cacheKey];
   if (cached !== undefined && cached.expiresAt > now) {
     return cached;
+  }
+
+  // Catalog lookups are network requests to the AI Gateway; never issue them implicitly.
+  if (!isGatewayModelRoutingEnabled()) {
+    throw modelLimitsRequireGatewayError(input.modelLabel);
   }
 
   const resolved = await input.load(input.catalog);

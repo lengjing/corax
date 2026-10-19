@@ -6,6 +6,10 @@ import {
 
 import { ensureAiSdkWarningLogger } from "#instrumentation/ai-sdk-warnings.js";
 import { localGatewayDecisionModel } from "#internal/model-auth/transport.js";
+import {
+  bareModelIdRequiresGatewayError,
+  isGatewayModelRoutingEnabled,
+} from "#shared/model-helper.js";
 
 export const DEFAULT_DECISION_MODEL = "typesafe-ai/jev";
 
@@ -18,6 +22,9 @@ export function decide<const Questions extends Record<string, DecisionQuestion>>
   model?: DecisionModel;
 }) {
   ensureAiSdkWarningLogger();
+  if (typeof model === "string" && !isGatewayModelRoutingEnabled()) {
+    throw bareModelIdRequiresGatewayError(model, "decide()");
+  }
   return decideWithAiSdk({
     ...options,
     model:

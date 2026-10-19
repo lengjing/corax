@@ -9,6 +9,11 @@ import { isMockModel } from "#internal/mock-model-identity.js";
 import { isChatGptModelRouting } from "#shared/chatgpt-model.js";
 import { toErrorMessage } from "#shared/errors.js";
 import { parseJsonObject, type JsonObject } from "#shared/json.js";
+import {
+  bareModelIdRequiresGatewayError,
+  isGatewayModelRoutingEnabled,
+  modelLimitsRequireGatewayError,
+} from "#shared/model-helper.js";
 import type { ModuleSourceRef } from "#shared/source-ref.js";
 import {
   isDynamicModelDefinition,
@@ -209,6 +214,9 @@ async function normalizeAuthoredModelReference(input: {
   readonly value: PublicAgentStaticModelDefinition;
 }): Promise<CompiledRuntimeModelReference> {
   if (typeof input.value === "string") {
+    if (!isGatewayModelRoutingEnabled()) {
+      throw bareModelIdRequiresGatewayError(input.value, input.sourcePath ?? "agent.ts");
+    }
     const routing = classifyModelRouting(input.value, input.providerOptions);
     rejectGatewayPromptCache(input, routing);
     return await withCompiledRuntimeModelLimits(
@@ -286,22 +294,26 @@ async function normalizeAuthoredModelReference(input: {
       };
     }
 
-    try {
-      const providerResult = await input.modelCatalog.getByProviderModelId(
-        languageModel.provider,
-        languageModel.modelId,
-      );
+    // Provider-model lookups below hit the AI Gateway catalog; skip them unless opted in and
+    // let withCompiledRuntimeModelLimits resolve built-in limits or raise a clear error.
+    if (isGatewayModelRoutingEnabled()) {
+      try {
+        const providerResult = await input.modelCatalog.getByProviderModelId(
+          languageModel.provider,
+          languageModel.modelId,
+        );
 
-      if (providerResult) {
-        return {
-          ...sourceBackedModel,
-          id: providerResult.slug,
-          contextWindowTokens: providerResult.limits.contextWindowTokens,
-          maxOutputTokens: providerResult.limits.maxOutputTokens,
-        };
+        if (providerResult) {
+          return {
+            ...sourceBackedModel,
+            id: providerResult.slug,
+            contextWindowTokens: providerResult.limits.contextWindowTokens,
+            maxOutputTokens: providerResult.limits.maxOutputTokens,
+          };
+        }
+      } catch {
+        // Slug lookup below still resolves built-in limits and otherwise resurfaces the catalog error.
       }
-    } catch {
-      // Slug lookup below still resolves built-in limits and otherwise resurfaces the catalog error.
     }
   }
 
@@ -372,12 +384,18 @@ async function withCompiledRuntimeModelLimits(
   try {
     limits = await input.modelCatalog.getModelLimits(model.id);
   } catch (error) {
+    if (!isGatewayModelRoutingEnabled()) {
+      throw modelLimitsRequireGatewayError(model.id, input.purpose);
+    }
     throw new Error(
       `Failed to load AI Gateway model metadata for ${input.purpose} "${model.id}". ${toErrorMessage(error)}`,
     );
   }
 
   if (limits === null) {
+    if (!isGatewayModelRoutingEnabled()) {
+      throw modelLimitsRequireGatewayError(model.id, input.purpose);
+    }
     throw new Error(
       `Cannot compile agent compaction because ${input.purpose} "${model.id}" does not have known AI Gateway context window metadata.`,
     );

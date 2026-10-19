@@ -84,6 +84,8 @@ corax start --root ./my-agent
 
 CLI 使用 `CORAX_HOST`、`CORAX_PORT` 配置默认监听地址和端口，显式命令行选项优先；`CORAX_DATA_DIR` 配置数据目录，相对路径以目标项目为基准。
 
+模型请传入 AI SDK provider 实例并指定 `modelContextWindowTokens`。裸字符串模型 ID 会被 AI SDK 路由到 Vercel AI Gateway，Corax 默认拒绝并提示修改；如确需 Gateway，设置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 与 `AI_GATEWAY_API_KEY` 显式开启。详见 [运行说明](docs/runtime.md)。
+
 ## 目录结构
 
 ```text

@@ -17,6 +17,17 @@
 
 不要把这些运行数据放入 CLI 安装目录。不同项目默认使用各自的数据目录。
 
+## 模型路由
+
+`model` 应传入 AI SDK provider 实例，例如 `createOpenAI({ baseURL }).chat("gpt-4.1-mini")`，并提供 `modelContextWindowTokens`。请求只发往该 provider 配置的地址。
+
+裸字符串模型 ID（如 `"openai/gpt-4.1-mini"`）在 AI SDK 中默认经由 Vercel AI Gateway 路由。Corax 不会隐式启用该网关：未选择时，编译与运行阶段都会报错并给出修改建议，也不会向 `ai-gateway.vercel.sh` 获取模型目录或探测 Vercel OIDC 凭据。需要使用 Gateway 时显式开启：
+
+- `CORAX_MODEL_CONNECTION=ai-gateway-key` 并提供 `AI_GATEWAY_API_KEY`；
+- 或自行设置 `globalThis.AI_SDK_DEFAULT_PROVIDER`，让裸字符串解析到你自己的 provider。
+
+缺少 `modelContextWindowTokens` 时，仅在已开启 Gateway 的情况下才会查询其模型目录；否则必须显式提供。
+
 ## 认证与交互
 
 channels 示例提供 HTTP Basic 与本地开发认证。生产环境需设置 `CORAX_USERNAME` / `CORAX_PASSWORD` 才能使用其受保护会话入口。健康接口 `/corax/v1/health` 公开。
