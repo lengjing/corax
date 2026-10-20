@@ -4,11 +4,9 @@ import type { NextConfig } from "next";
 
 import { assertValidPublicAgentName } from "#internal/agent-name.js";
 import { findCoraxProjectContext } from "#internal/project-context.js";
-import { quoteVercelShellArgument, toVercelRelativePath } from "#internal/vercel/build-command.js";
 import { CORAX_ROUTE_PREFIX } from "#protocol/routes.js";
 import { joinCoraxRoutePath } from "#shared/corax-route-path.js";
 import { resolveDevServerTimeout } from "#shared/framework-corax-server.js";
-import { resolveCoraxBinaryPath } from "#shared/resolve-corax-binary.js";
 import {
   CORAX_NEXT_HOST,
   ensureCoraxProductionServer,
@@ -16,11 +14,11 @@ import {
   NEXT_PHASE_PRODUCTION_SERVER,
   resolveCoraxDestinationPrefix,
 } from "./server.js";
-import { ensureCoraxVercelOutputConfig } from "./vercel-output-config.js";
 
 /**
- * Default private route namespace for legacy manually configured Vercel
- * services. {@link WithCoraxOptions.servicePrefix} defaults to this value.
+ * Default private route namespace used when proxying to a separately hosted
+ * corax service in production. {@link WithCoraxOptions.servicePrefix} defaults
+ * to this value.
  */
 export const CORAX_NEXT_SERVICE_PREFIX = "/_corax_internal/corax";
 
@@ -90,14 +88,8 @@ export interface WithCoraxAgentOptions {
    */
   readonly root: string;
   /**
-   * Build command for this generated corax Vercel service. Defaults to
-   * {@link WithCoraxOptions.coraxBuildCommand}, then a generated command that runs
-   * the installed corax binary from this agent root.
-   */
-  readonly buildCommand?: string;
-  /**
-   * Private route namespace for this agent's legacy manually configured Vercel
-   * service and non-Vercel production proxying.
+   * Private route namespace used when proxying to this agent's separately
+   * hosted service in production.
    */
   readonly servicePrefix?: string;
 }
@@ -134,16 +126,8 @@ export interface WithCoraxOptions {
    */
   readonly agents?: WithCoraxAgentsConfig;
   /**
-   * Build command for the generated corax Vercel service. In multi-agent mode
-   * this is the default for agents without their own `buildCommand`.
-   *
-   * When omitted, withCorax generates a command that runs the installed corax
-   * binary from the agent root.
-   */
-  readonly coraxBuildCommand?: string;
-  /**
-   * Private route namespace for legacy manually configured Vercel services and
-   * non-Vercel production proxying. Defaults to {@link CORAX_NEXT_SERVICE_PREFIX}
+   * Private route namespace used when proxying to a separately hosted corax
+   * service in production. Defaults to {@link CORAX_NEXT_SERVICE_PREFIX}
    * (`/_corax_internal/corax`). `withCorax` normalizes the prefix (adds a leading
    * slash, strips trailing slashes) and rejects a prefix that resolves to the
    * root route.
@@ -153,7 +137,6 @@ export interface WithCoraxOptions {
 
 interface ResolvedCoraxNextAgent {
   readonly appRoot: string;
-  readonly buildCommand: string;
   readonly localProductionPortOffset: number;
   readonly name?: string;
   readonly publicRoutePrefix: string;
@@ -231,12 +214,6 @@ function resolveProductionDestination(input: {
   readonly destinationPrefix: string;
   readonly localServerOrigin?: string;
 } {
-  if (process.env.VERCEL) {
-    return {
-      destinationPrefix: input.servicePrefix,
-    };
-  }
-
   const configuredOrigin = process.env[CORAX_NEXT_PRODUCTION_ORIGIN_ENV];
 
   if (configuredOrigin !== undefined && configuredOrigin.trim().length > 0) {
@@ -326,20 +303,10 @@ function assertValidWithCoraxOptions(options: WithCoraxOptions): void {
   for (const name of agentNames) assertValidAgentName(name);
 }
 
-function createDefaultBuildCommand(input: { readonly agentRoot: string }): string {
-  const coraxBinaryPath = toVercelRelativePath(
-    input.agentRoot,
-    resolveCoraxBinaryPath(input.agentRoot),
-  );
-  return `node ${quoteVercelShellArgument(coraxBinaryPath)} build`;
-}
-
 async function normalizeAgentsConfig(
   options: WithCoraxOptions,
 ): Promise<readonly ResolvedCoraxNextAgent[]> {
   const servicePrefixBase = normalizeRoutePrefix(options.servicePrefix ?? CORAX_NEXT_SERVICE_PREFIX);
-  const resolveBuildCommand = (agentRoot: string, buildCommand: string | undefined) =>
-    buildCommand ?? options.coraxBuildCommand ?? createDefaultBuildCommand({ agentRoot });
 
   if (options.agents === undefined) {
     const coraxRoot = resolveApplicationRoot(options.coraxRoot);
@@ -351,7 +318,6 @@ async function normalizeAgentsConfig(
     ) {
       return context.workspace.members.map((member, index) => ({
         appRoot: member.appRoot,
-        buildCommand: resolveBuildCommand(member.appRoot, undefined),
         localProductionPortOffset: index,
         name: member.name,
         publicRoutePrefix: createNamedAgentRoutePrefix(member.name),
@@ -364,7 +330,6 @@ async function normalizeAgentsConfig(
     return [
       {
         appRoot,
-        buildCommand: resolveBuildCommand(appRoot, undefined),
         localProductionPortOffset: 0,
         publicRoutePrefix: "",
         servicePrefix: servicePrefixBase,
@@ -385,7 +350,6 @@ async function normalizeAgentsConfig(
 
     return {
       appRoot,
-      buildCommand: resolveBuildCommand(appRoot, agentConfig.buildCommand),
       localProductionPortOffset: index,
       name,
       publicRoutePrefix: createNamedAgentRoutePrefix(name),
@@ -423,10 +387,7 @@ async function buildAgentWorkspaceExtensions(
  * In development, starts `corax dev --no-ui --port 0` for the corax app and
  * rewrites corax protocol endpoints to that local URL. During `next build`,
  * builds each agent's mounted source-backed workspace extensions so the
- * Next.js type check can resolve them. In Vercel production,
- * writes Build Output service routes so Vercel sends corax protocol endpoints to
- * the corax service directly.
- * Outside Vercel production, serves an existing `.output/server/index.mjs` build
+ * Next.js type check can resolve them. In production, serves an existing `.output/server/index.mjs` build
  * on a stable local port when present; otherwise set `CORAX_NEXT_PRODUCTION_ORIGIN`
  * to the origin serving the corax service namespace.
  */
@@ -434,7 +395,6 @@ export function withCorax<TConfig extends CoraxNextConfig>(
   configOrFunction: CoraxNextConfigInput<TConfig>,
   options: WithCoraxOptions = {},
 ): CoraxNextConfigFunction<TConfig> {
-  const nextRoot = process.cwd();
   const devServerTimeoutMs = resolveDevServerTimeout(options.devServerTimeoutMs, CORAX_NEXT_HOST);
   assertValidWithCoraxOptions(options);
   return async function coraxNextConfig(phase, context) {
@@ -446,42 +406,10 @@ export function withCorax<TConfig extends CoraxNextConfig>(
       await buildAgentWorkspaceExtensions(agents);
     }
     const existingRewrites = nextConfig.rewrites;
-    const configuredVercel = await ensureCoraxVercelOutputConfig({
-      agents: agents.map((agent) => {
-        const outputAgent: {
-          appRoot: string;
-          buildCommand: string;
-          name?: string;
-          publicRoutePrefix: string;
-          servicePrefix: string;
-          workspaceMember?: boolean;
-        } = {
-          appRoot: agent.appRoot,
-          buildCommand: agent.buildCommand,
-          name: agent.name,
-          publicRoutePrefix: agent.publicRoutePrefix,
-          servicePrefix: agent.servicePrefix,
-        };
-        if (agent.workspaceMember === true) {
-          outputAgent.workspaceMember = true;
-        }
-        return outputAgent;
-      }),
-      nextRoot,
-    });
-
-    if (process.env.VERCEL) {
-      return nextConfig;
-    }
-
-    const configuredAgentByName = new Map(
-      configuredVercel.agents.map((agent) => [agent.name, agent] as const),
-    );
     const agentsWithDestinations = agents.map((agent) => {
-      const configuredAgent = configuredAgentByName.get(agent.name);
       const productionDestination = resolveProductionDestination({
         localProductionPortOffset: agent.localProductionPortOffset,
-        servicePrefix: configuredAgent?.servicePrefix ?? agent.servicePrefix,
+        servicePrefix: agent.servicePrefix,
       });
 
       return {

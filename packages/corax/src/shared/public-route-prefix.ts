@@ -7,7 +7,7 @@
  * the corax service, so a running agent cannot recover its own public mount
  * from an inbound request. The integration exports this variable in the
  * generated service build command, the corax CLI resolves it once into the
- * build input, the build bakes it into every emitted Vercel workflow function
+ * build input, the build bakes it into every emitted workflow function
  * environment, and callback-URL minting prepends it so framework-owned
  * callbacks resolve to a routable public path.
  *

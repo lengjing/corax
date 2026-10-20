@@ -35,11 +35,6 @@ const userAuthDef: AuthorizationDefinition = {
   principalType: "user",
 };
 
-const connectUserAuthDef: AuthorizationDefinition = {
-  ...userAuthDef,
-  vercelConnect: { connector: "mcp.notion.com/notion" },
-};
-
 describe("principalKey", () => {
   it("collapses every app principal to the string 'app'", () => {
     expect(principalKey({ type: "app" })).toBe("app");
@@ -58,7 +53,7 @@ describe("principalKey", () => {
     expect(alice).not.toBe(bob);
   });
 
-  it("keys an issuerless native Vercel user by its user id", () => {
+  it("keys an issuerless user by its user id", () => {
     expect(principalKey({ id: "user_123", type: "user" })).toBe('["user",null,"user_123"]');
   });
 
@@ -115,29 +110,7 @@ describe("resolveConnectionPrincipal", () => {
     });
   });
 
-  it("projects a Vercel development user without its reserved OIDC issuer", () => {
-    const ctx = ctxWithAuth(
-      userAuth({
-        attributes: { environment: "development", user_id: "user_123" },
-        authenticator: "oidc",
-        issuer: "https://oidc.vercel.com/team_123",
-        principalId: "https://oidc.vercel.com/team_123:user_123",
-        subject: "user_123",
-      }),
-    );
-
-    const principal = contextStorage.run(ctx, () =>
-      resolveConnectionPrincipal("notion", connectUserAuthDef),
-    );
-
-    expect(principal).toEqual({
-      attributes: { environment: "development", user_id: "user_123" },
-      id: "user_123",
-      type: "user",
-    });
-  });
-
-  it("preserves a Vercel development user's issuer for non-Connect authorization", () => {
+  it("preserves an OIDC user's issuer on the principal", () => {
     const ctx = ctxWithAuth(
       userAuth({
         attributes: { environment: "development", user_id: "user_123" },
@@ -197,19 +170,6 @@ describe("resolveConnectionPrincipal", () => {
     expect(() =>
       contextStorage.run(ctx, () => resolveConnectionPrincipal("linear", userAuthDef)),
     ).toThrow(/active session is scoped to "service"/);
-  });
-
-  it("explains when a local Connect request has no Vercel user", () => {
-    const ctx = ctxWithAuth({
-      attributes: {},
-      authenticator: "local-dev",
-      principalId: "local-dev",
-      principalType: "local-dev",
-    });
-
-    expect(() =>
-      contextStorage.run(ctx, () => resolveConnectionPrincipal("notion", connectUserAuthDef)),
-    ).toThrow(/fell back to local development access/);
   });
 
   it("accepts an explicit ctx argument and bypasses AsyncLocalStorage", () => {

@@ -210,8 +210,8 @@ export type ToolContext = SessionContext & {
   readonly messages: readonly ModelMessage[];
   /**
    * Resolves the bearer token for an inline provider. This accepts the same
-   * auth shapes as a connection's `auth` field, including `connect("...")`
-   * from `@vercel/connect/corax`.
+   * auth shapes as a connection's `auth` field, including interactive
+   * OAuth definitions.
    */
   getToken(provider: ToolAuthProvider, options?: ToolAuthOptions): Promise<TokenResult>;
   /**

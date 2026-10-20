@@ -13,7 +13,6 @@ import {
   type ModuleBackedDefinitionLoadOptions,
 } from "#compiler/normalize-helpers.js";
 import { readConnectionProtocol } from "#public/definitions/connections/protocol.js";
-import { extractVercelConnectMetadata } from "#shared/vercel-connect-metadata.js";
 import {
   ALLOWED_DYNAMIC_CONNECTION_EVENTS,
   assertResolverOnlyDynamicSentinel,
@@ -102,7 +101,6 @@ export async function compileConnectionDefinition(
   } as const;
 
   let compiled: CompiledConnectionDefinition;
-  let auth: unknown;
 
   if (protocol === "openapi") {
     const normalized = normalizeOpenApiConnectionDefinition(loaded, message);
@@ -112,7 +110,6 @@ export async function compileConnectionDefinition(
       protocol: "openapi",
       url: normalized.baseUrl ?? "",
     };
-    auth = normalized.auth;
   } else {
     const normalized = normalizeMcpClientConnectionDefinition(loaded, message);
     compiled = {
@@ -121,16 +118,6 @@ export async function compileConnectionDefinition(
       protocol: "mcp",
       url: normalized.url,
     };
-    auth = normalized.auth;
-  }
-
-  const vercelConnect = extractVercelConnectMetadata(
-    auth === null || typeof auth !== "object"
-      ? undefined
-      : (auth as { readonly vercelConnect?: unknown }).vercelConnect,
-  );
-  if (vercelConnect !== undefined) {
-    compiled.vercelConnect = vercelConnect;
   }
 
   return { definition: compiled, kind: "connection" };

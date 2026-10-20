@@ -272,14 +272,14 @@ export function createTransformBrokerEnvironment(
   return gitConfigEnvironment;
 }
 
-interface VercelNetworkPolicyRule {
+interface FirewallNetworkPolicyRule {
   readonly forwardURL?: string;
   readonly match?: unknown;
   readonly transform?: readonly { readonly headers?: Readonly<Record<string, string>> }[];
 }
 
-interface VercelNetworkPolicyObject {
-  readonly allow?: readonly string[] | Readonly<Record<string, readonly VercelNetworkPolicyRule[]>>;
+interface FirewallNetworkPolicyObject {
+  readonly allow?: readonly string[] | Readonly<Record<string, readonly FirewallNetworkPolicyRule[]>>;
   readonly subnets?: {
     readonly allow?: readonly string[];
     readonly deny?: readonly string[];
@@ -287,8 +287,8 @@ interface VercelNetworkPolicyObject {
 }
 
 function normalizeAllowEntries(
-  allow: VercelNetworkPolicyObject["allow"],
-): ReadonlyArray<{ readonly domain: string; readonly rules: readonly VercelNetworkPolicyRule[] }> {
+  allow: FirewallNetworkPolicyObject["allow"],
+): ReadonlyArray<{ readonly domain: string; readonly rules: readonly FirewallNetworkPolicyRule[] }> {
   if (allow === undefined) {
     return [];
   }
@@ -299,7 +299,7 @@ function normalizeAllowEntries(
 }
 
 function normalizeTransforms(
-  transforms: VercelNetworkPolicyRule["transform"],
+  transforms: FirewallNetworkPolicyRule["transform"],
 ): ReadonlyArray<{ readonly headers: Readonly<Record<string, string>> }> {
   if (transforms === undefined) {
     return [];

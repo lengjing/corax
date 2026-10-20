@@ -14,7 +14,7 @@ import {
 } from "#instrumentation/providers.js";
 import { DEVELOPMENT_WORKER_APP_ROOT_ENV } from "#internal/workflow/development-world-protocol.js";
 import { defineInstrumentation } from "#public/instrumentation/index.js";
-import { agentRuns, localTraces, otelIntegration } from "#public/instrumentation/otel.js";
+import { localTraces, otelIntegration } from "#public/instrumentation/otel.js";
 import {
   disableInstrumentation,
   type ProviderSetupContext,
@@ -73,18 +73,6 @@ describe("registerInstrumentationProvider", () => {
     expect(contexts[0]?.environment).toMatch(/^(development|preview|production)$/);
     expect(contexts[0]?.evaluation).toBeUndefined();
     expect(contexts[0]?.frameworkVersion).toEqual(expect.any(String));
-  });
-
-  it("reports Vercel preview separately from production", async () => {
-    vi.stubEnv("VERCEL_ENV", "preview");
-    const contexts: ProviderSetupContext[] = [];
-
-    await register(
-      "otel",
-      defineInstrumentation({ setup: (context) => void contexts.push(context) }),
-    );
-
-    expect(contexts[0]?.environment).toBe("preview");
   });
 
   it("reports an evaluation server to setup", async () => {
@@ -147,7 +135,6 @@ describe("seedInstrumentationProviders", () => {
     delete (globalThis as Record<symbol, unknown>)[REGISTRY_GLOBAL_KEY];
     delete (globalThis as Record<symbol, unknown>)[RUNTIME_GLOBAL_KEY];
     vi.stubEnv("CORAX_TRACES", "off");
-    vi.stubEnv("VERCEL_ENV", undefined);
     vi.stubEnv(DEVELOPMENT_WORKER_APP_ROOT_ENV, "/tmp/corax-seed-test");
   });
 
@@ -158,18 +145,8 @@ describe("seedInstrumentationProviders", () => {
     expect(getInstrumentationProviders().map(({ slot }) => slot)).toEqual(["backend", "local"]);
   });
 
-  it.each(["preview", "production"])("seeds Agent Runs in Vercel %s", (environment) => {
+  it("seeds nothing outside the dev worker", () => {
     vi.stubEnv(DEVELOPMENT_WORKER_APP_ROOT_ENV, undefined);
-    vi.stubEnv("VERCEL_ENV", environment);
-
-    seedInstrumentationProviders();
-
-    expect(getInstrumentationProviders().map(({ slot }) => slot)).toEqual(["agent-runs"]);
-  });
-
-  it("does not seed Agent Runs in Vercel development", () => {
-    vi.stubEnv(DEVELOPMENT_WORKER_APP_ROOT_ENV, undefined);
-    vi.stubEnv("VERCEL_ENV", "development");
 
     seedInstrumentationProviders();
 
@@ -186,26 +163,13 @@ describe("seedInstrumentationProviders", () => {
     expect(getInstrumentationProviders()).toEqual([]);
   });
 
-  it("lets an authored Agent Runs slot reconfigure the hosted default", async () => {
-    vi.stubEnv(DEVELOPMENT_WORKER_APP_ROOT_ENV, undefined);
-    vi.stubEnv("VERCEL_ENV", "production");
-    seedInstrumentationProviders();
-    const authored = agentRuns({ exportPolicy: { span: () => ({ emit: false }) } });
-
-    await register("agent-runs", authored);
-
-    expect(getInstrumentationProviders()).toEqual([{ provider: authored, slot: "agent-runs" }]);
-  });
-
   it("sorts built-ins, authored slots, and reserved-slot replacements together", async () => {
-    vi.stubEnv("VERCEL_ENV", "production");
     seedInstrumentationProviders();
     await register("zeta", defineInstrumentation({}));
     await register("audit", defineInstrumentation({}));
     await register("local", localTraces({ exportPolicy: { span: () => ({ emit: false }) } }));
 
     expect(getInstrumentationProviders().map(({ slot }) => slot)).toEqual([
-      "agent-runs",
       "audit",
       "local",
       "zeta",

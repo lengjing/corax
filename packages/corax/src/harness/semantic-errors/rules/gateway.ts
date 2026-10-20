@@ -36,7 +36,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "config", "recoverable"],
     when: messageMatches(/AI Gateway requires a valid credit card on file/),
     message: (link) => link.message,
-    hint: "Add a valid credit card or credits in the Vercel dashboard, then retry.",
+    hint: "Add a valid payment method or credits to your AI Gateway account, then retry.",
   },
   {
     id: "gateway-credit-exhausted",
@@ -47,7 +47,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
       messageMatches(/A positive credit balance is required/i),
     ),
     message: "AI Gateway requires a positive credit balance to process requests.",
-    hint: "Add credits in the Vercel dashboard, then retry.",
+    hint: "Add credits to your AI Gateway account, then retry.",
   },
   {
     id: "gateway-budget-exhausted",
@@ -63,7 +63,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "config", "recoverable"],
     when: messageMatches(/Free tier users do not have access to this model/),
     message: (link) => link.message,
-    hint: "Switch to a model available on the free tier or upgrade your Vercel plan, then retry.",
+    hint: "Switch to a model available on the free tier or upgrade your AI Gateway plan, then retry.",
   },
   {
     id: "gateway-free-tier-rate-limited",
@@ -71,7 +71,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "recoverable"],
     when: messageMatches(/Free tier requests on this model are rate-limited/),
     message: (link) => link.message,
-    hint: "Wait for the free-tier limit to reset or upgrade your Vercel plan, then retry.",
+    hint: "Wait for the free-tier limit to reset or upgrade your AI Gateway plan, then retry.",
   },
   {
     id: "gateway-auth-invalid-api-key",
@@ -79,15 +79,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "config"],
     when: allOf(gatewayAuthenticationFailure, messageMatches(/Invalid API key/i)),
     message: "AI Gateway rejected the provided API key.",
-    hint: "Update or unset `AI_GATEWAY_API_KEY` (check your shell profile if you did not set it for this project) — manage keys at https://vercel.com/dashboard/ai/api-keys. Unsetting it falls back to OIDC via `corax link`.",
-  },
-  {
-    id: "gateway-auth-invalid-oidc-token",
-    name: GATEWAY_AUTH_FAILURE_SUMMARY_NAME,
-    tags: ["gateway", "config"],
-    when: allOf(gatewayAuthenticationFailure, messageMatches(/Invalid OIDC token/i)),
-    message: "AI Gateway rejected the OIDC token.",
-    hint: "Run `corax link` to refresh `VERCEL_OIDC_TOKEN` in `.env.local`, or set `AI_GATEWAY_API_KEY` — create a key at https://vercel.com/dashboard/ai/api-keys.",
+    hint: "Update or unset `AI_GATEWAY_API_KEY` (check your shell profile if you did not set it for this project), or switch to a provider model instance instead of a bare model id.",
   },
   {
     id: "gateway-auth-missing-credentials",
@@ -95,7 +87,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "config"],
     when: gatewayAuthenticationFailure,
     message: "AI Gateway received no credentials.",
-    hint: "Run `corax link` to populate `VERCEL_OIDC_TOKEN`, or set `AI_GATEWAY_API_KEY` — create a key at https://vercel.com/dashboard/ai/api-keys.",
+    hint: "Set `AI_GATEWAY_API_KEY` (with `CORAX_MODEL_CONNECTION=ai-gateway-key`) or use a provider model instance instead of a bare model id.",
   },
   {
     id: "model-not-found",
@@ -106,7 +98,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
       typeIs("model_not_found"),
     ),
     message: "The requested model is not available.",
-    hint: "Check the model id in `agent.ts` (`model:`) or switch models with `/model` in `corax dev` — browse available models at https://vercel.com/ai-gateway/models.",
+    hint: "Check the model id in `agent.ts` (`model:`) or switch models with `/model` in `corax dev`.",
   },
   {
     id: "gateway-rate-limited",
@@ -114,7 +106,7 @@ export const GATEWAY_RULES: readonly SemanticErrorRule[] = [
     tags: ["gateway", "transient"],
     when: anyOf(nameIs("GatewayRateLimitError"), typeIs("rate_limit_exceeded")),
     message: "AI Gateway rate-limited the request.",
-    hint: "Retries are automatic; if it persists, reduce request volume or review your plan limits at https://vercel.com/ai-gateway.",
+    hint: "Retries are automatic; if it persists, reduce request volume or review your AI Gateway plan limits.",
   },
   {
     id: "gateway-upstream-unavailable",

@@ -1,4 +1,11 @@
-import { CONNECTION_CATALOG } from "#setup/scaffold/index.js";
+import { connectionEntries } from "#compiled/corax-catalog/index.js";
+
+/** Catalog MCP endpoints probed for reachability, keyed by connection slug. */
+const MCP_CATALOG_ENDPOINTS: readonly { readonly slug: string; readonly url: string }[] =
+  connectionEntries().flatMap((entry) => {
+    const url = entry.connection?.mcp?.url;
+    return url === undefined ? [] : [{ slug: entry.slug, url }];
+  });
 
 const DEFAULT_PROBE_INTERVAL_MS = 60_000;
 
@@ -71,15 +78,9 @@ export function createMcpConnectionStatusTracker(
     const currentController = controller;
     const currentEpoch = ++epoch;
     void Promise.all(
-      CONNECTION_CATALOG.flatMap((entry) => {
-        const url = entry.mcp?.url;
-        if (url === undefined) return [];
-        return [
-          probe({ url, signal: currentController.signal }).then(
-            (reason) => [entry.slug, reason] as const,
-          ),
-        ];
-      }),
+      MCP_CATALOG_ENDPOINTS.map(({ slug, url }) =>
+        probe({ url, signal: currentController.signal }).then((reason) => [slug, reason] as const),
+      ),
     )
       .then((results) => {
         if (disposed || currentEpoch !== epoch) return;

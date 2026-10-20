@@ -79,7 +79,7 @@ export async function resolveRuntimeModelReference(
     return await loadSourceBackedRuntimeModelReference(reference, scope);
   }
 
-  // A bare id falls through to the AI SDK default provider, i.e. Vercel AI
+  // A bare id falls through to the AI SDK default provider, i.e. the AI
   // Gateway. Refuse unless the operator opted in rather than failing with an
   // opaque credential error from a service they never configured.
   if (!isGatewayModelRoutingEnabled()) {

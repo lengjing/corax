@@ -88,11 +88,6 @@ function deriveInlineScope(input: {
   readonly provider: ToolAuthProvider;
   readonly inlineAuthState: InlineAuthState;
 }): string {
-  const connector = input.authorization.vercelConnect?.connector;
-  if (connector !== undefined) {
-    return `${input.scope}__${sanitizeScopeSegment(connector)}`;
-  }
-
   if (input.inlineAuthState.anonymousProvider === undefined) {
     input.inlineAuthState.anonymousProvider = input.provider;
   } else if (input.inlineAuthState.anonymousProvider !== input.provider) {
@@ -115,17 +110,12 @@ function validateInlineAuthKey(authKey: string): string {
   return authKey;
 }
 
-function sanitizeScopeSegment(value: string): string {
-  const sanitized = value.replace(/[^A-Za-z0-9_.:-]+/gu, "_").replace(/^_+|_+$/gu, "");
-  return sanitized.length > 0 ? sanitized : "provider";
-}
-
 interface InlineAuthState {
   anonymousProvider?: ToolAuthProvider;
 }
 
 function missingProviderError(method: "ctx.getToken" | "ctx.requireAuth"): Error {
   return new Error(
-    `${method}: Pass an auth provider, for example ${method}(connect("github/myagent")).`,
+    `${method}: Pass an auth provider, for example ${method}(oauthProvider).`,
   );
 }

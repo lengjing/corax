@@ -49,7 +49,7 @@ export async function assertMicrosandboxPlatformCandidate(): Promise<void> {
     if (!isGlibcLinux()) {
       throw new Error(
         "The microsandbox sandbox provider requires a glibc-based Linux distribution; musl " +
-          "hosts are not supported. Use DockerSandbox or VercelSandbox instead.",
+          "hosts are not supported. Use DockerSandbox or JustBashSandbox instead.",
       );
     }
     if (process.env.MSB_PATH !== undefined || (await doesPathExist("/dev/kvm"))) {
@@ -58,14 +58,14 @@ export async function assertMicrosandboxPlatformCandidate(): Promise<void> {
     throw new Error(
       "The microsandbox sandbox provider requires Linux with KVM enabled. `/dev/kvm` is not " +
         "available on this host. Enable KVM, set MSB_PATH for a custom runtime, or use " +
-        "DockerSandbox or VercelSandbox.",
+        "DockerSandbox or JustBashSandbox.",
     );
   }
 
   throw new Error(
     "The microsandbox sandbox provider supports Linux with KVM or macOS on Apple Silicon. " +
       `Current host is ${process.platform}/${process.arch}. Use DockerSandbox or ` +
-      "VercelSandbox on this host.",
+      "JustBashSandbox on this host.",
   );
 }
 
@@ -80,7 +80,7 @@ async function doesPathExist(path: string): Promise<boolean> {
 
 /**
  * One-time setup applied to sandboxes created from the raw base image:
- * verifies Bash, creates the `vercel-sandbox` user, and hands it
+ * verifies Bash, creates the sandbox user, and hands it
  * `/workspace`.
  */
 export async function ensureMicrosandboxBaseRuntime(

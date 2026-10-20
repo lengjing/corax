@@ -22,12 +22,11 @@ describe("provider settings", () => {
   it("resolves available providers independently from the stored selection", async () => {
     const root = await mkdtemp(join(tmpdir(), "corax-provider-settings-"));
     roots.push(root);
-    await writeFile(join(root, ".env.local"), "AI_GATEWAY_API_KEY=key\nVERCEL_OIDC_TOKEN=token\n");
+    await writeFile(join(root, ".env.local"), "AI_GATEWAY_API_KEY=key\n");
 
     await expect(resolveAvailableProviders(root, { env: {} })).resolves.toEqual([
       "chatgpt",
       "ai-gateway-key",
-      "ai-gateway-project",
     ]);
     await expect(readProviderSelection(root)).resolves.toBeUndefined();
 
@@ -36,7 +35,6 @@ describe("provider settings", () => {
     await expect(resolveAvailableProviders(root, { env: {} })).resolves.toEqual([
       "chatgpt",
       "ai-gateway-key",
-      "ai-gateway-project",
     ]);
     await expect(readProviderSelection(root)).resolves.toBe("chatgpt");
   });
@@ -45,10 +43,10 @@ describe("provider settings", () => {
     const root = await mkdtemp(join(tmpdir(), "corax-provider-settings-"));
     roots.push(root);
 
-    await writeProviderSelection(root, "ai-gateway-project");
+    await writeProviderSelection(root, "ai-gateway-key");
 
-    await expect(readProviderSelection(root)).resolves.toBe("ai-gateway-project");
-    expect(readProviderSettingsSync(root)?.selected).toBe("ai-gateway-project");
+    await expect(readProviderSelection(root)).resolves.toBe("ai-gateway-key");
+    expect(readProviderSettingsSync(root)?.selected).toBe("ai-gateway-key");
     expect(providerSettingsPath(root)).toBe(join(root, ".corax", "provider.json"));
   });
 
@@ -61,18 +59,14 @@ describe("provider settings", () => {
   });
 });
 
-it("compares connection, team, and key source before deciding whether activation is needed", async () => {
+it("compares connection and key source before deciding whether activation is needed", async () => {
   const root = await mkdtemp(join(tmpdir(), "corax-provider-settings-"));
   roots.push(root);
-  const team = { teamId: "team_a", teamName: "Alice" };
-  expect(await providerSettingsMatch(root, { selected: "vercel", ...team })).toBe(false);
-  await writeProviderSelection(root, "vercel", team);
-  expect(await providerSettingsMatch(root, { selected: "vercel", ...team })).toBe(true);
-  expect(await providerSettingsMatch(root, { selected: "vercel", ...team, teamId: "team_b" })).toBe(
-    false,
-  );
-  expect(await providerSettingsMatch(root, { selected: "vercel-cli", ...team })).toBe(false);
-  await writeProviderSelection(root, "openai", undefined, "environment");
+  expect(await providerSettingsMatch(root, { selected: "ai-gateway-key" })).toBe(false);
+  await writeProviderSelection(root, "ai-gateway-key");
+  expect(await providerSettingsMatch(root, { selected: "ai-gateway-key" })).toBe(true);
+  expect(await providerSettingsMatch(root, { selected: "chatgpt" })).toBe(false);
+  await writeProviderSelection(root, "openai", "environment");
   expect(await providerSettingsMatch(root, { selected: "openai", keySource: "environment" })).toBe(
     true,
   );

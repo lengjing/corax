@@ -41,12 +41,7 @@ beforeEach(() => {
   vi.stubEnv("CORAX_DEV", "1");
   vi.stubEnv("CORAX_DEV_CONTROL_URL", origin);
   vi.stubEnv(DEVELOPMENT_WORKFLOW_SECRET_ENV, secret);
-  mocks.gateway.mockResolvedValue({
-    kind: "oauth",
-    token: "account-token",
-    teamId: "team_a",
-    teamName: "alice",
-  });
+  mocks.gateway.mockResolvedValue({ kind: "api-key", token: "account-token" });
   mocks.key.mockResolvedValue("key-token");
   mocks.chatgpt.mockResolvedValue({ token: "chatgpt-token", accountId: "account-a" });
   upstream.mockResolvedValue(new Response("{}"));
@@ -92,41 +87,27 @@ it("rejects unauthenticated and invalid requests before reading any credentials"
   expect(mocks.key).not.toHaveBeenCalled();
 });
 
-it("reads current host credentials and teams without restarting workers", async () => {
+it("reads current host credentials without restarting workers", async () => {
   expect(await readDevelopmentModelCredential("gateway")).toMatchObject({
+    kind: "api-key",
     token: "account-token",
-    teamName: "alice",
   });
-  mocks.gateway.mockResolvedValue({
-    kind: "oauth",
-    token: "account-token",
-    teamId: "team_b",
-    teamName: "bob",
-  });
+  mocks.gateway.mockResolvedValue({ kind: "api-key", token: "rotated-key" });
   expect(await readDevelopmentModelCredential("gateway")).toMatchObject({
-    token: "account-token",
-    teamId: "team_b",
-    teamName: "bob",
+    kind: "api-key",
+    token: "rotated-key",
   });
   expect(mocks.gateway.mock.calls).toEqual([[], []]);
   expect(mocks.environment).toHaveBeenCalledWith("/fixture");
   expect(upstream).not.toHaveBeenCalled();
 });
 
-it("refreshes only the rejected token and never puts tokens in URLs", async () => {
-  mocks.gateway
-    .mockResolvedValueOnce({ kind: "oauth", token: "old-token" })
-    .mockResolvedValue({ kind: "oauth", token: "new-token" });
-  expect(await readDevelopmentModelCredential("gateway", "old-token")).toMatchObject({
-    token: "new-token",
-  });
-  expect(mocks.gateway.mock.calls).toEqual([[], ["old-token"]]);
+it("never puts rejected tokens in URLs", async () => {
+  await readDevelopmentModelCredential("gateway", "old-token");
   expect(brokerRequests[0]?.headers.get(DEVELOPMENT_MODEL_REJECTED_HEADER)).toBe(
     createHash("sha256").update("old-token").digest("hex"),
   );
   expect(brokerRequests[0]?.url).not.toContain("old-token");
-  await readDevelopmentModelCredential("gateway", "old-token");
-  expect(mocks.gateway).toHaveBeenCalledTimes(3);
 });
 
 it.each(["openai", "anthropic"] as const)(
@@ -183,7 +164,7 @@ it("never contacts the broker in deployment or sends its secret to a remote URL"
   expect(fetch).not.toHaveBeenCalled();
 });
 
-it("streams through the same Gateway model after switching teams and then to a key", async () => {
+it("streams through the same Gateway model after switching keys", async () => {
   const model = localGatewayModel("openai/gpt-5.6-luna-fast");
   if (!model || typeof model === "string") throw new Error("Expected a Gateway model");
   expect(JSON.stringify(model)).not.toContain("account-token");
@@ -200,8 +181,7 @@ it("streams through the same Gateway model after switching teams and then to a k
       ),
   );
   const connections = [
-    { kind: "oauth", token: "account-token", teamId: "team_a" },
-    { kind: "oauth", token: "account-token", teamId: "team_b" },
+    { kind: "api-key", token: "account-token" },
     { kind: "api-key", token: "gateway-key" },
   ];
   for (const connection of connections) {
@@ -218,7 +198,6 @@ it("streams through the same Gateway model after switching teams and then to a k
     const [url, init] = upstream.mock.calls.at(-1)!;
     expect(new URL(String(url)).origin).toBe("https://ai-gateway.vercel.sh");
     expect(init.headers.get("authorization")).toBe(`Bearer ${connection.token}`);
-    expect(init.headers.get("x-vercel-ai-gateway-team")).toBe(connection.teamId ?? null);
     expect(init.headers.has(DEVELOPMENT_WORKFLOW_TRANSPORT_HEADER)).toBe(false);
     expect(init.body).not.toContain(connection.token);
   }
@@ -251,7 +230,6 @@ it("decides through the Gateway connection selected by /login", async () => {
   const [url, init] = upstream.mock.calls[0]!;
   expect(String(url)).toBe("https://ai-gateway.vercel.sh/v4/ai/decision-model");
   expect(init.headers.get("authorization")).toBe("Bearer account-token");
-  expect(init.headers.get("x-vercel-ai-gateway-team")).toBe("team_a");
   expect(init.headers.get("ai-model-id")).toBe("typesafe-ai/jev");
   expect(init.headers.has(DEVELOPMENT_WORKFLOW_TRANSPORT_HEADER)).toBe(false);
   expect(init.body).not.toContain("account-token");

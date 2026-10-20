@@ -7,7 +7,7 @@ import { gzipSync } from "node:zlib";
 export const APPLICATION_BUILD_PROFILE_SCHEMA_VERSION = 1 as const;
 
 /** Deployment target represented by one build profile. */
-export type ApplicationBuildProfileTarget = "local" | "vercel";
+export type ApplicationBuildProfileTarget = "local";
 
 /** One completed phase in an application build profile. */
 export interface ApplicationBuildProfilePhase {
@@ -15,7 +15,7 @@ export interface ApplicationBuildProfilePhase {
   readonly name: string;
 }
 
-/** Size totals for one Vercel function directory in the published output. */
+/** Size totals for one `.func` function directory in the published output. */
 interface ApplicationBuildProfileFunctionBundle {
   readonly files: number;
   readonly gzipBytes: number;
@@ -159,7 +159,7 @@ export function createApplicationBuildProfile(input: {
 
 /**
  * Measures regular files in the published output without following symlinks.
- * Each `.func` directory receives its own subtotal for Vercel output.
+ * Each `.func` directory receives its own subtotal.
  */
 export async function measureApplicationBuildOutput(
   outputDirectory: string,

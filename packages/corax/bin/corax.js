@@ -314,8 +314,8 @@ export async function main(argv = process.argv.slice(2)) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
     // Walk the `cause` chain so wrapped errors (sandbox prewarm wraps the
-    // underlying Vercel SDK failure with remediation hints, etc.) still
-    // surface the original SDK message a user can search for.
+    // underlying provider failure with remediation hints, etc.) still
+    // surface the original message a user can search for.
     let cause = error instanceof Error ? error.cause : undefined;
     while (cause instanceof Error) {
       console.error(`  Caused by: ${cause.message}`);

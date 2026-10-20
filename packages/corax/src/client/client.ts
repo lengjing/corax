@@ -16,7 +16,6 @@ import type {
   HealthResult,
   TokenValue,
 } from "#client/types.js";
-import { VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER } from "#client/types.js";
 
 /**
  * HTTP client for talking to a deployed corax agent.
@@ -83,8 +82,7 @@ export class Client {
    * Fetches the agent inspection payload from `GET /corax/v1/info`.
    *
    * The dev TUI uses it to render its startup header. Remote deployments
-   * require whatever auth the info route accepts, which defaults to Vercel
-   * OIDC outside local development.
+   * require whatever auth the info route accepts.
    *
    * @throws {ClientError} If the server returns a non-successful status.
    * @throws {AgentInfoResponseError} If an authorized response carries a body
@@ -166,18 +164,6 @@ export class Client {
   async #resolveAuthHeaders(): Promise<Readonly<Record<string, string>>> {
     const auth = this.#auth;
     if (!auth) return {};
-
-    if ("vercelOidc" in auth) {
-      // One credential, two headers: the bearer the route reads and the
-      // trusted-OIDC header Vercel Deployment Protection accepts. Resolved
-      // once; the client-side mirror of the server `vercelOidc()` channel.
-      const token = (await resolveTokenValue(auth.vercelOidc.token)).trim();
-      if (token.length === 0) return {};
-      return {
-        authorization: `Bearer ${token}`,
-        [VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER]: token,
-      };
-    }
 
     if ("bearer" in auth) {
       // Skip the header entirely on an empty token rather than emitting a

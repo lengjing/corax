@@ -5,25 +5,21 @@ import { resolveInstalledPackageInfo } from "#internal/application/package.js";
 import { appendUserAgentProduct } from "#internal/user-agent.js";
 import type { CommandLifecycle } from "#cli/shutdown.js";
 import {
+  resolveDevelopmentClientOptions,
   resolveLocalDevelopmentClientOptions,
-  resolveRemoteDevelopmentClientOptions,
 } from "#services/dev-client/client-options.js";
-import { createDevelopmentCredentialGate } from "#services/dev-client/credential-gate.js";
-import { resolveDevelopmentOidcToken } from "#services/dev-client/request-headers.js";
-import { isVercelAuthChallenge } from "#services/dev-client/vercel-auth-error.js";
-import { resolveVercelDeployment } from "#setup/vercel-deployment.js";
 import { toErrorMessage } from "#shared/errors.js";
 import { createDevDiagnostics, type DevDiagnostics } from "../diagnostics.js";
 
 import { createLocalPromptCommandHandler } from "./local-commands.js";
 import { promptCommandsFor } from "./prompt-commands.js";
-import { formatRemoteAuthChallengeMessage } from "./remote-auth-result.js";
+
 import { probeMcpConnection } from "./mcp-connection-status.js";
 import { CoraxTUIRunner, type CoraxTUIRunnerOptions } from "./runner.js";
 import { TerminalRenderer } from "./terminal-renderer.js";
 import type { PromptArgumentSuggestion } from "./argument-typeahead.js";
 import type { ArgumentTypeaheadCommand } from "./prompt-commands.js";
-import { remoteHost, type DevelopmentTuiTarget, type RemoteDevelopmentTarget } from "./target.js";
+import type { DevelopmentTuiTarget } from "./target.js";
 import type { TuiDisplayOptions } from "./types.js";
 
 export type { DevelopmentTuiTarget } from "./target.js";
@@ -113,37 +109,6 @@ export async function startDevelopmentTuiStartup(
   };
 }
 
-function prepareRemoteTarget(target: RemoteDevelopmentTarget) {
-  const credentials = createDevelopmentCredentialGate(target.serverUrl);
-  return {
-    target,
-    credentials,
-    resolveOidcToken: resolveDevelopmentOidcToken,
-    resolveDeployment: (signal: AbortSignal) =>
-      resolveVercelDeployment({
-        workspaceRoot: target.workspaceRoot,
-        host: remoteHost(target),
-        signal,
-      }),
-  } satisfies NonNullable<CoraxTUIRunnerOptions["remote"]>;
-}
-
-type PreparedDevelopmentTuiTarget =
-  | {
-      readonly kind: "local";
-      readonly target: Extract<DevelopmentTuiTarget, { kind: "local" }>;
-    }
-  | {
-      readonly kind: "remote";
-      readonly target: RemoteDevelopmentTarget;
-      readonly remote: NonNullable<CoraxTUIRunnerOptions["remote"]>;
-    };
-
-function prepareDevelopmentTarget(target: DevelopmentTuiTarget): PreparedDevelopmentTuiTarget {
-  return target.kind === "local"
-    ? { kind: "local", target }
-    : { kind: "remote", target, remote: prepareRemoteTarget(target) };
-}
 
 function withTuiUserAgent(
   headers: Readonly<Record<string, string>> | undefined,
@@ -158,9 +123,8 @@ function withTuiUserAgent(
  * user exits.
  *
  * The configured client is handed to the runner so its subagent
- * child-session streams inherit the same auth. Turn-dispatch failures —
- * including the Vercel Deployment Protection challenge — are formatted into
- * the inline error region rather than crashing the command.
+ * child-session streams inherit the same auth. Turn-dispatch failures are
+ * formatted into the inline error region rather than crashing the command.
  */
 export async function runDevelopmentTui(input: RunDevelopmentTuiInput): Promise<void> {
   const {
@@ -176,22 +140,17 @@ export async function runDevelopmentTui(input: RunDevelopmentTuiInput): Promise<
     withExclusiveTerminal,
     ...display
   } = input;
-  const prepared = prepareDevelopmentTarget(target);
   const { serverUrl } = target;
   const headerOptions = { headers: withTuiUserAgent(headers) };
 
   const client = new Client(
-    prepared.kind === "local"
+    target.kind === "local"
       ? resolveLocalDevelopmentClientOptions({
           ...headerOptions,
           interactiveClient: true,
           serverUrl,
         })
-      : resolveRemoteDevelopmentClientOptions({
-          ...headerOptions,
-          serverUrl,
-          credentials: prepared.remote.credentials,
-        }),
+      : { ...resolveDevelopmentClientOptions(serverUrl), ...headerOptions, redirect: "manual" },
   );
 
   const options: CoraxTUIRunnerOptions = {
@@ -203,16 +162,11 @@ export async function runDevelopmentTui(input: RunDevelopmentTuiInput): Promise<
     ...(target.kind === "local"
       ? { argumentSuggestions: inlineArgumentSuggestions(target.workspaceRoot) }
       : {}),
-    formatTransportError: (error) =>
-      isVercelAuthChallenge(error)
-        ? formatRemoteAuthChallengeMessage(serverUrl)
-        : toErrorMessage(error),
+    formatTransportError: (error) => toErrorMessage(error),
   };
-  if (prepared.kind === "local") {
-    options.appRoot = prepared.target.workspaceRoot;
+  if (target.kind === "local") {
+    options.appRoot = target.workspaceRoot;
     options.probeMcpConnection = probeMcpConnection;
-  } else {
-    options.remote = prepared.remote;
   }
   if (initialInput !== undefined) options.initialInput = initialInput;
   if (startup !== undefined) {
@@ -228,8 +182,8 @@ export async function runDevelopmentTui(input: RunDevelopmentTuiInput): Promise<
 
   const diagnostics =
     startup?.diagnostics ??
-    (prepared.kind === "local"
-      ? await createDevDiagnostics(prepared.target.workspaceRoot).catch(() => undefined)
+    (target.kind === "local"
+      ? await createDevDiagnostics(target.workspaceRoot).catch(() => undefined)
       : undefined);
   if (diagnostics !== undefined) options.diagnostics = diagnostics;
   try {

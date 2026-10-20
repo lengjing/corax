@@ -21,7 +21,7 @@ export interface MicrosandboxSandboxCreateOptions {
    * Python, or ripgrep during preparation or provide them through a
    * custom image.
    *
-   * @default The `ghcr.io/vercel/eve` tag matching the installed corax version without build metadata, or `CORAX_SANDBOX_IMAGE_TAG` when set.
+   * @default The default corax sandbox image tag matching the installed corax version without build metadata, or `CORAX_SANDBOX_IMAGE_TAG` when set.
    */
   readonly image?: string;
   /** Number of virtual CPUs assigned to each sandbox. @default 1 */

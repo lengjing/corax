@@ -1,12 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { build as buildNitro, copyPublicAssets, prepare, prerender } from "nitro/builder";
 import type { Nitro } from "nitro/types";
 
-import {
-  resolveInstalledPackageInfo,
-  resolvePackageSourceFilePath,
-} from "#internal/application/package.js";
+import { resolvePackageSourceFilePath } from "#internal/application/package.js";
 import {
   prepareCoraxVersionedCacheDirectory,
   writeCoraxVersionedCacheMetadata,
@@ -156,28 +152,6 @@ async function buildInWorkspace(
       await refreshProductionCompiledArtifacts(host, workspace.host.artifactsDir);
     }
     await buildOutput(nitro, profiler);
-    const manifest = host.compileResult.manifest;
-    await mkdir(dirname(workspace.publication.summary.stagedPath), { recursive: true });
-    await writeFile(
-      workspace.publication.summary.stagedPath,
-      JSON.stringify(
-        {
-          kind: "corax-agent",
-          schemaVersion: 1,
-          generatorVersion: resolveInstalledPackageInfo().version,
-          agent: {
-            name: manifest.config.name,
-            description: manifest.config.description,
-            model: manifest.config.model?.id,
-          },
-          tools: manifest.tools.map((tool) => tool.name),
-          channels: manifest.channelRoutes.effective.map((channel) => channel.name),
-          schedules: manifest.schedules.map((schedule) => schedule.name),
-        },
-        null,
-        2,
-      ),
-    );
     await phase(profiler, "compiler-artifacts.stage", () =>
       stageProductionCompilerArtifacts({
         compilerArtifactsRoot: workspace.compiler.artifactsDir,
@@ -191,10 +165,8 @@ async function buildInWorkspace(
     publishApplicationBuildArtifacts({
       appRoot: workspace.appRoot,
       finalOutputDir: workspace.publication.output.finalDir,
-      finalSummaryPath: workspace.publication.summary.finalPath,
       scratchDir: workspace.rootDir,
       stagedOutputDir: workspace.publication.output.stagedDir,
-      stagedSummaryPath: workspace.publication.summary.stagedPath,
     }),
   );
   return workspace.publication.output.finalDir;

@@ -1,7 +1,6 @@
 import { InvalidArgumentError, type Command } from "#compiled/commander/index.js";
 import type { CliApplicationContext } from "#cli/application-command.js";
 import { agentCommand } from "#cli/agent-command.js";
-import { inspectVerifiedRemoteAgent } from "#setup/verified-remote-agent.js";
 import { coraxCliBanner } from "#cli/banner.js";
 import { FORCED_EXIT_BACKSTOP_MS, installShutdownSignal } from "#cli/shutdown.js";
 import { startCliLiveRow } from "#cli/ui/live-row.js";
@@ -15,12 +14,6 @@ import type { DevelopmentCliOptions } from "./command-options.js";
 import { runInteractiveDevelopmentUi } from "./run-interactive-ui.js";
 import type { DevelopmentTuiStartup, RunDevelopmentTuiInput } from "./tui/tui.js";
 import { resolveDevUiMode, resolveTuiDisplayOptions } from "./ui-options.js";
-import {
-  parseDevelopmentHeaderOption,
-  resolveDevelopmentUrlTarget,
-  type DevelopmentRequestHeaders,
-} from "./url-target.js";
-import { parseDevelopmentServerUrl } from "./url.js";
 import { waitForServerOrStop, waitForUiOrServer } from "./wait-for-ui.js";
 import {
   parseContextSizeOption,
@@ -56,117 +49,6 @@ async function loadStartHost(): Promise<NonNullable<DevelopmentCommandRuntime["s
 
 function hasInteractiveTerminal(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
-}
-
-/** Registers an interactive client for existing corax agents. */
-export function registerRemoteCommands(input: {
-  applicationContext: CliApplicationContext;
-  logger: DevelopmentCommandLogger;
-  program: Command;
-  runtime: DevelopmentCommandRuntime;
-  telemetry: DevelopmentCommandTelemetry;
-}): void {
-  const { applicationContext, logger, program, runtime, telemetry } = input;
-  const theme = createCliTheme();
-
-  program
-    .command("info")
-    .description("Inspect an existing corax agent.")
-    .requiredOption("-u, --url <url>", "Existing corax agent URL", parseDevelopmentServerUrl)
-    .option(
-      "-H, --header <header>",
-      'Request header for the URL target, in "Name: value" form (repeatable)',
-      parseDevelopmentHeaderOption,
-    )
-    .option("--json", "Output as JSON")
-    .action(
-      async (options: { header?: DevelopmentRequestHeaders; json?: boolean; url: string }) => {
-        const target = resolveDevelopmentUrlTarget(
-          { header: options.header, url: options.url },
-          undefined,
-        )!;
-        const inspection = await inspectVerifiedRemoteAgent({
-          headers: target.headers,
-          prompter:
-            process.stdin.isTTY && process.stdout.isTTY
-              ? (await import("#setup/prompter.js")).createPrompter()
-              : undefined,
-          serverUrl: target.serverUrl,
-          workspaceRoot: applicationContext.root,
-        });
-        logger.log(JSON.stringify(inspection.info, null, options.json === true ? 0 : 2));
-      },
-    );
-
-  program
-    .command("connect")
-    .description("Open the terminal UI for an existing corax agent.")
-    .requiredOption("-u, --url <url>", "Existing corax agent URL", parseDevelopmentServerUrl)
-    .option(
-      "-H, --header <header>",
-      'Request header for the URL target, in "Name: value" form (repeatable)',
-      parseDevelopmentHeaderOption,
-    )
-    .option("--name <name>", "Title shown in the terminal UI")
-    .option("--input <text>", "Pre-fill the prompt input")
-    .option(
-      "--tools <mode>",
-      "How tool calls render: full | collapsed | auto-collapsed | hidden",
-      parseDisplayMode,
-    )
-    .option(
-      "--reasoning <mode>",
-      "How reasoning renders: full | collapsed | auto-collapsed | hidden",
-      parseDisplayMode,
-    )
-    .option(
-      "--subagents <mode>",
-      "How subagent tasks render: full | collapsed | hidden",
-      parseSubagentDisplayMode,
-    )
-    .option(
-      "--connection-auth <mode>",
-      "How connection authorization renders: full | collapsed | auto-collapsed | hidden",
-      parseDisplayMode,
-    )
-    .option(
-      "--assistant-response-stats <mode>",
-      "Assistant header statistic: tokens | tokensPerSecond",
-      parseStatsMode,
-    )
-    .option(
-      "--context-size <tokens>",
-      "Model context window size, shown as a usage percentage",
-      parseContextSizeOption,
-    )
-    .option("--logs <mode>", "Log severity: none | error | warn | debug | all", parseLogsMode)
-    .action(async (options: DevelopmentCliOptions & { url: string }) => {
-      const remoteTarget = resolveDevelopmentUrlTarget(options, undefined)!;
-      const mode = resolveDevUiMode({ options, interactive: hasInteractiveTerminal() });
-      if (mode === "headless") {
-        throw new InvalidArgumentError("corax remote connect requires an interactive terminal.");
-      }
-      telemetry.trackDevContext({ target: "remote", ui: mode });
-      const { loadDevelopmentEnvironmentFiles } = await import("#cli/dev/environment.js");
-      await loadDevelopmentEnvironmentFiles(applicationContext.root);
-      logger.log(`↗ remote agent ${theme.info(new URL(remoteTarget.serverUrl).host)}`);
-      logger.log("");
-      const lifecycle = installShutdownSignal({ exitAfterMs: FORCED_EXIT_BACKSTOP_MS });
-      try {
-        await runInteractiveDevelopmentUi({
-          applicationRoot: applicationContext.root,
-          lifecycle,
-          onOnboardingStep: telemetry.trackSetupStep,
-          onOnboardingTerminal: telemetry.trackSetupTerminal,
-          options,
-          remoteTarget,
-          runDevelopmentTui: runtime.runDevelopmentTui,
-          server: { serverUrl: remoteTarget.serverUrl },
-        });
-      } finally {
-        lifecycle.dispose();
-      }
-    });
 }
 
 /** Registers the local development server command. */

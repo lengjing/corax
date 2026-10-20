@@ -1,7 +1,7 @@
 /** Server target used by development clients. */
 interface DevelopmentTargetBase {
   readonly serverUrl: string;
-  /** Project root for shared dependencies, Vercel links, and environment files. */
+  /** Project root for shared dependencies and environment files. */
   readonly workspaceRoot: string;
   /** The selected agent's root when it is a member of a multi-agent project. */
   readonly agentRoot?: string;

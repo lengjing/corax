@@ -315,7 +315,7 @@ function pickFirstForwardedValue(value: string | null): string | undefined {
  * Resolves the public origin a visitor is using to reach the deployment.
  *
  * Prefers the `x-forwarded-host` / `x-forwarded-proto` headers set by
- * Vercel's edge so the rendered URL matches the address the visitor
+ * a reverse proxy so the rendered URL matches the address the visitor
  * actually typed (including custom domains), then falls back to the
  * `host` header, then to `request.url` for local `corax dev` runs that
  * skip the proxy chain. Comma-separated forwarded values are split and

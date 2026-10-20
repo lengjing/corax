@@ -37,7 +37,7 @@ export class ToolSessionSandboxUnsupportedError extends Error {
     super(
       `Sandbox provider "${providerName}" cannot keep a sandbox between invokeTool calls, ` +
         "so a call with a key cannot open one. Call without a key for a sandbox that lasts " +
-        "one call, or use Vercel Sandbox or just-bash.",
+        "one call, or use a provider that supports persistent sessions such as just-bash.",
     );
     this.name = "ToolSessionSandboxUnsupportedError";
   }

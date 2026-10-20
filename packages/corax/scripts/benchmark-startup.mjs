@@ -44,7 +44,6 @@ const env = {
   CORAX_TELEMETRY_DISABLED: "1",
   AI_GATEWAY_API_KEY: "benchmark-placeholder-no-model-calls",
 };
-delete env.VERCEL;
 delete env.PORT;
 delete env.CORAX_DEV;
 const results = [];

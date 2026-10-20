@@ -9,7 +9,6 @@ import {
   resolvePackageCompiledFilePath,
   resolvePackageSourceFilePath,
 } from "#internal/application/package.js";
-import { buildPackageUserAgent } from "#internal/user-agent.js";
 import type { AgentWorkflowWorldDefinition } from "#shared/agent-definition.js";
 import {
   sandboxPreparedArtifactsManifestSchema,
@@ -27,7 +26,7 @@ import { type InstrumentationLayout } from "#internal/instrumentation-layout.js"
 import { usesParentDevelopmentWorkflowWorld } from "#internal/workflow/development-world-protocol.js";
 import { resolveWorkflowWorldImport } from "#internal/workflow/world-target.js";
 
-export type BuiltInWorkflowWorldTarget = "local" | "vercel";
+export type BuiltInWorkflowWorldTarget = "local";
 
 export interface GeneratedInstrumentationLayout {
   readonly kind: "directory";
@@ -341,27 +340,6 @@ const workflowWorld = await workflowWorldModule.createWorld({
     return {
       moduleImportSpecifier,
       extraImportLines: importLines.split("\n"),
-      createWorldSource,
-    };
-  }
-
-  if (packageName === "@workflow/world-vercel") {
-    const defaultsImportSpecifier = stringifyEsmImportSpecifier(
-      resolvePackageSourceFilePath("src/internal/workflow/vercel-world-defaults.ts"),
-    );
-    const moduleImportSpecifier = resolvePackageCompiledFilePath(
-      `src/compiled/${packageName}/index.js`,
-    );
-    const createWorldSource = `
-const workflowWorld = await workflowWorldModule.createWorld({
-  headers: { "User-Agent": ${JSON.stringify(buildPackageUserAgent())} },
-});
-applyVercelWorkflowWorldDefaults(workflowWorld);`.trimStart();
-    return {
-      moduleImportSpecifier,
-      extraImportLines: [
-        `import { applyVercelWorkflowWorldDefaults } from ${defaultsImportSpecifier};`,
-      ],
       createWorldSource,
     };
   }

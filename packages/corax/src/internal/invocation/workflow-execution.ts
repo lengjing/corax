@@ -432,8 +432,6 @@ function publicInvocationFailure(
   const data: Record<string, string> = { runId };
   if (event !== undefined) data.coraxCode = event.data.code;
 
-  const deploymentId = vercelDeploymentId();
-  if (deploymentId !== undefined) data.vercelDeploymentId = deploymentId;
   if (typeof event?.data.details?.errorId === "string") data.errorId = event.data.details.errorId;
 
   const semantic = event === undefined ? null : semanticFailure(event.data);
@@ -507,12 +505,6 @@ function fallbackFailure(event: InvocationFailureEvent["data"]): {
 function truncateForDisplay(value: string, maxChars = 160): string {
   if (value.length <= maxChars) return value;
   return `${value.slice(0, maxChars - 1).trimEnd()}…`;
-}
-
-function vercelDeploymentId(): string | undefined {
-  if (process.env.VERCEL !== "1") return undefined;
-  const deploymentId = process.env.VERCEL_DEPLOYMENT_ID?.trim();
-  return deploymentId && deploymentId.length > 0 ? deploymentId : undefined;
 }
 
 function conflict(message: string): AgentInvocationMutationResult {

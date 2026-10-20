@@ -1,7 +1,7 @@
 /**
  * Framework-internal structured logger.
  *
- * Not public API; authors should use their own logger or Vercel
+ * Not public API; authors should use their own logger or the host's
  * observability primitives.
  */
 import { type Span, SpanStatusCode, trace } from "#compiled/@opentelemetry/api/index.js";

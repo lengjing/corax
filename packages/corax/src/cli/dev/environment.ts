@@ -96,8 +96,6 @@ function createDevelopmentEnvironmentLoader(
       ...managedValues.keys(),
       ...nextValues.keys(),
       MODEL_CONNECTION_ENV,
-      "CORAX_MODEL_TEAM",
-      "CORAX_MODEL_TEAM_NAME",
       "CORAX_MODEL_KEY_SOURCE",
     ]);
     const previousEnvironment = new Map(
@@ -109,13 +107,6 @@ function createDevelopmentEnvironmentLoader(
     const keySource = settings?.keySource;
     if (keySource) process.env.CORAX_MODEL_KEY_SOURCE = keySource;
     else delete process.env.CORAX_MODEL_KEY_SOURCE;
-    if (settings?.teamId && settings.teamName) {
-      process.env.CORAX_MODEL_TEAM = settings.teamId;
-      process.env.CORAX_MODEL_TEAM_NAME = settings.teamName;
-    } else {
-      delete process.env.CORAX_MODEL_TEAM;
-      delete process.env.CORAX_MODEL_TEAM_NAME;
-    }
 
     applyDevelopmentEnvironmentValues({
       managedValues,

@@ -89,12 +89,8 @@ vi.mock("../../workflow-bundle/builder.js", () => ({
   },
 }));
 
-// Mock paths.js so the unit test avoids its heavyweight workflow-runtime import
-// graph while preserving the real, env-driven `isVercelBuildEnvironment`
-// semantics that the direct-handler gate depends on.
-vi.mock("../../application/paths.js", () => ({
-  isVercelBuildEnvironment: () => Boolean(process.env.VERCEL),
-}));
+// Mock paths.js so the unit test avoids its heavyweight workflow-runtime import graph.
+vi.mock("../../application/paths.js", () => ({}));
 
 const { configureDevelopmentNitroRoutes, configureProductionNitroRoutes } =
   await import("./configure-nitro-routes.js");
@@ -203,8 +199,6 @@ describe("Nitro route configuration", () => {
     fsMocks.mkdir.mockClear();
     fsMocks.writeFile.mockClear();
     workflowBuilderMocks.build.mockClear();
-    // The direct-handler gate keys off `process.env.VERCEL`; ensure each test
-    // starts from a clean, self-hosted (non-Vercel) baseline.
     vi.unstubAllEnvs();
   });
 
@@ -399,33 +393,6 @@ describe("Nitro route configuration", () => {
     ).toContain("dispatchChannelRequest");
     expect(devNitro.options.virtual[`#corax-route${CORAX_INFO_ROUTE_PATH}`]).toBeUndefined();
     expect(prodNitro.options.virtual[`#corax-route${CORAX_INFO_ROUTE_PATH}`]).toBeUndefined();
-  });
-
-  it("does not register direct workflow queue handlers for Vercel production builds", async () => {
-    vi.stubEnv("VERCEL", "1");
-
-    const root = "/tmp/corax-nitro-direct-handlers-vercel";
-    const buildDir = `${root}/nitro`;
-    const workflowBuildDir = `${root}/workflow-cache`;
-    const nitro = createNitroStub({ buildDir, dev: false, rootDir: root });
-
-    await configureProductionNitroRoutes(
-      nitro,
-      createPreparedHost({
-        appRoot: root,
-        workflowBuildDir,
-        workflowWorld: "@workflow/world-postgres",
-      }),
-    );
-
-    const workflowHandlerSource = readWriteFileSourceMatching("/workflow/workflows-handler.mjs");
-
-    expect(workflowHandlerSource).toContain(
-      'import { POST } from "../../workflow-cache/workflows.mjs";',
-    );
-    expect(workflowHandlerSource).not.toContain("registerHandler");
-    expect(workflowHandlerSource).not.toContain("__coraxGetWorkflowWorld");
-    expect(readWriteFileSourceMatching("/workflow/steps-handler.mjs")).toBeUndefined();
   });
 
   it("registers direct workflow queue handlers for self-hosted production builds with a configured world", async () => {

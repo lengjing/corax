@@ -236,28 +236,6 @@ function createVendoredZodPlugin() {
   };
 }
 
-/**
- * The code extension imports `@vercel/connect`, whose `@vercel/oidc` tree is
- * CommonJS. Resolve it to the standalone vendored bundle instead of inlining
- * that CommonJS into `dist/src/node_modules`, where `polyfillRequire: false`
- * would leave its `require` calls undefined.
- */
-function createVendoredConnectPlugin() {
-  return {
-    name: "corax:vendored-connect",
-    resolveId(source, importer) {
-      if (source !== "@vercel/connect" && !source.startsWith("@vercel/connect/")) return null;
-      if (source !== "@vercel/connect") {
-        throw new Error(
-          `${importer ?? "corax"} imports "${source}", but corax vendors only the root ` +
-            `"@vercel/connect" entry. See scripts/vendor-compiled/@vercel/connect.mjs.`,
-        );
-      }
-      return { id: "#compiled/@vercel/connect/index.js", external: true };
-    },
-  };
-}
-
 function createVendoredTelemetryPlugin() {
   const packages = new Set([
     "@opentelemetry/api",
@@ -327,7 +305,6 @@ await buildWithNitroRolldown({
   platform: "node",
   plugins: [
     createVendoredZodPlugin(),
-    createVendoredConnectPlugin(),
     createVendoredTelemetryPlugin(),
     createStripUnusedRolldownRuntimeImportPlugin(),
     createDynamicToolTransformPlugin(),

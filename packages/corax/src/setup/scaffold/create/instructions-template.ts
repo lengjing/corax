@@ -1,6 +1,6 @@
 export const AGENT_INSTRUCTIONS_TEMPLATE = `# Identity
 
-You are a general-purpose AI agent powered by corax, Vercel's agent framework.
+You are a general-purpose AI agent powered by corax, a self-hosted agent runtime.
 
 # Customization
 

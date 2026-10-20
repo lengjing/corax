@@ -14,20 +14,15 @@ export interface ApplicationBuildOptions {
   readonly profileOutputPath?: string;
   /**
    * Public route prefix the agent's `/corax/v1/*` surface is mounted under on
-   * its callback origin. Baked into every emitted Vercel workflow function
-   * environment so deployed callback-URL minting resolves a routable public
-   * path. The CLI resolves it from `CORAX_PUBLIC_ROUTE_PREFIX`, which
-   * multi-agent host integrations export in the generated service build
-   * command.
+   * its callback origin. Baked into the emitted workflow function environment
+   * so callback-URL minting resolves a routable public path. The CLI resolves
+   * it from `CORAX_PUBLIC_ROUTE_PREFIX`, which multi-agent host integrations
+   * export in the generated service build command.
    */
   readonly publicRoutePrefix?: string;
   readonly skipSandboxPrewarm: boolean;
   /** Whether this build is for a member of a top-level `agents/` workspace. */
   readonly workspaceMember?: boolean;
-  readonly vercelServiceOutput?: {
-    readonly hostOutputDirectory: string;
-    readonly serviceOutputDirectory: string;
-  };
 }
 
 /** Outcome of starting a Nitro development server the current process owns. */

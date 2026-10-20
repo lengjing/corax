@@ -5,7 +5,6 @@ import {
 import type { ChatGptAuthState } from "#public/models/openai/chatgpt/token-broker.js";
 import { isCoraxDevEnvironment } from "#internal/application/dev-environment.js";
 import { resolveGatewayModelCredential } from "#internal/model-auth/gateway-credential.js";
-import { getVercelOidcToken } from "#compiled/@vercel/oidc/index.js";
 import { hasEnvValue } from "#internal/resolve-model-endpoint-status.js";
 import { buildAgentInfoResponse } from "#internal/nitro/routes/agent-info/build-agent-info-response.js";
 import {
@@ -17,7 +16,6 @@ import type { NitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifa
 import { getDefaultCodexTokenBroker } from "#public/models/openai/chatgpt/token-broker.js";
 import type { ModelRouting } from "#shared/agent-definition.js";
 import { isChatGptModelRouting } from "#shared/chatgpt-model.js";
-import { MODEL_CONNECTION_ENV } from "#shared/model-helper.js";
 
 async function createAgentInfoPayload(input: NitroArtifactsConfig) {
   const data = await loadAgentInfoManifestData({
@@ -32,7 +30,7 @@ async function createAgentInfoPayload(input: NitroArtifactsConfig) {
     mode: input.kind,
     gatewayCredentials:
       routing === undefined
-        ? { apiKey: false, oidc: false }
+        ? { apiKey: false }
         : await resolveGatewayCredentialPresence(routing),
     ...(isChatGptModelRouting(routing) ? { chatgptAuth: await resolveChatGptAuthState() } : {}),
   });
@@ -49,9 +47,8 @@ async function resolveChatGptAuthState(): Promise<ChatGptAuthState> {
 }
 
 /**
- * Mirrors the AI Gateway credential selection order. The Vercel OIDC SDK owns
- * request-context, environment, and linked-project token resolution; lookup
- * failure means the gateway is unavailable and must not break agent inspection.
+ * Mirrors the AI Gateway credential selection order. Lookup failure means the
+ * gateway is unavailable and must not break agent inspection.
  */
 async function resolveGatewayCredentialPresence(
   routing: ModelRouting,
@@ -61,34 +58,12 @@ async function resolveGatewayCredentialPresence(
       const credential =
         (await readDevelopmentModelCredential("gateway")) ??
         (await resolveGatewayModelCredential());
-      return {
-        apiKey: credential.kind === "api-key",
-        oidc: credential.kind === "oidc",
-        account: credential.kind === "oauth",
-        team: credential.teamName,
-      };
+      return { apiKey: credential.kind === "api-key" };
     } catch {
-      return { apiKey: false, oidc: false };
+      return { apiKey: false };
     }
   }
-  const apiKey = hasEnvValue(process.env.AI_GATEWAY_API_KEY);
-
-  if (routing.kind === "external" || apiKey) {
-    return { apiKey, oidc: false };
-  }
-
-  // Only a linked Vercel project (ai-gateway-project) legitimately relies on OIDC; do not
-  // probe Vercel deployment credentials otherwise.
-  if (process.env[MODEL_CONNECTION_ENV] !== "ai-gateway-project") {
-    return { apiKey: false, oidc: false };
-  }
-
-  try {
-    await getVercelOidcToken();
-    return { apiKey: false, oidc: true };
-  } catch {
-    return { apiKey: false, oidc: false };
-  }
+  return { apiKey: hasEnvValue(process.env.AI_GATEWAY_API_KEY) };
 }
 
 /**

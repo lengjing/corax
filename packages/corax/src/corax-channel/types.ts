@@ -120,7 +120,7 @@ export interface CoraxChannelInput {
    * assert a forwarded principal, callback-marked public trace audience, or
    * remote parent lineage. The predicate receives the *verified* route-auth
    * principal of the forwarder and must match it precisely (for example
-   * `(forwarder) => forwarder.subject === vercelSubject({ teamSlug, projectName })`).
+   * `(forwarder) => forwarder.subject === "service:forwarder"`).
    * A permissive predicate lets any authenticated forwarder assert any principal,
    * public trace audience, or remote lineage.
    *

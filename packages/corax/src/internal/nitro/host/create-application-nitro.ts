@@ -24,7 +24,6 @@ import {
 } from "#internal/nitro/host/artifacts-config.js";
 import { stringifyEsmImportSpecifier } from "#internal/application/import-specifier.js";
 import type { NitroArtifactsConfig } from "#internal/nitro/routes/runtime-artifacts.js";
-import { createCompiledSandboxProviderPrunePlugin } from "#internal/nitro/host/compiled-sandbox-provider-prune-plugin.js";
 import { createDevelopmentRuntimePrunePlugin } from "#internal/nitro/host/development-runtime-prune-plugin.js";
 import { prepareSkillServerAssets } from "#internal/nitro/host/skill-server-assets.js";
 import { createExtensionScopePlugin } from "#internal/bundler/extension-scope-plugin.js";
@@ -77,11 +76,6 @@ const WORKFLOW_CACHE_PATH_FRAGMENT = "/.corax/workflow-cache/";
 // `nitro(`, which is the case when a TanStack Start host shares its root with
 // the agent. corax bundles its own runtime and never builds through the host's Vite.
 const CORAX_NITRO_BUILDER = "rolldown";
-
-const LOCAL_SANDBOX_BACKEND_NAMES = new Set([
-  "docker",
-  ...Object.keys(OPTIONAL_ENGINE_PACKAGES_BY_BACKEND_NAME),
-]);
 
 function resolveWorkflowAliases(): Record<string, string> {
   const aliases: Record<string, string> = {};
@@ -157,24 +151,6 @@ function collectConfiguredSandboxProviderNames(manifest: CompiledAgentManifest):
     nodes
       .map((node) => node.sandbox?.providerName)
       .filter((providerName): providerName is string => typeof providerName === "string"),
-  );
-}
-
-/**
- * Hosted Vercel builds can prune local sandbox providers only when the
- * app did not explicitly configure one. Omitted backends resolve through
- * `DefaultSandbox.environment()`, which selects Vercel on hosted Vercel and never
- * needs local runtime code there.
- */
-export function shouldPruneLocalSandboxProviders(input: {
-  readonly configuredBackendNames: ReadonlySet<string>;
-  readonly preset: "vercel" | "node-server" | "bun" | undefined;
-}): boolean {
-  return (
-    input.preset === "vercel" &&
-    ![...input.configuredBackendNames].some((providerName) =>
-      LOCAL_SANDBOX_BACKEND_NAMES.has(providerName),
-    )
   );
 }
 
@@ -568,18 +544,11 @@ function patchWorkflowTransformExcludePath(nitro: Nitro, workflowBuildDir: strin
 
 function createApplicationNitroBundlerConfiguration(
   preparedHost: PreparedApplicationHost,
-  options: { readonly development: boolean; readonly preset: "vercel" | "node-server" | "bun" | undefined },
+  options: { readonly development: boolean; readonly preset: "node-server" | "bun" | undefined },
 ) {
-  const { preset } = options;
   const configuredBackendNames = collectConfiguredSandboxProviderNames(
     preparedHost.compileResult.manifest,
   );
-  const compiledSandboxProviderPrunePlugin = shouldPruneLocalSandboxProviders({
-    configuredBackendNames,
-    preset,
-  })
-    ? createCompiledSandboxProviderPrunePlugin()
-    : null;
   const configuredOptionalEnginePackages: string[] = [];
   const unconfiguredOptionalEnginePackages: string[] = [];
   for (const [providerName, packageName] of Object.entries(
@@ -607,7 +576,6 @@ function createApplicationNitroBundlerConfiguration(
   ].flatMap((node) => node.extensionMounts);
   const nitroBundlerPlugins = [
     options.development ? null : createDevelopmentRuntimePrunePlugin(),
-    compiledSandboxProviderPrunePlugin,
     createOptionalEngineDependencyPlugin(unconfiguredOptionalEnginePackages),
     createExtensionExternalDependencyPlugin(extensionMounts),
     createExtensionMountPlugin(

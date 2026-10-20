@@ -2,17 +2,16 @@ import type { DockerSandboxSession } from "#public/sandbox/docker.js";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { defineDefaultSandboxProvider } from "#sandbox/providers/default.js";
-import { DockerSandbox, MicrosandboxSandbox, VercelSandbox } from "#sandbox/providers.js";
+import { DockerSandbox, MicrosandboxSandbox } from "#sandbox/providers.js";
 import type { RuntimeSandboxSessionFor } from "#shared/sandbox-session.js";
 
 describe("sandbox providers", () => {
   it("implements default selection through the provider contract", () => {
     const environment = defineDefaultSandboxProvider({
-      isDeployedOnVercel: () => true,
       isDockerAvailable: () => false,
       isMicrosandboxSupported: () => false,
     }).environment();
-    expect(environment.provider).toBe("vercel");
+    expect(environment.provider).toBe("just-bash");
   });
   it("exposes image and Dockerfile constructors only for local image providers", () => {
     expect(DockerSandbox.image("example.test/agent@sha256:abc").provider).toBe("docker");
@@ -21,8 +20,6 @@ describe("sandbox providers", () => {
       "microsandbox",
     );
     expect(MicrosandboxSandbox.dockerfile().provider).toBe("microsandbox");
-    expect("image" in VercelSandbox).toBe(false);
-    expect("dockerfile" in VercelSandbox).toBe(false);
   });
 
   it("returns runtime sandboxes from open", () => {

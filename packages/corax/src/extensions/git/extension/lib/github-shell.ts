@@ -1,5 +1,4 @@
 import { posix } from "node:path";
-import { getToken, type ConnectTokenParams } from "@vercel/connect";
 import type { SandboxSession } from "corax/sandbox";
 
 import { validateRepositoryRoot } from "./repository-root.ts";
@@ -26,13 +25,26 @@ export interface GitHubShellOutput {
   readonly truncated: boolean;
 }
 
+/** Resolves a GitHub installation token scoped to the declared repositories. */
+export type GitHubTokenSource =
+  | string
+  | ((input: {
+      readonly org: string;
+      readonly repositories: readonly string[];
+    }) => Promise<string> | string);
+
 export interface GitHubConfig {
   readonly broker: (
     sandbox: SandboxSession,
     rules: Readonly<Record<string, readonly GitHubLeaseRule[]>> | null,
   ) => Promise<void>;
-  readonly connector: string;
   readonly org: string;
+  /**
+   * Installation token (or a function minting one) used for the declared
+   * repository. Typically a GitHub App installation token minted per call so
+   * the credential stays scoped to one repository.
+   */
+  readonly token: GitHubTokenSource;
 }
 
 export interface GitHubLeaseRule {
@@ -46,7 +58,6 @@ export interface GitHubLeaseRule {
 }
 
 interface GitHubShellDependencies {
-  readonly getConnectToken?: typeof getToken;
   readonly getSandbox: () => Promise<SandboxSession>;
   /** Serializes credential leases per corax session; every `ctx.getSandbox()` call returns a new handle. */
   readonly sessionId: string;
@@ -89,13 +100,11 @@ export async function executeGitHubShell(
     sandbox,
   );
   const repositories = repositoryNames(declaredRepositories, config.org);
-  const tokenParams: ConnectTokenParams = {
-    authorizationDetails: [{ type: "github_app_installation", org: config.org, repositories }],
-    subject: { type: "app" },
-  };
-  const token = await (dependencies.getConnectToken ?? getToken)(config.connector, tokenParams);
-  if (!token)
-    throw new Error(`Connect returned an empty token for ${JSON.stringify(config.connector)}.`);
+  const token =
+    typeof config.token === "string"
+      ? config.token
+      : await config.token({ org: config.org, repositories });
+  if (!token) throw new Error("The configured GitHub token source returned an empty token.");
 
   const executable = executablePath(argv[0]!);
   const executionArguments = remoteRepository

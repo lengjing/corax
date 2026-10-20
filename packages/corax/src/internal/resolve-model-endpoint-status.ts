@@ -3,17 +3,13 @@ import { isChatGptModelRouting } from "#shared/chatgpt-model.js";
 import type { ChatGptEndpointState, ModelEndpointStatus } from "#shared/model-endpoint-status.js";
 
 /**
- * Presence of the two gateway credentials, read from wherever the caller can
- * observe them: the running server's `process.env` (runtime-authoritative) or
+ * Presence of the gateway credential, read from wherever the caller can
+ * observe it: the running server's `process.env` (runtime-authoritative) or
  * an app's `.env` files (dev/setup-time). Only meaningful for gateway routing.
  */
 export interface GatewayCredentialPresence {
   /** `AI_GATEWAY_API_KEY` is set. */
   readonly apiKey: boolean;
-  /** A Vercel OIDC token is available (`VERCEL_OIDC_TOKEN` or a linked project). */
-  readonly oidc: boolean;
-  readonly account?: boolean;
-  readonly team?: string;
 }
 
 /** True when an environment value is present and non-blank. */
@@ -25,28 +21,22 @@ export function hasEnvValue(value: string | undefined): boolean {
 export type GatewayCredentialSource = { kind: "env-file"; path: string } | { kind: "shell" };
 
 /**
- * Everywhere the two gateway credentials can be observed. Callers fill in
- * whatever their vantage point can see — env files on disk, the process
- * environment, an SDK token lookup — and the resolver ranks it.
+ * Everywhere the gateway credential can be observed. Callers fill in
+ * whatever their vantage point can see (env files on disk, the process
+ * environment) and the resolver ranks it.
  */
 interface GatewayCredentialEvidence {
   /** `AI_GATEWAY_API_KEY` found in an app env file (the file's name). */
   readonly apiKeyFile?: string;
   /** `AI_GATEWAY_API_KEY` present in the process environment. */
   readonly apiKeyInEnv?: boolean;
-  /** `VERCEL_OIDC_TOKEN` found in an app env file (the file's name). */
-  readonly oidcFile?: string;
-  /** An OIDC token is otherwise available (env or linked-project lookup). */
-  readonly oidcAvailable?: boolean;
 }
 
-export type GatewayCredentialResolution =
-  | {
-      credential: "api-key";
-      /** Where the winning key lives; a shell export is not corax's to remove. */
-      source: GatewayCredentialSource;
-    }
-  | { credential: "oidc"; file?: string };
+export type GatewayCredentialResolution = {
+  credential: "api-key";
+  /** Where the winning key lives; a shell export is not corax's to remove. */
+  source: GatewayCredentialSource;
+};
 
 /** Ranks Gateway credentials using runtime precedence. */
 export function resolveGatewayCredential(
@@ -58,15 +48,9 @@ export function resolveGatewayCredential(
       : evidence.apiKeyInEnv === true
         ? { kind: "shell" }
         : undefined;
-  const hasOidc = evidence.oidcFile !== undefined || evidence.oidcAvailable === true;
 
   if (source !== undefined) {
     return { credential: "api-key", source };
-  }
-  if (hasOidc) {
-    return evidence.oidcFile === undefined
-      ? { credential: "oidc" }
-      : { credential: "oidc", file: evidence.oidcFile };
   }
   return undefined;
 }
@@ -92,16 +76,8 @@ export function resolveModelEndpointStatus(
     }
     return { kind: "external", provider: routing.provider };
   }
-  if (credentials.account)
-    return {
-      kind: "gateway",
-      connected: true,
-      credential: "oauth",
-      team: credentials.team,
-    };
   const resolution = resolveGatewayCredential({
     apiKeyInEnv: credentials.apiKey,
-    oidcAvailable: credentials.oidc,
   });
   if (resolution === undefined) {
     return { kind: "gateway", connected: false };

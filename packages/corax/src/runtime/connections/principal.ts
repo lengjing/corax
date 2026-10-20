@@ -14,7 +14,6 @@ import { type AlsContext, contextStorage } from "#context/container.js";
 import { AuthKey, type SessionAuthContext } from "#context/keys.js";
 import { ConnectionAuthorizationFailedError } from "#connections/errors.js";
 import type { AuthorizationDefinition, ConnectionPrincipal } from "#shared/connection-types.js";
-import { isVercelOidcIssuer } from "#shared/vercel-project.js";
 
 /**
  * Stable string key identifying one principal within a connection's
@@ -22,8 +21,7 @@ import { isVercelOidcIssuer } from "#shared/vercel-project.js";
  *
  * - `{ type: "app" }` → `"app"`. Shared across all sessions.
  * - `{ type: "user", issuer, id }` → `["user", issuer, id]` JSON.
- * - `{ type: "user", id }` → `["user", null, id]` JSON. This is the
- *   native Vercel Connect user projection.
+ * - `{ type: "user", id }` → `["user", null, id]` JSON (issuer-less user).
  *
  * JSON tuple encoding preserves the boundaries between issuer and id, so
  * user-provided separators and percent sequences cannot alias cache entries.
@@ -97,18 +95,10 @@ export function resolveConnectionPrincipalFromAuth(
 
   if (current === null || current === undefined || current.principalType !== "user") {
     throw new ConnectionAuthorizationFailedError(connectionName, {
-      message: buildUserPrincipalRequiredMessage(connectionName, authorization, ctx, current),
+      message: buildUserPrincipalRequiredMessage(connectionName, ctx, current),
       reason: "principal_required",
       retryable: false,
     });
-  }
-
-  if (authorization.vercelConnect !== undefined && isVercelDevelopmentUser(current)) {
-    return {
-      attributes: current.attributes,
-      id: current.subject ?? current.principalId,
-      type: "user",
-    };
   }
 
   return {
@@ -119,18 +109,8 @@ export function resolveConnectionPrincipalFromAuth(
   };
 }
 
-function isVercelDevelopmentUser(current: SessionAuthContext): boolean {
-  return (
-    current.authenticator === "oidc" &&
-    isVercelOidcIssuer(current.issuer) &&
-    current.attributes.environment === "development" &&
-    current.subject === current.attributes.user_id
-  );
-}
-
 function buildUserPrincipalRequiredMessage(
   connectionName: string,
-  authorization: AuthorizationDefinition,
   ctx: AlsContext | undefined,
   current: SessionAuthContext | null | undefined,
 ): string {
@@ -139,10 +119,6 @@ function buildUserPrincipalRequiredMessage(
     detail = "it was invoked outside an corax context, so no authenticated user can be resolved.";
   } else if (current === undefined || current === null) {
     detail = "the active session has no authenticated user.";
-  } else if (authorization.vercelConnect !== undefined && current.authenticator === "local-dev") {
-    detail =
-      "the local request fell back to local development access instead of authenticating a Vercel user. " +
-      "Ensure this directory is linked and the Vercel CLI can mint a Vercel OIDC token, then retry.";
   } else {
     detail = `the active session is scoped to "${current.principalType}", not an authenticated user.`;
   }

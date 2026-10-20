@@ -24,7 +24,6 @@ channelInstrumentationKindGlobal[CHANNEL_INSTRUMENTATION_KINDS] ??= new Map();
 const channelInstrumentationKinds = channelInstrumentationKindGlobal[CHANNEL_INSTRUMENTATION_KINDS];
 
 interface ChannelBuildMetadata {
-  readonly externalCredentials?: unknown;
   readonly manifest?: JsonObject;
 }
 

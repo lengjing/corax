@@ -268,7 +268,7 @@ export interface CreateAgentSourceManifestInput {
    * Optional package name read from the app root's package.json.
    * When provided this is preferred over `basename(appRoot)` for agent id
    * derivation so that builds running in synthetic CI paths (e.g.
-   * `/vercel/path0`) produce a meaningful agent id.
+   * `/build/path0`) produce a meaningful agent id.
    */
   packageName?: string;
   instructions?: readonly InstructionsSourceRef[];
@@ -363,7 +363,7 @@ export function createAgentSourceManifest(
  *
  * When `packageName` is provided it is preferred over `basename(appRoot)` so
  * that builds running inside synthetic CI working directories (e.g.
- * `/vercel/path0`) produce a meaningful agent id instead of `"path0"`.
+ * `/build/path0`) produce a meaningful agent id instead of `"path0"`.
  */
 export function deriveAgentIdFromRoots(
   appRoot: string,

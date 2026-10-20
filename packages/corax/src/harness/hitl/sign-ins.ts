@@ -36,7 +36,7 @@ export function supersededChallenges(
 
 /**
  * Same scope, or the same grant from another scope, such as two tools and a
- * connection that all use one Vercel Connect connector. Approval sign-ins
+ * connection that all use one OAuth connector. Approval sign-ins
  * stay per candidate because each one settles its own approval.
  */
 function sameSignIn(

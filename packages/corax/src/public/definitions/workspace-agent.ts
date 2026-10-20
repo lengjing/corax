@@ -1,5 +1,5 @@
 import type { HeadersValue } from "#client/types.js";
-import { type OutboundAuthFn, vercelOidc } from "#public/agents/auth.js";
+import type { OutboundAuthFn } from "#public/agents/auth.js";
 import {
   defineRemoteAgent,
   type RemoteAgentDefinition,
@@ -64,39 +64,28 @@ function isBrandedWorkspaceSubagent(value: unknown): value is BrandedWorkspaceSu
 
 function workspaceAgentRoutePrefix(name: string): string {
   const callerRoutePrefix = normalizePublicRoutePrefix(process.env.CORAX_PUBLIC_ROUTE_PREFIX);
-  const namespace =
-    callerRoutePrefix?.slice(0, callerRoutePrefix.lastIndexOf("/")) ??
-    (process.env.VERCEL_ENV === "development" ? "" : "/corax");
+  const namespace = callerRoutePrefix?.slice(0, callerRoutePrefix.lastIndexOf("/")) ?? "/corax";
   return `${namespace}/${name}`;
 }
 
+const WORKSPACE_BASE_URL_ENV = "CORAX_WORKSPACE_BASE_URL";
+
+/**
+ * Default transport for a self-hosted workspace: every member is reachable
+ * under one shared origin (`CORAX_WORKSPACE_BASE_URL`) at
+ * `/corax/<name>/v1/*`. Deployments with per-agent origins or service
+ * authentication pass an explicit `transport` instead.
+ */
 function defaultWorkspaceAgentTransport(name: string): WorkspaceAgentTransport {
-  const auth = vercelOidc();
   return {
-    auth: async () => {
-      requireVercelWorkspaceEnvironment();
-      return process.env.VERCEL_ENV === "development" ? { headers: {} } : auth();
-    },
     url: () => {
-      requireVercelWorkspaceEnvironment();
-      const development = process.env.VERCEL_ENV === "development";
-      const host =
-        process.env.VERCEL_ENV === "production"
-          ? process.env.VERCEL_PROJECT_PRODUCTION_URL
-          : process.env.VERCEL_URL;
-      if (host === undefined || host.length === 0) {
+      const base = process.env[WORKSPACE_BASE_URL_ENV]?.trim();
+      if (base === undefined || base.length === 0) {
         throw new Error(
-          "The default workspace-agent transport requires VERCEL_URL, or VERCEL_PROJECT_PRODUCTION_URL in production.",
+          `No default workspace-agent transport is available: set ${WORKSPACE_BASE_URL_ENV} to the origin serving the workspace, or provide transport to defineWorkspaceAgent().`,
         );
       }
-      return `${development ? "http" : "https"}://${host}${workspaceAgentRoutePrefix(name)}`;
+      return `${base.replace(/\/+$/, "")}${workspaceAgentRoutePrefix(name)}`;
     },
   };
-}
-
-function requireVercelWorkspaceEnvironment(): void {
-  if (process.env.VERCEL) return;
-  throw new Error(
-    "No default workspace-agent transport is available in this environment. Provide transport to defineWorkspaceAgent().",
-  );
 }

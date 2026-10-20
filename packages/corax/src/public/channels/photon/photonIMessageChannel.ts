@@ -1,5 +1,4 @@
 import type { SessionAuthContext, TurnPolicy } from "#channel/types.js";
-import { vercelOidc } from "#public/channels/auth.js";
 import {
   chatSdkChannel,
   type ChatSdkChannel,
@@ -71,7 +70,6 @@ export interface PhotonIMessageChannel extends ChatSdkChannel {}
  *
  * @example
  * ```ts
- * import { connectPhotonCredentials } from "@vercel/connect/corax";
  * import { photonIMessageChannel } from "corax/channels/photon";
  *
  * export default photonIMessageChannel({
@@ -87,7 +85,7 @@ export function photonIMessageChannel(config: PhotonIMessageChannelConfig): Phot
       ? { webhookVerifier: config.webhookVerifier }
       : webhookSecret
         ? { webhookSecret }
-        : { webhookVerifier: vercelOidc() }),
+        : {}),
   });
   addPhotonAttachmentRehydration(imessage);
   const bridge = chatSdkChannel({

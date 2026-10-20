@@ -279,7 +279,7 @@ function registerApplicationRoutes(
         // The complete config is resolved here, in the unbundled host process,
         // and baked into the handler: resolving the module-map loader path from
         // inside the bundled dev server can land on the authored app instead of
-        // the installed corax package (vercel/corax#311).
+        // the installed corax package.
         addHostVirtualHandler(nitro, {
           args: JSON.stringify(artifactsConfig),
           handlerExport: "handleDevScheduleDispatchRequest",

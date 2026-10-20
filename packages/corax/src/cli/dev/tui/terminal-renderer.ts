@@ -143,8 +143,6 @@ import {
   wrapVisibleLine,
   stripTerminalControls,
 } from "#cli/ui/terminal-text.js";
-import type { VercelStatusSnapshot } from "./vercel-status.js";
-import type { RemoteConnectionSnapshot } from "./remote-connection.js";
 import { groupToolBlocksForDisplay } from "./tool-block-groups.js";
 import { inputContextLabel, renderQuestionChoices, renderQuestionPanel } from "./question-panel.js";
 import { TurnClock } from "./turn-clock.js";
@@ -250,10 +248,9 @@ type SetupFlowState = {
  * How much subprocess output a warning or error can pull in as its evidence.
  * Only the one-line preview is ever painted while the command runs, so the
  * cap costs nothing visually — it bounds how much of a failure's tail (e.g.
- * a `vercel deploy` build error) survives the settle.
+ * a failed setup subprocess) survives the settle.
  */
 const FLOW_OUTPUT_BUFFER_CAP = 40;
-const STATUS_LINE_LEFT_PADDING = "  ";
 
 const defaultAssistantResponseStats: AssistantResponseStatsMode = "tokensPerSecond";
 
@@ -385,10 +382,6 @@ export class TerminalRenderer implements AgentTUIRenderer {
    */
   #lastCommitted?: PreviousBlock;
 
-  /** Vercel segment of the bottom status line; pushed by the runner. */
-  #vercelStatus?: VercelStatusSnapshot;
-  /** Remote target and connection/authentication state; pushed by the runner. */
-  #remoteConnection?: RemoteConnectionSnapshot;
   #inputText = "";
   #inputCursor = 0;
   readonly #promptHistory = new PromptHistory();
@@ -1472,17 +1465,6 @@ export class TerminalRenderer implements AgentTUIRenderer {
     });
   }
 
-  setVercelStatus(status: VercelStatusSnapshot): void {
-    this.#vercelStatus = status;
-    // #paint self-guards on #isInteractive, so a probe resolving after
-    // shutdown is inert.
-    this.#paint();
-  }
-
-  setRemoteConnectionStatus(status: RemoteConnectionSnapshot): void {
-    this.#remoteConnection = status;
-    this.#paint();
-  }
 
   reset(): void {
     this.#blocks = [];
@@ -1493,8 +1475,7 @@ export class TerminalRenderer implements AgentTUIRenderer {
     this.#transcriptBlocks.length = 0;
     // `/new` resets the conversation, not the workspace: keep #agentHeader
     // (the status line's model segment reads it — the header is not re-sent
-    // after a reset) and #vercelStatus (link + pending-deploy outlive the
-    // conversation). The header *block* still leaves the transcript because
+    // after a reset). The header *block* still leaves the transcript because
     // its rows are only re-emitted via renderAgentHeader.
     this.#agentHeaderRendered = false;
     this.#agentHeaderBody = undefined;
@@ -3615,7 +3596,6 @@ export class TerminalRenderer implements AgentTUIRenderer {
       if (rows.length === 1 && rows[0] === "") rows.length = 0;
       rows.push(...drawer.rows);
       if (drawer.controls.length > 0) rows.push(...drawer.controls);
-      this.#pushRemoteStatusLine(rows, width);
       return rows;
     }
 
@@ -3810,11 +3790,9 @@ export class TerminalRenderer implements AgentTUIRenderer {
       rows.push(clip(this.#theme.colors.dim(`${pulse} ${label}`), width));
       return;
     }
-    const padding = this.#remoteConnection === undefined ? "" : STATUS_LINE_LEFT_PADDING;
-    const contentWidth = Math.max(1, width - padding.length);
     const input: Parameters<typeof buildStatusLine>[0] = {
       theme: this.#theme,
-      width: contentWidth,
+      width,
     };
     if (this.#devBuildStatusVisible && this.#devBuildStatus !== undefined) {
       input.devBuild = this.#devBuildStatus;
@@ -3839,23 +3817,8 @@ export class TerminalRenderer implements AgentTUIRenderer {
     if (endpoint !== undefined) input.endpoint = endpoint;
     // Token flow lives in the end-of-turn coda, not the persistent bar — a
     // live counter mostly restates the last step's context size.
-    if (this.#vercelStatus !== undefined) input.vercel = this.#vercelStatus;
-    if (this.#remoteConnection !== undefined) input.remote = this.#remoteConnection;
     const line = buildStatusLine(input);
-    if (line !== undefined) rows.push(clip(`${padding}${line}`, width));
-  }
-
-  #pushRemoteStatusLine(rows: string[], width: number): void {
-    if (this.#remoteConnection === undefined) return;
-    const contentWidth = Math.max(1, width - STATUS_LINE_LEFT_PADDING.length);
-    const line = buildStatusLine({
-      remote: this.#remoteConnection,
-      theme: this.#theme,
-      width: contentWidth,
-    });
-    if (line !== undefined) {
-      rows.push("", clip(`${STATUS_LINE_LEFT_PADDING}${line}`, width));
-    }
+    if (line !== undefined) rows.push(clip(line, width));
   }
 
   #statusMeta(): string {

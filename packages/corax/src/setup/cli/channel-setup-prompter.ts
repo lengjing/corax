@@ -1,8 +1,3 @@
-import type { ChannelKind } from "../scaffold/update/channels.js";
-
-/** Reasons that make scaffoldable channel kinds unavailable in a picker. */
-export type DisabledChannelReasons = Readonly<Partial<Record<ChannelKind, string>>>;
-
 /** One selectable action shown while a setup operation continues in the background. */
 export interface ChannelSetupAction {
   value: string;

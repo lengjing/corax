@@ -259,7 +259,7 @@ async function addDependencyMountsForRoot(
 /**
  * An app root without its own `package.json` (a bare `withCorax` agent
  * directory) resolves imports through the nearest owning package. Its
- * dependency declarations live there, not at the app root (vercel/corax#1151).
+ * dependency declarations live there, not at the app root.
  */
 function resolveDependencyDeclarationRoot(packageRoot: string, sourceRoot: string): string {
   let currentDirectory = resolve(packageRoot);
@@ -287,7 +287,7 @@ function resolveDependencyDeclarationRoot(packageRoot: string, sourceRoot: strin
  * the source boundary so hoisted installs — npm/yarn workspaces and
  * intermediate monorepo levels — are materialized in the snapshot instead of
  * only the package's own and the source root's `node_modules`
- * (vercel/corax#1151).
+ *.
  */
 function listAncestorNodeModulesRoots(packageRoot: string, sourceRoot: string): string[] {
   const boundary = resolve(sourceRoot);
@@ -318,7 +318,7 @@ function listAncestorNodeModulesRoots(packageRoot: string, sourceRoot: string): 
  * npm and Yarn mark the workspace root only in `package.json` (`workspaces`),
  * unlike pnpm's `pnpm-workspace.yaml`. Without recognizing it, a gitless npm
  * workspace collapses the source root to the app root and hides the hoisted
- * `node_modules` level from the snapshot (vercel/corax#1151).
+ * `node_modules` level from the snapshot.
  */
 function isWorkspaceManifestRoot(directory: string): boolean {
   const packageJsonPath = join(directory, "package.json");
@@ -380,7 +380,7 @@ async function addDependencyMount(state: SnapshotPlanState, mountPath: string): 
 /**
  * Workspace dependency packages are mounted in place rather than copied: the
  * dev runtime resolves their contents through the real tree, the same way
- * installed dependencies already resolve (vercel/corax#652). Their dependency
+ * installed dependencies already resolve. Their dependency
  * closure is still discovered so externalized dependencies resolve from the
  * same installation topology as the authored source bundle.
  */

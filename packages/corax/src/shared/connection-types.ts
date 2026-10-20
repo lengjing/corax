@@ -83,8 +83,7 @@ export type ToolFilterDefinition =
  * - `{ type: "user", id, issuer }`: per end-user identity; the token
  *   cache keys on `issuer + id` so the same `id` across different
  *   IdPs (Slack `U123` vs Google `U123`) never collides.
- * - `{ type: "user", id }`: Vercel Connect's native user subject, used for a
- *   verified Vercel development user. The Vercel OIDC issuer is not forwarded
+ * - `{ type: "user", id }`: an issuer-less user subject. The issuer is not forwarded
  *   because Connect rejects it.
  */
 export type ConnectionPrincipal =
@@ -118,8 +117,7 @@ export interface AuthorizationCallback {
  * callback alongside the resolved {@link ConnectionPrincipal}.
  *
  * Currently exposes the connection's declared MCP server `url`, which
- * helper-based `getToken` implementations (e.g. `@vercel/connect/corax`)
- * use to provision the credential lazily on first use without
+ * helper-based `getToken` implementations use to provision the credential lazily on first use without
  * re-declaring the URL.
  *
  * Strictly additive: new fields may appear over time, so callbacks that
@@ -200,7 +198,7 @@ export type ConnectionAuthProvider =
  * Resolves a connection auth provider from the active turn.
  *
  * Use this when the provider, connector, or credential source depends on
- * `ctx.session`, such as selecting a tenant-specific Vercel Connect client.
+ * `ctx.session`, such as selecting a tenant-specific OAuth client.
  * The returned provider is validated and normalized before use.
  */
 export type ConnectionAuthResolver = (
@@ -237,28 +235,6 @@ interface AuthorizationDefinitionBase {
   readonly principalType: "app" | "user";
 
   /**
-   * Optional metadata marker attached by `connect()` from
-   * `@vercel/connect/corax` so downstream tooling can detect Vercel
-   * Connect-backed connections at compile time without inspecting
-   * `getToken`'s closure state. Examples: a future corax compiler step
-   * that surfaces connector identifiers in build output, or the Vercel
-   * dashboard rendering deep links to a connector's settings page.
-   *
-   * The runtime uses this marker for Connect-specific authorization behavior,
-   * including its local callback URL contract. Authors writing their own
-   * `getToken` callbacks (raw bearer tokens, custom callbacks) should leave
-   * it unset.
-   *
-   * `connector` carries whatever value the author passed to
-   * `connect()`: a UID like `"oauth/mcp-linear-app"` or opaque
-   * `"scl_..."`. Both forms address the same connector on the Vercel
-   * Connect side.
-   */
-  readonly vercelConnect?: {
-    readonly connector: string;
-  };
-
-  /**
    * Optional human-readable provider name shown in sign-in UI (e.g.
    * `"Salesforce"`). Presentation-only: the authorization scope, token
    * cache keys, and callback URLs all stay keyed by the path-derived
@@ -275,8 +251,8 @@ interface AuthorizationDefinitionBase {
    * corax always drops its own per-step entry when a resolved bearer is
    * rejected (a downstream `401` mapped to `ctx.requireAuth()`, or the
    * MCP server rejecting the token). But a strategy frequently sits on a
-   * second, longer-lived cache — most notably the `@vercel/connect`
-   * in-process token cache — that corax cannot see. Without this hook the
+   * second, longer-lived cache (an OAuth helper's in-process token cache)
+   * that corax cannot see. Without this hook the
    * re-authorization re-reads the same revoked-but-unexpired credential
    * from that lower layer and the tool keeps failing.
    *
@@ -369,7 +345,7 @@ export interface InteractiveAuthorizationDefinition<
      * `startAuthorization` to {@link completeAuthorization} (e.g. a PKCE
      * verifier). Serialized across workflow steps to survive the park.
      * Omit it when the provider owns the flow state server-side
-     * (e.g. Vercel Connect).
+     * (e.g. a managed OAuth broker).
      */
     readonly resume?: Resume;
   }>;

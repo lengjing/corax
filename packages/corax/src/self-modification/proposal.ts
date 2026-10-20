@@ -181,7 +181,6 @@ export function assertAllowedChange(
         ".next",
         ".output",
         ".turbo",
-        ".vercel",
         "coverage",
         "out",
       ].includes(part),

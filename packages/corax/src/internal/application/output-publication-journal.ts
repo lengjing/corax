@@ -8,17 +8,13 @@ export type OutputPublicationPhase = "acquired" | "prepared" | "backed-up" | "co
 
 export interface OutputPublicationJournal {
   readonly finalOutputDir: string;
-  readonly finalSummaryPath: string;
   hadOutput: boolean;
-  hadSummary: boolean;
   liveness: "active" | "recoverable";
   readonly outputBackupPath: string;
   phase: OutputPublicationPhase;
   readonly pid: number;
   readonly scratchDir: string;
   readonly stagedOutputDir: string;
-  readonly stagedSummaryPath: string;
-  readonly summaryBackupPath: string;
   readonly token: string;
 }
 
@@ -86,17 +82,13 @@ function isOutputPublicationJournal(value: unknown): value is OutputPublicationJ
   const journal = value as Partial<OutputPublicationJournal>;
   return (
     typeof journal.finalOutputDir === "string" &&
-    typeof journal.finalSummaryPath === "string" &&
     typeof journal.hadOutput === "boolean" &&
-    typeof journal.hadSummary === "boolean" &&
     (journal.liveness === "active" || journal.liveness === "recoverable") &&
     typeof journal.outputBackupPath === "string" &&
     ["acquired", "prepared", "backed-up", "committed"].includes(journal.phase ?? "") &&
     typeof journal.pid === "number" &&
     typeof journal.scratchDir === "string" &&
     typeof journal.stagedOutputDir === "string" &&
-    typeof journal.stagedSummaryPath === "string" &&
-    typeof journal.summaryBackupPath === "string" &&
     typeof journal.token === "string"
   );
 }

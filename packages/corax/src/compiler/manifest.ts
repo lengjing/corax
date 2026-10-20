@@ -32,7 +32,6 @@ import {
   type AgentBuildDefinition,
   type ModelRouting,
 } from "#shared/agent-definition.js";
-import type { VercelConnectMetadata } from "#shared/vercel-connect-metadata.js";
 import type { InternalToolDefinition } from "#tools/definition.js";
 import type { CompiledToolBehavior } from "#tools/behavior.js";
 import type {
@@ -90,7 +89,6 @@ export interface CompiledChannelDefinition {
    */
   readonly cors?: NormalizedChannelCorsOptions;
   readonly manifest?: JsonObject;
-  readonly vercelConnect?: VercelConnectMetadata;
 }
 
 /**
@@ -498,21 +496,6 @@ const compiledChannelCorsSchema = z
   })
   .strict() satisfies z.ZodType<NormalizedChannelCorsOptions>;
 
-const compiledVercelConnectMetadataSchema = z
-  .object({
-    connector: z.string(),
-    requirement: z
-      .object({
-        method: z.string().optional(),
-        reference: z.string(),
-        service: z.string(),
-        subjectTypes: z.array(z.enum(["app", "user"])).readonly(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict() satisfies z.ZodType<VercelConnectMetadata>;
-
 const compiledChannelDefinitionSchema = z
   .object({
     kind: z.literal("channel"),
@@ -526,7 +509,6 @@ const compiledChannelDefinitionSchema = z
     adapterKind: z.string().optional(),
     cors: compiledChannelCorsSchema.optional(),
     manifest: jsonObjectSchema.optional(),
-    vercelConnect: compiledVercelConnectMetadataSchema.optional(),
   })
   .strict();
 
@@ -822,14 +804,6 @@ const compiledConnectionDefinitionSchema = z
      * connections, the API base URL for OpenAPI connections.
      */
     url: z.string(),
-    /**
-     * Marker the compiler captures when the connection's `auth` is built
-     * by `connect()` from `@vercel/connect/corax`. The `connector` field
-     * carries whatever the author wrote — UID (`"oauth/mcp-linear-app"`)
-     * or opaque service-connector key (`"scl_..."`); both forms address
-     * the same connector on the Vercel Connect side.
-     */
-    vercelConnect: compiledVercelConnectMetadataSchema.optional(),
   })
   .strict();
 

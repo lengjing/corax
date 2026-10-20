@@ -263,7 +263,7 @@ export async function acquireRecoveryLease(
 /**
  * Recovery is driven entirely by the stale journal's own recorded paths: the
  * interrupted publication may have targeted a different output directory than
- * the recovering build (`.vercel/output` vs `.output`), and refusing to touch
+ * the recovering build (a different output directory), and refusing to touch
  * it would wedge every later publication behind the retained recovery dir.
  */
 async function finishInterruptedPublication(journalPath: string): Promise<void> {
@@ -286,10 +286,7 @@ async function finishInterruptedPublication(journalPath: string): Promise<void> 
  * corrupt or tampered with; discard it without renaming anything it names.
  */
 function hasTokenDerivedBackupPaths(journal: OutputPublicationJournal): boolean {
-  return (
-    journal.outputBackupPath === `${journal.finalOutputDir}.corax-backup-${journal.token}` &&
-    journal.summaryBackupPath === `${journal.finalSummaryPath}.corax-backup-${journal.token}`
-  );
+  return journal.outputBackupPath === `${journal.finalOutputDir}.corax-backup-${journal.token}`;
 }
 
 // The scratch directory is the failed build's preserved workspace; removing

@@ -1,6 +1,6 @@
 import { isObject } from "#shared/guards.js";
 import { getDefaultCodexTokenBroker } from "#public/models/openai/chatgpt/token-broker.js";
-import { authJson } from "./vercel.js";
+import { authJson } from "./auth-json.js";
 import { resolveModelApiKey } from "./transport.js";
 
 const MODEL_CATALOG_MAX_BYTES = 8 * 1024 * 1024;

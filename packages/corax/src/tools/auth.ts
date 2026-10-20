@@ -8,8 +8,8 @@ import type {
  * `requireAuth` method. Accepts the same shapes as a connection's `auth`:
  * - a `getToken`-only object (static API keys, pre-provisioned JWTs);
  *   `credentialOwner` may be omitted and defaults to `"app"`.
- * - a full interactive OAuth definition (e.g. `connect("okta/myagent")` from
- *   `@vercel/connect/corax`, or `defineInteractiveAuthorization`), which keeps
+ * - a full interactive OAuth definition (e.g. `defineInteractiveAuthorization`),
+ *   which keeps
  *   `principalType: "user"`.
  */
 export type ToolAuthDefinition = ConnectionAuthProvider;
@@ -32,7 +32,7 @@ export interface ToolAuthOptions {
   /**
    * Optional corax auth-flow key for token caches, callback URLs, pending
    * authorization state, and authorization completion. This is not an OAuth
-   * scope. For Vercel Connect OAuth targeting such as `scopes`, `resources`,
+   * scope. For OAuth targeting such as `scopes`, `resources`,
    * or `authorizationDetails`, configure the provider with
    * `connect({ connector, tokenParams })`.
    */

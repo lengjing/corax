@@ -26,7 +26,7 @@ import type {
 } from "#client/index.js";
 import { renderApplicationInfo } from "#cli/commands/info.js";
 import type { CoraxCliSetupStepEvent, CoraxCliSetupTerminalEvent } from "#cli/telemetry/index.js";
-import type { OnboardingScreenEvent } from "./setup-commands.js";
+
 import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
 import {
   createDevelopmentRuntimeArtifactRefresher,
@@ -64,16 +64,7 @@ import {
   type ArgumentTypeaheadCommand,
 } from "./prompt-commands.js";
 import type { PromptArgumentSuggestion } from "./argument-typeahead.js";
-import {
-  createRemoteConnectionController,
-  type RemoteConnectionController,
-  type RemoteConnectionControllerOptions,
-  type RemoteConnectionSnapshot,
-} from "./remote-connection.js";
-import type { RemoteAuthFlow } from "./remote-auth.js";
-import { describeRemoteAuthCompletedMutations } from "./remote-auth-result.js";
-import { prepareRemoteTuiAccess } from "./remote-startup.js";
-import type { DevelopmentCredentialGate } from "#services/dev-client/credential-gate.js";
+
 import {
   BOOT_DETECTIONS,
   detectSetupIssues,
@@ -85,10 +76,10 @@ import {
 } from "./setup-issues.js";
 import type { SetupFlowRenderer } from "./setup-flow.js";
 import type { TraceViewerRenderer } from "./traces/trace-viewer-session.js";
-import type { RemoteDevelopmentTarget } from "./target.js";
+
 import type { LogDisplayMode, TuiDisplayOptions } from "./types.js";
 import { TerminalRenderer, type TerminalInput, type TerminalOutput } from "./terminal-renderer.js";
-import type { VercelStatusEffect, VercelStatusSnapshot } from "./vercel-status.js";
+
 import {
   createMcpConnectionStatusTracker,
   type McpConnectionProbe,
@@ -263,14 +254,7 @@ export type AgentTUIRenderer = {
    * a user prompt. Renderers without process-log capture ignore it.
    */
   flushDelayedDevBuildErrors?(): void;
-  /**
-   * Sets the workspace-scoped Vercel segment of the persistent bottom
-   * status line. Pushed by the runner at startup and after Vercel-related
-   * setup outcomes. Renderers without a status line ignore it.
-   */
-  setVercelStatus?(status: VercelStatusSnapshot): void;
-  /** Sets the remote deployment badge and its current connection/authentication state. */
-  setRemoteConnectionStatus?(status: RemoteConnectionSnapshot): void;
+
   /**
    * Clears the rendered transcript and resets per-conversation display
    * state, leaving the UI interactive on a fresh screen. Used by the
@@ -291,7 +275,7 @@ export interface PromptCommandHandlerContext {
   readonly title: string;
   /** Provider entry authorized by confirmed boot-time model-access evidence. */
   readonly initialModelStep?: "provider";
-  readonly onOnboardingScreen?: (input: OnboardingScreenEvent) => void;
+  readonly onOnboardingScreen?: (input: { readonly screen: string }) => void;
   /** Live ChatGPT identity shown only inside model configuration UI. */
   readonly chatGptAccountLabel?: string;
   /** Settles runtime changes before the setup panel releases the screen. */
@@ -314,7 +298,7 @@ export interface PromptCommandOutcome {
   /** Replaces the echoed invocation once the command settles. */
   summary?: string;
   /** Post-command work after setup settles. */
-  effect?: VercelStatusEffect | ModelAccessChange;
+  effect?: ModelAccessChange;
   cancelled?: true;
 }
 
@@ -338,11 +322,8 @@ export type CoraxTUIRunnerOptions = TuiDisplayOptions & {
   screen?: TerminalOutput;
   userInput?: TerminalInput;
   /**
-   * Formats a session error (a failed send — e.g. a transport failure or a
-   * Vercel Deployment Protection challenge) into the text rendered in the
-   * inline error region. Defaults to the error's message. Callers that know
-   * about transport-specific challenges (the `corax dev` glue) inject a richer
-   * formatter here.
+   * Formats a session error (a failed send, e.g. a transport failure) into the
+   * text rendered in the inline error region. Defaults to the error's message.
    */
   formatTransportError?: (error: unknown) => string;
   /**
@@ -370,15 +351,6 @@ export type CoraxTUIRunnerOptions = TuiDisplayOptions & {
   ) => Promise<readonly PromptArgumentSuggestion[]>;
   /** Gives setup subprocesses exclusive terminal and development-host ownership. */
   withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
-  /** Remote target and mutable OIDC token source, when connected through `--url`. */
-  remote?: {
-    readonly target: RemoteDevelopmentTarget;
-    readonly credentials: DevelopmentCredentialGate;
-    readonly resolveOidcToken: NonNullable<RemoteConnectionControllerOptions["resolveOidcToken"]>;
-    readonly resolveDeployment: NonNullable<RemoteConnectionControllerOptions["resolveDeployment"]>;
-    /** Test seam for consented deployment access repair. */
-    readonly runAuthFlow?: RemoteAuthFlow;
-  };
   /** Boot-time installation-state checks; defaults to the built-ins. */
   bootDetections?: readonly BootDetection[];
   /** Test seam for `/info`; defaults to the filesystem application inspector. */
@@ -416,8 +388,7 @@ export class CoraxTUIRunner {
   readonly #promptCommandHandler?: PromptCommandHandler;
   readonly #availablePromptCommands: readonly PromptCommandSpec[];
   readonly #withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
-  readonly #remoteConnection?: RemoteConnectionController;
-  readonly #remoteAuthFlow?: RemoteAuthFlow;
+
   readonly #bootDetections: readonly BootDetection[];
   readonly #inspectApplication: typeof inspectApplication;
   #onBootProgress?: DevBootProgressReporter;
@@ -487,22 +458,12 @@ export class CoraxTUIRunner {
       this.#promptCommandHandler = options.promptCommandHandler;
     }
     this.#availablePromptCommands = options.availablePromptCommands ?? PROMPT_COMMANDS;
-    if (options.remote !== undefined) {
-      this.#remoteAuthFlow = options.remote.runAuthFlow;
-      this.#remoteConnection = createRemoteConnectionController({
-        client: this.#client,
-        credentials: options.remote.credentials,
-        target: options.remote.target,
-        onChange: (snapshot) => this.#renderer.setRemoteConnectionStatus?.(snapshot),
-        resolveOidcToken: options.remote.resolveOidcToken,
-        resolveDeployment: options.remote.resolveDeployment,
-      });
-    }
+
     this.#bootDetections = options.bootDetections ?? BOOT_DETECTIONS;
     this.#inspectApplication = options.inspectApplication ?? inspectApplication;
     if (options.onBootProgress !== undefined) this.#onBootProgress = options.onBootProgress;
     if (options.serverUrl !== undefined) this.#serverUrl = options.serverUrl;
-    if (options.serverUrl !== undefined && options.remote === undefined) {
+    if (options.serverUrl !== undefined && options.appRoot !== undefined) {
       this.#runtimeArtifacts = createDevelopmentRuntimeArtifactRefresher({
         serverUrl: options.serverUrl,
       });
@@ -523,22 +484,17 @@ export class CoraxTUIRunner {
     }
 
     let info: AgentInfoResult | undefined;
-    if (this.#remoteConnection !== undefined) {
-      const connection = await this.#remoteConnection.check();
-      if (connection.state === "ready") info = connection.info;
-    } else {
-      const client = this.#client;
-      if (client !== undefined) {
-        try {
-          const probe = await devBootPhase(
-            "connecting to agent",
-            () => probeAgentInfo({ client, timeoutMs: 2000 }),
-            this.#onBootProgress,
-          );
-          if (probe.kind === "ready") info = probe.info;
-        } catch {
-          info = undefined;
-        }
+    const client = this.#client;
+    if (client !== undefined) {
+      try {
+        const probe = await devBootPhase(
+          "connecting to agent",
+          () => probeAgentInfo({ client, timeoutMs: 2000 }),
+          this.#onBootProgress,
+        );
+        if (probe.kind === "ready") info = probe.info;
+      } catch {
+        info = undefined;
       }
     }
     this.#reportBeforeFirstPaint();
@@ -594,7 +550,6 @@ export class CoraxTUIRunner {
       // Restore captured stdout/stderr before a fatal error reaches the CLI.
       this.#renderer.shutdown?.();
       this.#mcpConnectionStatus?.dispose();
-      this.#remoteConnection?.dispose();
     }
   }
 
@@ -613,28 +568,6 @@ export class CoraxTUIRunner {
       this.#promptCommandHandler !== undefined &&
       this.#renderer.setupFlow !== undefined;
     let startupOutcome: PromptCommandOutcome | undefined;
-    if (this.#remoteConnection !== undefined && this.#renderer.setupFlow !== undefined) {
-      const access = await prepareRemoteTuiAccess({
-        connection: this.#remoteConnection,
-        renderer: this.#renderer.setupFlow,
-        signal: this.#lifecycle?.signal,
-        runAuthFlow: this.#remoteAuthFlow,
-      });
-      if (access?.kind === "authenticated") {
-        const connection = this.#remoteConnection.current().connection;
-        if (connection.state === "ready") this.#replaceAgentInfo(connection.info);
-      } else if (access?.kind === "failed" || access?.kind === "unavailable") {
-        startupOutcome = {
-          failed: true,
-          message: access.kind === "failed" ? access.message : access.failure.message,
-        };
-      } else if (access?.kind === "cancelled") {
-        startupOutcome = { cancelled: true };
-        if (access.completedMutations.length > 0) {
-          startupOutcome.message = `Completed before cancellation: ${describeRemoteAuthCompletedMutations(access.completedMutations).join(", ")}.`;
-        }
-      }
-    }
     if (initialAgentOnboarding) {
       this.#renderer.setStartupPhase?.("connecting");
       startupOutcome = await this.#runInitialAgentOnboarding(title);
@@ -857,7 +790,6 @@ export class CoraxTUIRunner {
     if (sessionFailed) return;
     // A stranded session is a property of that session, not of the connection.
     if (!this.#renderStrandedSession(error)) {
-      this.#remoteConnection?.reportFailure(error);
       this.#renderer.renderError?.("Error", this.#formatTransportError(error));
     }
   }
@@ -1242,11 +1174,7 @@ export class CoraxTUIRunner {
   async #applyCommandEffect(effect: PromptCommandOutcome["effect"]): Promise<void> {
     if (effect?.kind === "model-access-changed") {
       await this.#refreshModelAccess(effect);
-      return;
     }
-    if (effect === undefined) return;
-
-    void this.#refreshSetupAttention(this.#agentInfo);
   }
 
   async #settleCommandOutcome(outcome: PromptCommandOutcome): Promise<PromptCommandOutcome> {
@@ -1295,7 +1223,6 @@ export class CoraxTUIRunner {
       else
         this.#finishCommand({ kind: "result", message: outcome.message, summary: outcome.summary });
     }
-    this.#refreshHeaderFromRemoteConnection();
     return outcome;
   }
 
@@ -1316,18 +1243,6 @@ export class CoraxTUIRunner {
     return outcome;
   }
 
-  #refreshHeaderFromRemoteConnection(): void {
-    if (this.#startupActive) return;
-    const connection = this.#remoteConnection?.current().connection;
-    if (connection?.state !== "ready" || connection.info === this.#agentInfo) return;
-    this.#agentInfo = connection.info;
-    if (this.#serverUrl === undefined) return;
-    this.#renderer.renderAgentHeader?.({
-      info: connection.info,
-      name: this.#name,
-      serverUrl: this.#serverUrl,
-    });
-  }
 
   /**
    * Opens the renderer's trace viewer on the local spool. The viewer owns the

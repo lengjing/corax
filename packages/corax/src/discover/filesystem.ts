@@ -17,7 +17,7 @@ export const SUPPORTED_AUTHORED_MODULE_FILE_EXTENSIONS = [
  * Files that mark a surrounding directory as an application root when paired
  * with a top-level `agent/` directory.
  */
-const PROJECT_MARKER_FILE_NAMES = ["package.json", "vercel.json"] as const;
+const PROJECT_MARKER_FILE_NAMES = ["package.json"] as const;
 
 const PROJECT_MARKER_FILE_NAME_SET = new Set<string>(PROJECT_MARKER_FILE_NAMES);
 const GENERATED_AGENT_DIRECTORY_NAMES = new Set<string>([
@@ -27,7 +27,6 @@ const GENERATED_AGENT_DIRECTORY_NAMES = new Set<string>([
   ".corax",
   ".next",
   ".output",
-  ".vercel",
   "node_modules",
 ]);
 

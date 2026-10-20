@@ -7,7 +7,6 @@
  */
 export { CoraxTUIRunner } from "../runner.js";
 export type { CoraxTUIRunnerOptions } from "../runner.js";
-export { createPromptCommandHandler } from "../prompt-command-handler.js";
 export { promptCommandsFor } from "../prompt-commands.js";
 export { TerminalRenderer } from "../terminal-renderer.js";
 export { MockScreen, MockUserInput } from "./mock-terminal.js";

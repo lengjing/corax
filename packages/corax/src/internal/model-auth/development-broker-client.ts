@@ -5,7 +5,7 @@ import {
   DEVELOPMENT_WORKFLOW_SECRET_ENV,
   DEVELOPMENT_WORKFLOW_TRANSPORT_HEADER,
 } from "#internal/workflow/development-world-protocol.js";
-import { authJson } from "./vercel.js";
+import { authJson } from "./auth-json.js";
 import {
   DEVELOPMENT_MODEL_CREDENTIAL_ROUTE,
   DEVELOPMENT_MODEL_REJECTED_HEADER,
@@ -37,19 +37,17 @@ export async function readDevelopmentModelCredential(
     headers[DEVELOPMENT_MODEL_REJECTED_HEADER] = createHash("sha256")
       .update(rejectedToken)
       .digest("hex");
-  // The host may wait for the refresh lock and complete two OAuth requests.
+  // The host may wait for the ChatGPT refresh lock and complete two OAuth requests.
   const value = await authJson(url.href, { headers, signal }, 256_000, 75_000);
   if (
     typeof value.token !== "string" ||
     !value.token ||
-    !["api-key", "oauth", "oidc"].includes(String(value.kind))
+    !["api-key", "oauth"].includes(String(value.kind))
   )
     throw new Error("The model connection is unavailable. Run /login to reconnect.");
   return {
     kind: value.kind as DevelopmentModelCredential["kind"],
     token: value.token,
-    ...(typeof value.teamId === "string" && { teamId: value.teamId }),
-    ...(typeof value.teamName === "string" && { teamName: value.teamName }),
     ...(typeof value.accountId === "string" && { accountId: value.accountId }),
     ...(typeof value.accountLabel === "string" && { accountLabel: value.accountLabel }),
   };

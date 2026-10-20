@@ -45,7 +45,6 @@ import {
   type TokenResult,
 } from "#shared/connection-types.js";
 
-const LOCAL_HTTP_VERCEL_CONNECT_HOSTNAMES: ReadonlySet<string> = new Set(["127.0.0.1", "[::1]"]);
 
 /**
  * Everything the scoped authorization helpers need to drive one
@@ -267,7 +266,7 @@ export async function resolveScopedToken(input: ScopedAuthorization): Promise<To
  * re-authorization attempt does not re-read the stale token. Drops two
  * layers: corax's per-step cache, and — via the strategy's optional
  * {@link AuthorizationDefinition.evict} hook — any cache the strategy
- * itself owns (e.g. the `@vercel/connect` in-process token cache). The
+ * itself owns (e.g. an OAuth helper's in-process token cache). The
  * single shared eviction path here means both authored tools and MCP
  * connections cascade identically.
  *
@@ -349,10 +348,7 @@ async function startScopedAuthorization(
   const interactive = authorization as InteractiveAuthorizationDefinition<JsonValue>;
   const principal = resolveScopedPrincipal(input);
   const requester = input.boundResponder ?? contextStorage.getStore()?.get(AuthKey) ?? undefined;
-  const callbackUrl = resolveAuthorizationCallbackUrl({
-    authorization,
-    callbackUrl: attempt.hookUrl,
-  });
+  const callbackUrl = attempt.hookUrl;
   const { challenge, resume } = await interactive.startAuthorization({
     callbackUrl,
     connection,
@@ -362,7 +358,6 @@ async function startScopedAuthorization(
     {
       attemptId: attempt.attemptId,
       challenge: stampChallengeDisplayName(challenge, authorization),
-      grant: authorization.vercelConnect?.connector,
       hookUrl: callbackUrl,
       instanceId: input.instanceId,
       name: scope,
@@ -383,28 +378,6 @@ function resolveScopedPrincipal(input: ScopedAuthorization, ctx?: AlsContext) {
         input.boundResponder,
         ctx,
       );
-}
-
-/** Normalizes callback URLs for providers with localhost requirements. */
-export function resolveAuthorizationCallbackUrl(input: {
-  readonly authorization: Readonly<AuthorizationDefinition>;
-  readonly callbackUrl: string;
-}): string {
-  if (input.authorization.vercelConnect === undefined) return input.callbackUrl;
-
-  let url: URL;
-  try {
-    url = new URL(input.callbackUrl);
-  } catch {
-    return input.callbackUrl;
-  }
-
-  if (url.protocol !== "http:" || !LOCAL_HTTP_VERCEL_CONNECT_HOSTNAMES.has(url.hostname)) {
-    return input.callbackUrl;
-  }
-
-  url.hostname = "localhost";
-  return url.toString();
 }
 
 /**

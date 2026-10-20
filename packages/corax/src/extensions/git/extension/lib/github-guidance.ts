@@ -6,10 +6,10 @@ const SHELL_INSTRUCTIONS = `# GitHub
 Use the \`gh\` and \`git\` CLIs in \`bash\` for GitHub operations: cloning, fetching, pushing, issues, pull requests, reviews, and CI. They authenticate with the credentials already configured in the shell. Never put credentials in URLs or commands. If access is denied, report it plainly and stop.
 `;
 
-/** Holds only when the Connect-brokered `gh` tool can authenticate, which requires `github` config. */
-const CONNECT_INSTRUCTIONS = `# GitHub
+/** Holds only when the brokered `gh` tool can authenticate, which requires `github` config. */
+const BROKERED_INSTRUCTIONS = `# GitHub
 
-GitHub credentials are not available to ordinary \`bash\`. Use the \`gh\` tool for every authenticated GitHub operation. The full \`gh\` CLI surface is available. Declare exactly one repository in the configured organization with write-capable access. Authenticated commands run without an approval prompt; describe the intended GitHub-side result accurately in \`description\`. Connect mints the real token for only the declared repository. The sandbox process receives only a placeholder \`GH_TOKEN\`, and the firewall exchanges it on matching GitHub requests. GitHub rejects access outside the token's server-side repository scope. Never put credentials in URLs or commands. If access is denied, report it plainly and stop.
+GitHub credentials are not available to ordinary \`bash\`. Use the \`gh\` tool for every authenticated GitHub operation. The full \`gh\` CLI surface is available. Declare exactly one repository in the configured organization with write-capable access. Authenticated commands run without an approval prompt; describe the intended GitHub-side result accurately in \`description\`. The configured token source mints the real token for only the declared repository. The sandbox process receives only a placeholder \`GH_TOKEN\`, and the firewall exchanges it on matching GitHub requests. GitHub rejects access outside the token's server-side repository scope. Never put credentials in URLs or commands. If access is denied, report it plainly and stop.
 
 Pass commands as simple argv with ordinary quoting. Do not use environment assignments, pipes, redirects, substitutions, or other shell syntax. Commands without an explicit repository may use normal \`gh\` context, but their token remains scoped to the declared repository. An explicit \`-R\`, \`--repo\`, \`--repo=\`, or repository argument to \`gh repo clone\`, \`view\`, or \`fork\` must match the declaration.
 
@@ -23,7 +23,7 @@ Repositories that require verified signatures reject ordinary sandbox commits. S
 `;
 
 export function githubInstructions(github: boolean): string {
-  return `${github ? CONNECT_INSTRUCTIONS : SHELL_INSTRUCTIONS}\n${PUBLISHING}\n`;
+  return `${github ? BROKERED_INSTRUCTIONS : SHELL_INSTRUCTIONS}\n${PUBLISHING}\n`;
 }
 
 /** `gh-signed-commit` authenticates through the `gh` tool's credential lease. */

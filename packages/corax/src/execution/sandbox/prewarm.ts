@@ -119,14 +119,10 @@ async function prewarmSandboxes(input: PrewarmSandboxesInput): Promise<void> {
         });
         return { nodeId, provider, result };
       } catch (error) {
-        const prewarmError = formatPrewarmFailureForEnvironment({
-          providerName: provider.providerName,
-          error,
-        });
         input.log?.(
-          `corax: failed to initialize sandbox template "${label}" on provider "${provider.providerName}": ${toErrorMessage(prewarmError)}`,
+          `corax: failed to initialize sandbox template "${label}" on provider "${provider.providerName}": ${toErrorMessage(error)}`,
         );
-        throw prewarmError;
+        throw error;
       }
     }),
   );
@@ -155,7 +151,7 @@ async function prewarmSandboxes(input: PrewarmSandboxesInput): Promise<void> {
  * Hydrates the module map directly from authored source so callers
  * don't need a pre-existing `module-map.mjs` import in Node's cache.
  * Shared entrypoint for `corax dev` startup, the dev watcher, and the
- * Vercel build hook.
+ * build hook.
  */
 export async function prewarmAppSandboxes(input: {
   readonly appRoot: string;
@@ -308,30 +304,4 @@ function shouldLogSandboxPrewarmProgress(message: string): boolean {
     message !== "loading microsandbox runtime" &&
     message !== "microsandbox runtime ready"
   );
-}
-
-function formatPrewarmFailureForEnvironment(input: {
-  readonly providerName: string;
-  readonly error: unknown;
-}): unknown {
-  if (!isVercelEnvironment() || !isLocalSandboxProvider(input.providerName)) {
-    return input.error;
-  }
-
-  return new Error(
-    `The ${input.providerName} sandbox provider is not available when deploying on Vercel. ` +
-      "Vercel build containers cannot run local Docker containers or microsandbox VMs. " +
-      "Use DefaultSandbox.environment() so corax selects Vercel Sandbox on Vercel, or configure " +
-      "VercelSandbox.environment() explicitly. " +
-      `Original ${input.providerName} error: ${toErrorMessage(input.error)}`,
-    { cause: input.error },
-  );
-}
-
-function isVercelEnvironment(): boolean {
-  return Boolean(process.env.VERCEL?.trim());
-}
-
-function isLocalSandboxProvider(providerName: string): boolean {
-  return providerName === "docker" || providerName === "microsandbox";
 }

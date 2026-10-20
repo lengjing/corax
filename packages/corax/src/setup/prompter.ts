@@ -53,7 +53,7 @@ export interface SelectOption<T extends PrompterValue> {
   /**
    * "warning" renders the disabled reason in yellow with a dimmed (not struck)
    * label: the row is unavailable here but actionable elsewhere (e.g. a channel
-   * that needs a Vercel account points at /model), unlike the default disabled
+   * that needs a model connection points at /model), unlike the default disabled
    * styling, which marks a hard conflict.
    */
   disabledReasonTone?: "warning";
@@ -271,7 +271,7 @@ export interface Prompter {
    */
   note(message: string, title?: string, options?: { tone?: NoteTone }): void;
 
-  /** Prints the Vercel ▲ logo + title + subtitle banner. */
+  /** Prints the ▲ brand mark + title + subtitle banner. */
   intro(title: string, subtitle?: string): void;
 
   /** Prints a final green ● end-cap with the message. */
@@ -448,7 +448,7 @@ function cornerNote(note: string | undefined): string {
 }
 
 /**
- * Builds a prompter with Vercel-branded styling — white-then-green vertical
+ * Builds a prompter with corax's terminal styling — white-then-green vertical
  * rails, open/filled triangle bullets per step, and a colored corner
  * below the active prompt. Built on `@clack/core` so we own every glyph.
  *

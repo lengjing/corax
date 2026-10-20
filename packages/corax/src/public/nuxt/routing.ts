@@ -20,7 +20,7 @@ export function normalizeOrigin(origin: string): string {
 
 /**
  * Resolve the local production port the module proxies to when an corax service
- * runs alongside a non-Vercel Nuxt deployment. Defaults to
+ * runs alongside a self-hosted Nuxt deployment. Defaults to
  * {@link DEFAULT_CORAX_NUXT_PRODUCTION_PORT}.
  */
 export function readLocalProductionPort(): number {
@@ -36,10 +36,8 @@ export function readLocalProductionPort(): number {
 }
 
 /**
- * Resolve the proxy destination for corax routes in non-Vercel production: an
- * explicit origin override (`CORAX_NUXT_PRODUCTION_ORIGIN`) or a local port. On
- * Vercel the module routes at the edge via a Build Output service route
- * instead of proxying.
+ * Resolve the proxy destination for corax routes in production: an explicit
+ * origin override (`CORAX_NUXT_PRODUCTION_ORIGIN`) or a local port.
  */
 export function resolveProductionTarget(): string {
   const configuredOrigin = process.env[CORAX_NUXT_PRODUCTION_ORIGIN_ENV];

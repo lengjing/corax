@@ -1,5 +1,4 @@
 import type { SessionAuthContext, TurnPolicy } from "#channel/types.js";
-import { vercelOidc } from "#public/channels/auth.js";
 import {
   chatSdkChannel,
   type ChatSdkChannelBridge,
@@ -49,7 +48,7 @@ export interface LinqChannelCredentials {
   readonly apiKey?: LinqCredentialValue;
   /** Signing secret for direct Linq webhook delivery. */
   readonly signingSecret?: LinqCredentialValue;
-  /** Trusted verifier for webhooks forwarded by a provider such as Vercel Connect. */
+  /** Trusted verifier for webhooks forwarded by an upstream relay. */
   readonly webhookVerifier?: LinqWebhookVerifier;
 }
 
@@ -86,7 +85,6 @@ export interface LinqChannel extends Channel<
  *
  * @example
  * ```ts
- * import { connectLinqCredentials } from "@vercel/connect/corax";
  * import { linqChannel } from "corax/channels/linq";
  *
  * export default linqChannel({
@@ -132,8 +130,6 @@ function normalizeCredentials(
   }
   if (webhookVerifier !== undefined) {
     config.webhookVerifier = webhookVerifier;
-  } else if (signingSecret === undefined) {
-    config.webhookVerifier = vercelOidc();
   }
   return config;
 }

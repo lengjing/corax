@@ -217,7 +217,7 @@ type CompiledRuntimeModelCatalogCache = z.infer<typeof compiledRuntimeModelCatal
 async function fetchAndPersistModelCatalog(
   appRoot: string,
 ): Promise<CompiledRuntimeModelCatalogCache> {
-  // The catalog is a Vercel service; only contact it when the operator enabled AI Gateway.
+  // The catalog is a hosted gateway service; only contact it when the operator enabled AI Gateway.
   if (!isGatewayModelRoutingEnabled()) {
     throw modelLimitsRequireGatewayError("the requested model");
   }

@@ -1,7 +1,7 @@
 /**
  * Visual language for the `corax dev` terminal UI.
  *
- * The palette and iconography follow the Vercel / Next.js CLI: a monochrome
+ * The palette and iconography follow a monochrome CLI convention: a monochrome
  * base (bold white primary, dim gray secondary) anchored by the `▲` brand
  * mark, with restrained accent colors reserved for status — green `✓`, red
  * `⨯`, yellow `⚠`/spinner — and cyan for interactive/link text. Everything
@@ -50,7 +50,7 @@ export interface ThemeColors {
   yellow: Style;
   magenta: Style;
   blue: Style;
-  /** Vercel-orange accent (xterm-256 208), used for nested subagent regions. */
+  /** Orange accent (xterm-256 208), used for nested subagent regions. */
   orange: Style;
 }
 
@@ -59,7 +59,7 @@ export interface ThemeColors {
  * the terminal can't be trusted with wide/box-drawing characters).
  */
 export interface ThemeGlyphs {
-  /** `▲` — the Vercel/corax brand mark; prefixes the agent's own output. */
+  /** `▲` — the corax brand mark; prefixes the agent's own output. */
   brand: string;
   /** `│` — left gutter bar marking a user message. */
   user: string;

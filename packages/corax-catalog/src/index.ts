@@ -308,7 +308,7 @@ export const INTEGRATIONS: readonly IntegrationEntry[] = [
     slug: "github-tools",
     name: "GitHub Tools",
     kind: "extension",
-    tagline: "Add scoped GitHub tools with Vercel Connect authentication and approval rules.",
+    tagline: "Add scoped GitHub tools with brokered authentication and approval rules.",
     surfaces: { scaffoldable: false, registry: true, gallery: true },
   },
   {
@@ -330,7 +330,7 @@ export const INTEGRATIONS: readonly IntegrationEntry[] = [
     name: "KERNEL",
     kind: "extension",
     tagline:
-      "Let your corax agent use the Internet with KERNEL browser infra, o11y, and stealth. Integrated natively with Vercel Connect and AI Gateway.",
+      "Let your corax agent use the Internet with KERNEL browser infra, o11y, and stealth. Integrates with brokered connections and AI Gateway.",
     surfaces: { scaffoldable: false, registry: true, gallery: true },
   },
   {
@@ -338,7 +338,7 @@ export const INTEGRATIONS: readonly IntegrationEntry[] = [
     name: "File memory",
     kind: "memory",
     tagline:
-      "Store durable per-principal memory in a private Vercel Blob store provisioned for the agent.",
+      "Store durable per-principal memory in a private file store (SQLite by default) owned by the agent.",
     surfaces: { scaffoldable: false, registry: true, gallery: true },
   },
   {
@@ -394,18 +394,6 @@ export const INTEGRATIONS: readonly IntegrationEntry[] = [
       description:
         "DataForSEO: run SEO, keyword, and SERP data lookups through DataForSEO's MCP server.",
       mcp: { url: "https://mcp.dataforseo.com/v3/mcp" },
-    },
-  },
-  {
-    slug: "vercel",
-    name: "Vercel",
-    kind: "connection",
-    tagline: "Manage Vercel projects, deployments, and logs through Vercel's MCP server.",
-    surfaces: { scaffoldable: false, registry: true, gallery: true },
-    connection: {
-      description:
-        "Vercel: manage projects and deployments, inspect logs, and search documentation.",
-      mcp: { url: "https://mcp.vercel.com" },
     },
   },
   {

@@ -416,10 +416,9 @@ async function runSessionStepBody(
     const dynamicToolResolvers = bundle.resolvedAgent.dynamicToolResolvers ?? [];
     const runtimeIdentity = buildRuntimeIdentity(effectiveNode);
     try {
-      const deploymentId = process.env.VERCEL_DEPLOYMENT_ID?.trim();
-      const dynamicRuntimeRevision = deploymentId
-        ? `deployment:${deploymentId}`
-        : await resolveRuntimeCompiledArtifactsVersionedCacheKey(bundle.compiledArtifactsSource);
+      const dynamicRuntimeRevision = await resolveRuntimeCompiledArtifactsVersionedCacheKey(
+        bundle.compiledArtifactsSource,
+      );
       const sessionStarted = initialEmissionState.sessionStarted;
 
       ctx.setVirtualContext(StaticModelReferenceKey, effectiveAgent.turnAgent.model ?? null);

@@ -1,52 +1,14 @@
-import { getVercelOidcToken } from "#compiled/@vercel/oidc/index.js";
-
-import { type TokenValue, VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER } from "#client/types.js";
+import type { TokenValue } from "#client/types.js";
 
 /**
  * Outbound request auth hook for remote agent dispatch. Runs once per
  * outbound request; returns the headers (e.g. `authorization`) to merge onto
- * that request. Use {@link vercelOidc}, {@link bearer}, or {@link basic} to
+ * that request. Use {@link bearer} or {@link basic} to
  * construct one, or supply a custom function for other schemes.
  */
 export type OutboundAuthFn = () => Promise<{
   readonly headers: Readonly<Record<string, string>>;
 }>;
-
-/**
- * corax-owned mirror of the `@vercel/oidc` token lookup options forwarded to
- * {@link vercelOidc}.
- */
-export interface VercelOidcOptions {
-  /** Buffer in milliseconds before token expiry that triggers a refresh. */
-  readonly expirationBufferMs?: number;
-  /** Project ID (`prj_*`) or slug to use for token refresh. */
-  readonly project?: string;
-  /** Team ID (`team_*`) or slug to use for token refresh. */
-  readonly team?: string;
-}
-
-/**
- * Returns an {@link OutboundAuthFn} that emits a Vercel OIDC token in both the
- * bearer and trusted-identity-provider headers for outbound remote-agent
- * requests. The bearer authenticates the corax route, while the trusted header
- * passes Vercel Deployment Protection.
- *
- * Reads the token from the request context or the `VERCEL_OIDC_TOKEN`
- * environment variable (refreshed in development when expired). Pass
- * {@link VercelOidcOptions} to scope the refresh to a team or project; defaults
- * to `{}`.
- */
-export function vercelOidc(options: VercelOidcOptions = {}): OutboundAuthFn {
-  return async () => {
-    const token = await getVercelOidcToken(options);
-    return {
-      headers: {
-        authorization: `Bearer ${token}`,
-        [VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER]: token,
-      },
-    };
-  };
-}
 
 /**
  * Returns an {@link OutboundAuthFn} that emits a `Bearer` `Authorization`

@@ -5,7 +5,7 @@ export const MICROSANDBOX_DEFAULT_IMAGE = DEFAULT_CORAX_SANDBOX_IMAGE;
 const MICROSANDBOX_DEFAULT_CPUS = 1;
 const MICROSANDBOX_DEFAULT_MEMORY_MIB = 1024;
 const MICROSANDBOX_DEFAULT_PULL_POLICY = "if-missing";
-/** User every sandbox command runs as, mirroring hosted Vercel Sandbox. */
+/** User every sandbox command runs as inside the microsandbox VM. */
 export const MICROSANDBOX_USER = "vercel-sandbox";
 
 /**

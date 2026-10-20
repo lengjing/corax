@@ -22,11 +22,9 @@ export { resolveOutputPublicationLockPath };
 interface OutputPublicationInput {
   readonly appRoot: string;
   readonly finalOutputDir: string;
-  readonly finalSummaryPath: string;
   /** Invocation-owned directory containing the staged paths; recovery removes it. */
   readonly scratchDir: string;
   readonly stagedOutputDir: string;
-  readonly stagedSummaryPath: string;
 }
 
 /**
@@ -54,8 +52,7 @@ const DEFAULT_OBSERVER: OutputPublicationObserver = {
 };
 
 /**
- * Atomically installs a build's staged output and summary as the app's
- * published artifacts: backs up the previous publication, renames the staged
+ * Atomically installs a build's staged output as the app's published artifact: backs up the previous publication, renames the staged
  * paths into place, and rolls back to the backup on failure. A journaled,
  * cross-process lock serializes publishers and lets the next build finish an
  * interrupted publication.
@@ -128,20 +125,15 @@ export async function publishApplicationBuildArtifactsWithObserver(
 function createOutputPublicationJournal(input: OutputPublicationInput): OutputPublicationJournal {
   const token = randomUUID();
   const finalOutputDir = resolve(input.finalOutputDir);
-  const finalSummaryPath = resolve(input.finalSummaryPath);
   return {
     finalOutputDir,
-    finalSummaryPath,
     hadOutput: false,
-    hadSummary: false,
     liveness: "active",
     outputBackupPath: `${finalOutputDir}.corax-backup-${token}`,
     phase: "acquired",
     pid: process.pid,
     scratchDir: resolve(input.scratchDir),
     stagedOutputDir: resolve(input.stagedOutputDir),
-    stagedSummaryPath: resolve(input.stagedSummaryPath),
-    summaryBackupPath: `${finalSummaryPath}.corax-backup-${token}`,
     token,
   };
 }

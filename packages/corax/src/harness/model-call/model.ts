@@ -18,12 +18,9 @@ export function buildGatewayAttributionHeaders(
   if (!profile.gateway) return undefined;
 
   const title = runtimeIdentity?.agentName ?? runtimeIdentity?.agentId;
-  const deploymentHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-  const referer = deploymentHost ? `https://${deploymentHost}` : undefined;
 
   const headers: Record<string, string> = Object.fromEntries(appendPackageUserAgent(new Headers()));
   if (title) headers["x-title"] = title;
-  if (referer) headers["http-referer"] = referer;
   return headers;
 }
 

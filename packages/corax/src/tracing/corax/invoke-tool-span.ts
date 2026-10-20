@@ -170,7 +170,6 @@ async function traced(
     "agent.trace.schema.version": 4,
     "gen_ai.conversation.id": operationConversationId({ sessionId: input.sessionId }),
   };
-  if (process.env.VERCEL_ENV !== undefined) attributes["vercel.session_id"] = input.sessionId;
   if (input.origin !== undefined) {
     attributes["corax.channel.kind"] = conversation.channel.kind;
     attributes["corax.channel.name"] = input.origin.channelName;

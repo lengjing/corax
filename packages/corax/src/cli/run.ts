@@ -6,21 +6,12 @@ import type { CliApplicationContext } from "#cli/application-command.js";
 import { agentCommand } from "#cli/agent-command.js";
 import { findCliApplicationRoot, resolveCliApplicationProject } from "#cli/application-root.js";
 import { coraxCliBanner } from "#cli/banner.js";
-import { registerDevelopmentCommand, registerRemoteCommands } from "#cli/dev/command.js";
+import { registerDevelopmentCommand } from "#cli/dev/command.js";
 import { resolveDevUiMode, resolveTuiDisplayOptions } from "#cli/dev/ui-options.js";
-import {
-  registerAcpCommand,
-  type ResolveVerifiedRemoteDevelopmentClient,
-  type RunAcpServer,
-} from "#cli/acp/command.js";
 import { waitForShutdownSignal } from "#cli/shutdown.js";
 import type { ProductionCliOptions } from "#cli/dev/command-options.js";
 import type { RunDevelopmentTuiInput } from "#cli/dev/tui/tui.js";
 import type { EvalCliOptions } from "#evals/cli/eval.js";
-import {
-  registerRuntimeInvokeCommand,
-  type InvokeCliRuntimeDependencies,
-} from "#cli/invoke/command.js";
 import { parsePortOption } from "#cli/option-parsers.js";
 import { resolveCoraxProjectContext } from "#internal/project-context.js";
 import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
@@ -43,15 +34,12 @@ interface CliLogger {
 interface CliRuntimeDependencies {
   findApplicationRoot(cwd: string): Promise<string | undefined>;
   buildHost: BuildHost;
-  resolveVerifiedRemoteDevelopmentClient: ResolveVerifiedRemoteDevelopmentClient;
-  runAcpServer: RunAcpServer;
   printApplicationInfo(
     logger: CliLogger,
     appRoot: string,
     options?: { json?: boolean },
   ): Promise<void>;
   runDevelopmentTui(input: RunDevelopmentTuiInput): Promise<void>;
-  runInvoke: InvokeCliRuntimeDependencies["runInvoke"];
   runEvalCommand(
     evalIds: readonly string[],
     options: EvalCliOptions,
@@ -102,11 +90,7 @@ export function createCliProgram(
     .exitOverride()
     .hook("preAction", (_program, actionCommand) => {
       const { json } = actionCommand.opts<{ json?: boolean }>();
-      if (
-        !json &&
-        (actionCommand.name() === "info" ||
-          (actionCommand.name() === "init" && actionCommand.parent !== program))
-      ) {
+      if (!json && actionCommand.name() === "info") {
         logger.log(coraxCliBanner());
       }
     })
@@ -152,18 +136,6 @@ export function createCliProgram(
       await waitForShutdownSignal({ close: () => server.close(), wait: () => server.wait() });
     });
 
-  const remote = program.command("remote").description("Connect to an existing corax agent.");
-  registerRemoteCommands({ applicationContext, logger, program: remote, runtime, telemetry });
-  registerRuntimeInvokeCommand({ applicationContext, logger, program: remote, runtime });
-
-  registerAcpCommand({
-    applicationContext,
-    coraxVersion: packageVersion,
-    program,
-    resolveVerifiedRemoteDevelopmentClient: runtime.resolveVerifiedRemoteDevelopmentClient,
-    runAcpServer: runtime.runAcpServer,
-    startHost: runtime.startHost,
-  });
 
   registerDevelopmentCommand({
     applicationContext,

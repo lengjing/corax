@@ -12,7 +12,6 @@ import type { InstrumentationRuntimeContextInput } from "#public/instrumentation
 import type { JsonObject } from "#shared/json.js";
 import { batchSpanProcessor } from "#tracing/corax/batch-span-processor.js";
 import { contentFilteringProcessor } from "#tracing/corax/content-span-processor.js";
-import { vercelRuntimeSpanProcessor } from "#tracing/corax/vercel-runtime-span-exporter.js";
 import type { OtelConfiguration } from "#tracing/corax/otel-configuration.js";
 import { createLogger, formatError } from "#internal/logging.js";
 const log = createLogger("tracing.export");
@@ -201,17 +200,6 @@ function createOtelIntegration(options: OtelIntegrationOptions): OtelIntegration
     spanProcessors: spanProcessors.map((processor) =>
       contentFilteringProcessor(processor, options.exportPolicy),
     ),
-  };
-}
-
-/** Vercel Agent Runs through the hosted request-context transport. @internal */
-export function agentRunsIntegration(options: ManagedTraceOptions = {}): OtelIntegration {
-  assertNoRemovedContentOptions(options);
-  return {
-    [OTEL_INTEGRATION]: true,
-    [PROVIDER]: true,
-    metricReaders: [],
-    spanProcessors: [contentFilteringProcessor(vercelRuntimeSpanProcessor(), options.exportPolicy)],
   };
 }
 

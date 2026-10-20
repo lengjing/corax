@@ -83,7 +83,7 @@ function addScheduleTaskVirtualHandler(
   // Nitro's `defineTask` is a passthrough that only installs a guard `run`
   // when one is missing — we always provide one, so we skip the import and
   // export the task object directly. Importing from `"nitro/task"` would
-  // fail at runtime on Vercel because `nitro` is a build-only dependency
+  // fail at runtime in production because `nitro` is a build-only dependency
   // and is not included in the deployed function trace.
   nitro.options.virtual[virtualId] = [
     `import { dispatchScheduleTask } from ${dispatchModulePath};`,

@@ -1,18 +1,13 @@
 export const MODEL_CONNECTION_ENV = "CORAX_MODEL_CONNECTION";
 
-/** Connection selections that route bare model ids through Vercel AI Gateway. */
-export const GATEWAY_MODEL_CONNECTIONS = [
-  "vercel",
-  "vercel-cli",
-  "ai-gateway-key",
-  "ai-gateway-project",
-] as const;
+/** Connection selections that route bare model ids through the AI Gateway. */
+export const GATEWAY_MODEL_CONNECTIONS = ["ai-gateway-key"] as const;
 
 /**
  * Whether bare model id strings may be resolved through a default provider.
  *
  * The AI SDK resolves a bare string with `globalThis.AI_SDK_DEFAULT_PROVIDER ??
- * gateway`, which means Vercel AI Gateway unless the operator installed their
+ * gateway`, which means the hosted AI Gateway unless the operator installed their
  * own default provider. Corax never contacts the gateway implicitly: the
  * operator must opt in through `CORAX_MODEL_CONNECTION`, `AI_GATEWAY_API_KEY`,
  * or by setting `AI_SDK_DEFAULT_PROVIDER` themselves.
@@ -29,7 +24,7 @@ export function isGatewayModelRoutingEnabled(
 /** Error raised when a bare model id would be routed through AI Gateway without opt-in. */
 export function bareModelIdRequiresGatewayError(modelId: string, location?: string): Error {
   return new Error(
-    `${location ? `${location}: ` : ""}Model "${modelId}" is a bare model id, which the AI SDK routes through Vercel AI Gateway. ` +
+    `${location ? `${location}: ` : ""}Model "${modelId}" is a bare model id, which the AI SDK routes through the AI Gateway. ` +
       "Corax does not use AI Gateway unless explicitly enabled. Pass a provider model instance instead " +
       '(for example createOpenAI({ baseURL }).chat("model")), or opt in with ' +
       `${MODEL_CONNECTION_ENV}=ai-gateway-key and AI_GATEWAY_API_KEY.`,
@@ -39,7 +34,7 @@ export function bareModelIdRequiresGatewayError(modelId: string, location?: stri
 /** Error raised when model limits would have to be fetched from the AI Gateway catalog without opt-in. */
 export function modelLimitsRequireGatewayError(modelLabel: string, purpose?: string): Error {
   return new Error(
-    `Cannot determine the context window for ${purpose ? `${purpose} ` : ""}"${modelLabel}" without contacting the Vercel AI Gateway model catalog, ` +
+    `Cannot determine the context window for ${purpose ? `${purpose} ` : ""}"${modelLabel}" without contacting the AI Gateway model catalog, ` +
       "which Corax does not use unless explicitly enabled. Set modelContextWindowTokens on the agent " +
       `or model selection, or opt in with ${MODEL_CONNECTION_ENV}=ai-gateway-key and AI_GATEWAY_API_KEY.`,
   );

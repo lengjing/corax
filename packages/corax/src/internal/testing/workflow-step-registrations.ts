@@ -13,7 +13,7 @@ import {
   WORKFLOW_VIRTUAL_ENTRY_ID,
   type WorkflowBundleDiscoveredEntries,
 } from "#internal/workflow-bundle/builder-support.js";
-import { WORKFLOW_STEP_EXTERNAL_PACKAGES } from "#internal/workflow-bundle/vercel-workflow-output.js";
+import { WORKFLOW_STEP_EXTERNAL_PACKAGES } from "#internal/workflow-bundle/workflow-external-packages.js";
 import type { WorkflowManifest } from "#internal/workflow-bundle/workflow-builders.js";
 import { atomicWriteFile } from "#shared/atomic-write-file.js";
 

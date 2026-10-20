@@ -33,7 +33,6 @@ const WATCHER_IGNORED_DIRECTORY_NAMES = new Set([
   ".next",
   ".output",
   ".turbo",
-  ".vercel",
   "build",
   "dist",
   "node_modules",

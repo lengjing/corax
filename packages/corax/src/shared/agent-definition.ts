@@ -53,7 +53,7 @@ export type AgentReasoningDefinition = Exclude<NonNullable<CallSettings["reasoni
  * How an agent's model is reached at runtime, decided at compile time from the
  * authored model value.
  *
- * - `gateway`: routed through the Vercel AI Gateway. This covers a bare model
+ * - `gateway`: routed through the AI Gateway. This covers a bare model
  *   id string (resolved via the AI SDK global default provider), a
  *   `gateway(...)` instance, and a gateway id whose provider key is forwarded
  *   to the gateway via `providerOptions.gateway.byok`. `target` is the upstream
@@ -303,7 +303,7 @@ export interface AgentWorkflowDefinition {
    * by deployment handoff.
    *
    * - `"default"`: same as omission. The Workflow SDK World decides.
-   *   On Vercel this follows your team's plan.
+   *   On the hosted gateway this follows your plan.
    * - `0`: the world deletes run payloads and stream chunks as soon as the run
    *   completes or fails. Metadata such as run IDs, status, and timestamps may
    *   persist up to the default period.

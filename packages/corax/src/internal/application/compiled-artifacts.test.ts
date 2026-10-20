@@ -41,20 +41,6 @@ describe("createWorkflowWorldPluginSource", () => {
     expect(source).not.toContain("createWorldFromModule(workflowWorldModule)");
   });
 
-  it("selects the vendored Vercel World with Workflow's selector", () => {
-    const source = createWorkflowWorldPluginSource({
-      compiledArtifactsBootstrapPath: "/app/.corax/compile/bootstrap.mjs",
-      configuredWorld: undefined,
-      defaultWorld: "vercel",
-    });
-
-    expect(source).toContain("/compiled/@workflow/world-vercel/index.js");
-    expect(source).toMatch(/headers: \{ "User-Agent": "corax\/.+" \}/);
-    expect(source).toContain("applyVercelWorkflowWorldDefaults(workflowWorld);");
-    expect(source.indexOf("applyVercelWorkflowWorldDefaults(workflowWorld);")).toBeLessThan(
-      source.indexOf("await installWorkflowWorld("),
-    );
-  });
 });
 
 describe("createDevelopmentWorkflowWorldPluginSource", () => {

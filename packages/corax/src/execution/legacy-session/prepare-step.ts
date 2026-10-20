@@ -52,7 +52,7 @@ export async function prepareLegacySessionStep(rawInput: unknown) {
     sessionState,
     serializedContext,
     sessionTimeoutMs: sessionTimeoutMs as number | false,
-    deploymentId: process.env.VERCEL_DEPLOYMENT_ID?.trim() || (await world.getDeploymentId()),
+    deploymentId: await world.getDeploymentId(),
   };
 }
 export type PreparedLegacySession = Awaited<ReturnType<typeof prepareLegacySessionStep>>;

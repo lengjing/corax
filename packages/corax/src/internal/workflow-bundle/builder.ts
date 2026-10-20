@@ -49,7 +49,7 @@ import {
 import {
   WORKFLOW_BUILDER_DEFERRED_PACKAGES,
   WORKFLOW_STEP_EXTERNAL_PACKAGES,
-} from "#internal/workflow-bundle/vercel-workflow-output.js";
+} from "#internal/workflow-bundle/workflow-external-packages.js";
 import {
   findWorkflowPatterns,
   type WorkflowManifest,

@@ -28,7 +28,7 @@ export type GitHubInstallationToken = string | (() => string | Promise<string>);
  * without the `[bot]` suffix), supplied directly or resolved lazily.
  *
  * A lazy resolver runs on first use inside request handling, where
- * credentials that only exist per request (such as the Vercel OIDC token
+ * credentials that only exist per request (such as a per-request OIDC token
  * behind Connect metadata lookups) are available; a fulfilled value is
  * cached, and a rejection is retried on the next event instead of pinned.
  */

@@ -16,7 +16,7 @@ const runnableOwnerRunIds = new Set<string>();
 
 /**
  * Whether the World replays every run on the deployment that started it
- * (Vercel). There, an owner from another corax version is the normal handoff
+ * (a hosted runtime). There, an owner from another corax version is the normal handoff
  * case, not a stranded one.
  */
 export function routesToOwnerDeployment(world: Pick<World, "capabilities">): boolean {

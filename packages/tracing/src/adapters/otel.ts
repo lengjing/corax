@@ -81,25 +81,11 @@ function mappedAttributes(
   return mapping?.attributes(span, attributes) ?? attributes;
 }
 
-/**
- * Applied when the host passes no mapping. On Vercel it adds the session ID
- * Agent Runs uses to find a run's spans.
- */
+/** Applied when the host passes no mapping. */
 const DEFAULT_MAPPING: OutputMapping = {
-  attributes(_span, attributes) {
-    const runId = attributes["agent.run.id"];
-    return onVercel() && typeof runId === "string" && attributes["vercel.session_id"] === undefined
-      ? { ...attributes, "vercel.session_id": runId }
-      : attributes;
-  },
+  attributes: (_span, attributes) => attributes,
   link: (_span, link) => ({ "agent.link.type": link.relationship }),
 };
-
-function onVercel(): boolean {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env;
-  return env?.VERCEL_ENV !== undefined;
-}
 
 export interface OtelTelemetryOptions {
   /** Defaults to the global tracer provider. */
@@ -114,7 +100,7 @@ export interface OtelTelemetryOptions {
     traceId: string,
     operation: { name: string; attributes: Attributes },
   ) => boolean;
-  /** Replaces the default mapping, which adds `vercel.session_id` on Vercel. */
+  /** Replaces the default (identity) attribute mapping. */
   readonly mapping?: OutputMapping;
   readonly tracerName?: string;
   /** Recorded as the spans' instrumentation scope version. */

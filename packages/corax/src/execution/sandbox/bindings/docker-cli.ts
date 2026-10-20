@@ -57,7 +57,7 @@ export class DockerUnavailableError extends Error {
     "Install and start Docker Desktop, OrbStack, Colima, or another runtime exposing a " +
     "Docker-compatible `docker` CLI (or point CORAX_DOCKER_PATH at one, e.g. Podman). " +
     "Alternatively use MicrosandboxSandbox, the dependency-free JustBashSandbox, " +
-    "VercelSandbox, or DefaultSandbox to pick by availability.";
+    "or DefaultSandbox to pick by availability.";
 
   constructor(cause?: unknown) {
     super("The Docker sandbox provider requires Docker, but the `docker` CLI was not found.", {
@@ -75,7 +75,7 @@ export class DockerDaemonUnavailableError extends Error {
   readonly hint =
     "Start Docker Desktop (or your Docker-compatible runtime) and retry. Alternatively use " +
     "MicrosandboxSandbox, the dependency-free JustBashSandbox (installed automatically " +
-    "by `corax dev`, or `pnpm add -D just-bash`), VercelSandbox, or DefaultSandbox " +
+    "by `corax dev`, or `pnpm add -D just-bash`) or DefaultSandbox " +
     "to pick by availability.";
 
   constructor(detail: string) {

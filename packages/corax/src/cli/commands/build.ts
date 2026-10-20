@@ -2,9 +2,7 @@ import { resolve } from "node:path";
 
 import type { Command } from "#compiled/commander/index.js";
 import type { CliApplicationContext } from "#cli/application-command.js";
-import { resolveInternalVercelServiceOutput } from "#cli/vercel-service-output.js";
 import { createCliTheme, renderCliTaggedLine } from "#cli/ui/output.js";
-import { CORAX_INTERNAL_AGENT_WORKSPACE_MEMBER_ENV } from "#internal/application/build-output-environment.js";
 import type { ApplicationBuildOptions } from "#internal/nitro/host/types.js";
 import {
   CORAX_PUBLIC_ROUTE_PREFIX_ENV,
@@ -47,25 +45,10 @@ export function registerBuildCommand(input: {
 
       const projectContext = await input.applicationContext.resolveAgent();
       if (projectContext.kind === "workspace") {
-        if (options.profile !== undefined) {
-          throw new Error(
-            "Workspace builds do not support --profile. Run it from an individual agent directory.",
-          );
-        }
-        const { buildAgentWorkspace } = await import("#internal/vercel/build-agent-workspace.js");
-        const outputDir = await buildAgentWorkspace(projectContext.workspace, {
-          skipSandboxPrewarm: options.skipSandboxPrewarm,
-        });
-        input.logger.log(
-          renderCliTaggedLine(theme, {
-            message: `built output at ${outputDir}`,
-            tag: "build",
-            tone: "success",
-          }),
+        throw new Error(
+          "`corax build` must run from an individual agent directory. Pass --root <agent-directory> or run it inside the agent.",
         );
-        return;
       }
-
       const buildHost =
         input.buildHost ?? (await import("#internal/nitro/host.js")).buildApplication;
       const profileOutputPath =
@@ -76,15 +59,11 @@ export function registerBuildCommand(input: {
         profileOutputPath?: string;
         readonly publicRoutePrefix: ApplicationBuildOptions["publicRoutePrefix"];
         readonly skipSandboxPrewarm: boolean;
-        readonly vercelServiceOutput: ApplicationBuildOptions["vercelServiceOutput"];
         readonly workspaceMember: boolean;
       } = {
         publicRoutePrefix: normalizePublicRoutePrefix(process.env[CORAX_PUBLIC_ROUTE_PREFIX_ENV]),
         skipSandboxPrewarm: options.skipSandboxPrewarm === true,
-        vercelServiceOutput: resolveInternalVercelServiceOutput(input.applicationContext.root),
-        workspaceMember:
-          projectContext.kind === "workspace-member" ||
-          process.env[CORAX_INTERNAL_AGENT_WORKSPACE_MEMBER_ENV] === "1",
+        workspaceMember: projectContext.kind === "workspace-member",
       };
       if (profileOutputPath !== undefined) {
         buildOptions.profileOutputPath = profileOutputPath;

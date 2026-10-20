@@ -119,7 +119,7 @@ export function createAiSdkHookBridge(
       await hooks.publish(completed);
     },
     async onStepEnd(event) {
-      // Step results carry provider metadata (e.g. Vercel AI Gateway cost)
+      // Step results carry provider metadata (e.g. AI Gateway cost)
       // that the per-call telemetry events don't. Publish it for providers
       // that know what to do with it; skip when there is none.
       if (event.providerMetadata === undefined) return;

@@ -3,7 +3,6 @@ import { mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { resolveOutputDirectory } from "#internal/application/paths.js";
-import { VERCEL_CORAX_AGENT_SUMMARY_OUTPUT_PATH } from "#internal/vercel-agent-summary.js";
 
 export interface ApplicationBuildWorkspace {
   readonly appRoot: string;
@@ -21,10 +20,6 @@ export interface ApplicationBuildWorkspace {
     readonly output: {
       readonly finalDir: string;
       readonly stagedDir: string;
-    };
-    readonly summary: {
-      readonly finalPath: string;
-      readonly stagedPath: string;
     };
   };
   readonly rootDir: string;
@@ -63,10 +58,6 @@ export async function createApplicationBuildWorkspace(
       output: {
         finalDir: outputDirectory ?? resolveOutputDirectory(resolvedAppRoot),
         stagedDir: join(rootDir, "output"),
-      },
-      summary: {
-        finalPath: join(resolvedAppRoot, VERCEL_CORAX_AGENT_SUMMARY_OUTPUT_PATH),
-        stagedPath: join(rootDir, "agent-summary.json"),
       },
     },
     rootDir,

@@ -11,7 +11,7 @@ const log = createLogger("github.verify");
 /**
  * Caller-supplied inbound webhook verifier. Use it as an alternative to HMAC
  * verification. For example, Connect supplies a verifier that authenticates
- * Connect-forwarded webhooks with Vercel OIDC instead of GitHub's webhook
+ * relay-forwarded webhooks with OIDC instead of GitHub's webhook
  * secret.
  *
  * Contract (matches the other channels' `webhookVerifier`):
@@ -19,7 +19,7 @@ const log = createLogger("github.verify");
  * - **Throw / reject** → the channel responds 401 to GitHub.
  * - **Return a falsy value** (`null` / `undefined` / `false` / `""` / `0`)
  *   → the channel responds 401 to GitHub. This lets verifiers signal
- *   rejection without throwing. For example, Connect's `vercelOidc()` returns
+ *   rejection without throwing. For example, a relay's `oidc()` verifier returns
  *   `null` on a failed OIDC check.
  * - **Return a truthy non-string value** → verification accepted.
  * - **Return a string** → verification accepted, and the string replaces

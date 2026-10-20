@@ -9,11 +9,6 @@ import {
   resolveSharedCoraxDevServer,
   type CoraxFrameworkHost,
 } from "#shared/framework-corax-server.js";
-import {
-  ensureCoraxVercelServicesConfig,
-  mergeCoraxVercelConfig,
-  type VercelBuildConfig,
-} from "#shared/vercel-services.js";
 
 const CORAX_BASE_URL_ENV = "CORAX_BASE_URL";
 const CORAX_TANSTACK_HOST: CoraxFrameworkHost = { label: "TanStack Start", slug: "tanstack" };
@@ -40,12 +35,6 @@ export interface CoraxTanStackPluginOptions {
    * root unless absolute. Defaults to the TanStack Start project root.
    */
   readonly coraxRoot?: string;
-  /**
-   * Command that builds the corax app inside the generated Vercel corax service.
-   * Defaults to running the installed corax binary from the TanStack Start
-   * app's dependencies (`node <path-to>/corax/bin/corax.js build`).
-   */
-  readonly coraxBuildCommand?: string;
 }
 
 /**
@@ -65,9 +54,7 @@ type NitroUserConfig = UserConfig & {
  */
 interface CoraxNitroModule {
   readonly name: string;
-  setup(nitro: {
-    readonly options: { vercel?: { config?: VercelBuildConfig; [key: string]: unknown } };
-  }): Promise<void>;
+  setup(nitro: { readonly options: Record<string, unknown> }): Promise<void>;
 }
 
 function resolveApplicationRoot(hostRoot: string, appPath: string | undefined): string {
@@ -114,8 +101,8 @@ function stopSpawnedDevServer(appRoot: string): void {
 /**
  * Vite plugin for running an corax agent alongside a TanStack Start app.
  *
- * TanStack Start reaches Vercel through Nitro, so the app must register
- * `nitro()` from `nitro/vite`; `coraxTanStack` configures Nitro to route corax.
+ * TanStack Start serves through Nitro, so the app must register `nitro()` from
+ * `nitro/vite`; `coraxTanStack` configures Nitro to route corax.
  *
  * In development, Nitro proxies corax protocol endpoints to a local corax server.
  * It resolves the server in order: the `CORAX_BASE_URL` env var if set, then a
@@ -123,16 +110,14 @@ function stopSpawnedDevServer(appRoot: string): void {
  * spawned `corax dev --no-ui --port 0`. A server spawned by the plugin stops
  * when the Vite dev server closes.
  *
- * On Vercel builds, `coraxTanStack` adds the corax runtime as a sibling Vercel
- * service and routes its transport requests before TanStack Start's own
- * routing, including routes declared in `nitro({ vercel: { config } })`.
+ * Production deployments run the corax app as its own service (`corax build`
+ * + `corax start`) and route `/corax/v1/**` to it from the host.
  */
 export function coraxTanStack(options: CoraxTanStackPluginOptions = {}): Plugin {
   const devServerTimeoutMs = resolveDevServerTimeout(options.devServerTimeoutMs, CORAX_TANSTACK_HOST);
   let hostRoot = process.cwd();
   let appRoot = resolveApplicationRoot(hostRoot, options.coraxRoot);
   let isPreview = false;
-  let isVercelBuild = false;
   let nitroModuleInstalled = false;
 
   const plugin: Plugin & { readonly nitro: CoraxNitroModule } = {
@@ -140,29 +125,10 @@ export function coraxTanStack(options: CoraxTanStackPluginOptions = {}): Plugin 
     enforce: "pre",
     nitro: {
       name: "corax",
-      // Merging here rather than through the `nitro` Vite config key lets corax
-      // see the user's own `nitro({ vercel })` config: that key has the
-      // lowest priority, so user routes would otherwise land ahead of corax's.
-      async setup(nitro) {
+      // Installing a Nitro module is how the plugin learns Nitro is present;
+      // `configResolved` fails fast when it is not.
+      async setup() {
         nitroModuleInstalled = true;
-        if (!isVercelBuild) {
-          return;
-        }
-
-        const configured = await ensureCoraxVercelServicesConfig({
-          appRoot,
-          coraxBuildCommand: options.coraxBuildCommand,
-          frameworkName: "TanStack Start",
-          hostRoot,
-        });
-        if (configured.mode !== "generated") {
-          return;
-        }
-
-        nitro.options.vercel = {
-          ...nitro.options.vercel,
-          config: mergeCoraxVercelConfig(nitro.options.vercel?.config, configured),
-        };
       },
     },
     async config(config, env): Promise<NitroUserConfig> {
@@ -173,7 +139,6 @@ export function coraxTanStack(options: CoraxTanStackPluginOptions = {}): Plugin 
 
       hostRoot = resolve(process.cwd(), config.root ?? ".");
       appRoot = resolveApplicationRoot(hostRoot, options.coraxRoot);
-      isVercelBuild = env.command === "build" && Boolean(process.env.VERCEL);
 
       if (env.command !== "serve") {
         return {};

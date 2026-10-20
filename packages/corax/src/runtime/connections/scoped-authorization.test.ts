@@ -1,14 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  resolveAuthorizationCallbackUrl,
-  stampChallengeDisplayName,
-} from "#runtime/connections/scoped-authorization.js";
+import { stampChallengeDisplayName } from "#runtime/connections/scoped-authorization.js";
 import type { AuthorizationDefinition, TokenResult } from "#shared/connection-types.js";
 
-function interactiveAuth(
-  input: { displayName?: string; connector?: string } = {},
-): AuthorizationDefinition {
+function interactiveAuth(input: { displayName?: string } = {}): AuthorizationDefinition {
   const auth: AuthorizationDefinition = {
     principalType: "user",
     async getToken(): Promise<TokenResult> {
@@ -21,18 +16,8 @@ function interactiveAuth(
       return { token: "fresh" };
     },
   };
-  if (input.displayName === undefined && input.connector === undefined) return auth;
-  const overrides: {
-    displayName?: AuthorizationDefinition["displayName"];
-    vercelConnect?: NonNullable<AuthorizationDefinition["vercelConnect"]>;
-  } = {};
-  if (input.connector !== undefined) {
-    overrides.vercelConnect = { connector: input.connector };
-  }
-  if (input.displayName !== undefined) {
-    overrides.displayName = input.displayName;
-  }
-  return { ...auth, ...overrides };
+  if (input.displayName === undefined) return auth;
+  return { ...auth, displayName: input.displayName };
 }
 
 describe("stampChallengeDisplayName", () => {
@@ -60,41 +45,3 @@ describe("stampChallengeDisplayName", () => {
   });
 });
 
-describe("resolveAuthorizationCallbackUrl", () => {
-  it.each([
-    [
-      "http://127.0.0.1:2000/corax/v1/connections/notion/callback/wrun_123%3Aauth",
-      "http://localhost:2000/corax/v1/connections/notion/callback/wrun_123%3Aauth",
-    ],
-    [
-      "http://[::1]:2000/corax/v1/connections/notion/callback/wrun_123%3Aauth",
-      "http://localhost:2000/corax/v1/connections/notion/callback/wrun_123%3Aauth",
-    ],
-  ])("uses localhost for a Vercel Connect callback at %s", (callbackUrl, expectedUrl) => {
-    expect(
-      resolveAuthorizationCallbackUrl({
-        authorization: interactiveAuth({ connector: "mcp.notion.com/notion" }),
-        callbackUrl,
-      }),
-    ).toBe(expectedUrl);
-  });
-
-  it("preserves a custom authorization callback URL", () => {
-    const callbackUrl = "http://127.0.0.1:2000/callback";
-
-    expect(resolveAuthorizationCallbackUrl({ authorization: interactiveAuth(), callbackUrl })).toBe(
-      callbackUrl,
-    );
-  });
-
-  it("preserves an HTTPS Vercel Connect callback URL", () => {
-    const callbackUrl = "https://agent.example.com/callback";
-
-    expect(
-      resolveAuthorizationCallbackUrl({
-        authorization: interactiveAuth({ connector: "mcp.notion.com/notion" }),
-        callbackUrl,
-      }),
-    ).toBe(callbackUrl);
-  });
-});

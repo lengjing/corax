@@ -21,7 +21,7 @@ import { bufferToStream, streamToBuffer } from "./stream-utils.js";
 export type { InternalSandboxSession };
 
 /**
- * Tells agent-aware CLIs (such as `vercel`) that an automated agent runs
+ * Tells agent-aware CLIs that an automated agent runs
  * the command, so they skip interactive prompts. Built-in providers apply it
  * beneath environment-level and per-call env so authors can override it.
  */
@@ -37,7 +37,7 @@ export const SANDBOX_AGENT_ENV: Readonly<Record<string, string>> = { AI_AGENT: "
  * then return the combined result.
  *
  * Providers without mutable firewall support omit `setNetworkPolicy`; the
- * dedicated Vercel provider wires it to `sandbox.update`.
+ * dedicated remote provider can wire it to its own update call.
  */
 export function buildSandboxSession(
   primitives: InternalSandboxSession,

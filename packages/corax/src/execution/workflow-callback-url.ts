@@ -4,28 +4,7 @@ import {
   normalizePublicRoutePrefix,
 } from "#shared/public-route-prefix.js";
 
-const PRODUCTION_ENVIRONMENT = "production";
-const VERCEL_PROTECTION_BYPASS_QUERY = "x-vercel-protection-bypass";
 const WORKFLOW_LOCAL_BASE_URL_ENV = "WORKFLOW_LOCAL_BASE_URL";
-
-/**
- * Workflow metadata is deployment-specific, so on Vercel it can point at
- * the generated deployment URL. Production callbacks need the stable
- * project production URL instead so other services can post back through
- * the same trusted source configuration users set up for the production
- * agent.
- */
-export function resolveVercelProductionCallbackBaseUrl(): string | null {
-  // https://vercel.com/docs/environment-variables/system-environment-variables#VERCEL_ENV
-  // https://vercel.com/docs/environment-variables/system-environment-variables#VERCEL_PROJECT_PRODUCTION_URL
-  if (
-    process.env.VERCEL_ENV === PRODUCTION_ENVIRONMENT &&
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ) {
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  }
-  return null;
-}
 
 /**
  * Resolves the base URL used for framework-owned workflow callbacks.
@@ -35,7 +14,7 @@ export function resolveVercelProductionCallbackBaseUrl(): string | null {
  * active dev-server origin, so prefer that value before the metadata fallback.
  *
  * When {@link CORAX_PUBLIC_ROUTE_PREFIX_ENV} is set (baked into deployed
- * Vercel workflow functions for named multi-agent mounts), the prefix is
+ * workflow functions for named multi-agent mounts), the prefix is
  * appended so callbacks built from this base resolve to the agent's public
  * `<prefix>/corax/v1/*` mount instead of the bare `/corax/v1/*` path the origin
  * does not serve.
@@ -43,7 +22,7 @@ export function resolveVercelProductionCallbackBaseUrl(): string | null {
 export function resolveWorkflowCallbackBaseUrl(metadataUrl: string): string {
   const configuredLocalBaseUrl = process.env[WORKFLOW_LOCAL_BASE_URL_ENV]?.trim();
   const localBaseUrl = configuredLocalBaseUrl ? configuredLocalBaseUrl : undefined;
-  const resolved = resolveVercelProductionCallbackBaseUrl() ?? localBaseUrl ?? metadataUrl;
+  const resolved = localBaseUrl ?? metadataUrl;
   const baseUrl = resolved.replace(/\/$/, "");
   const publicRoutePrefix = normalizePublicRoutePrefix(process.env[CORAX_PUBLIC_ROUTE_PREFIX_ENV]);
   return publicRoutePrefix === undefined ? baseUrl : `${baseUrl}${publicRoutePrefix}`;
@@ -66,20 +45,10 @@ export function createBrowserCallbackUrl(baseUrl: string, callbackPath: string):
 }
 
 /**
- * Builds a framework-owned callback URL for server-to-server delivery.
- *
- * Unlike {@link createBrowserCallbackUrl}, it carries the deployment's
- * Protection Bypass for Automation secret so the caller can reach a
- * protected deployment.
+ * Builds a framework-owned callback URL for server-to-server delivery. It is
+ * currently identical to {@link createBrowserCallbackUrl}; the distinction is
+ * kept so hosts can attach transport-specific credentials in one place.
  */
 export function createWorkflowCallbackUrl(baseUrl: string, callbackPath: string): string {
-  const url = new URL(createBrowserCallbackUrl(baseUrl, callbackPath));
-
-  // https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation
-  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-  if (bypassSecret) {
-    url.searchParams.set(VERCEL_PROTECTION_BYPASS_QUERY, bypassSecret);
-  }
-
-  return url.toString();
+  return createBrowserCallbackUrl(baseUrl, callbackPath);
 }

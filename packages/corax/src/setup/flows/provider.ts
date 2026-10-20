@@ -9,7 +9,6 @@ type AcceptedGatewayKeyValidation = Exclude<GatewayKeyValidation, { kind: "inval
 
 /** A provider choice, including the accepted evidence for an inline key. */
 export type ProviderPickerChoice =
-  | { kind: "ai-gateway-project" }
   | { kind: "chatgpt" }
   | { kind: "external" }
   | {

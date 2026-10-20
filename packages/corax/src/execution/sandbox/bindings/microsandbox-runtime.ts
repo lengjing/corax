@@ -473,7 +473,7 @@ async function restoreMicrosandboxSessionSnapshot(input: {
 const MICROSANDBOX_MISSING_PACKAGE_MESSAGE =
   "The microsandbox sandbox provider requires the `microsandbox` package, which is not bundled " +
   `with corax. Install it in your application (for example \`pnpm add -D ${MICROSANDBOX_INSTALL_SPECIFIER}\`), or use ` +
-  "DockerSandbox or VercelSandbox instead.";
+  "DockerSandbox or JustBashSandbox instead.";
 
 /**
  * Loads the microsandbox npm package and ensures its VM runtime is
@@ -544,7 +544,7 @@ async function assertSupportedMicrosandboxApi(
     version === undefined ? "The installed `microsandbox`" : `\`microsandbox@${version}\``;
   throw new Error(
     `${installed} is not supported by corax. Install the supported version with ` +
-      `\`pnpm add -D ${MICROSANDBOX_INSTALL_SPECIFIER}\`, or use DockerSandbox or VercelSandbox instead.`,
+      `\`pnpm add -D ${MICROSANDBOX_INSTALL_SPECIFIER}\`, or use DockerSandbox or JustBashSandbox instead.`,
   );
 }
 

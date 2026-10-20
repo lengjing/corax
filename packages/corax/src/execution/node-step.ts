@@ -145,21 +145,6 @@ export function buildRuntimeIdentity(node: ResolvedRuntimeAgentNode): RuntimeIde
     coraxVersion: packageInfo.version,
   };
 
-  const gitSha = process.env.VERCEL_GIT_COMMIT_SHA?.trim();
-  const gitBranch = process.env.VERCEL_GIT_COMMIT_REF?.trim();
-  const deployedAt = process.env.VERCEL_DEPLOYMENT_CREATED_AT?.trim();
-
-  if (gitSha || gitBranch || deployedAt) {
-    return {
-      ...identity,
-      build: {
-        deployedAt: deployedAt || undefined,
-        gitBranch: gitBranch || undefined,
-        gitSha: gitSha || undefined,
-      },
-    };
-  }
-
   return identity;
 }
 

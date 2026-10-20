@@ -20,7 +20,7 @@ import {
 } from "#public/definitions/instructions.js";
 import { defineInstrumentation, type ProviderDefinition } from "#public/instrumentation/index.js";
 import { defineSandbox } from "#public/definitions/sandbox.js";
-import { DockerSandbox, VercelSandbox } from "#sandbox/providers.js";
+import { DockerSandbox } from "#sandbox/providers.js";
 import { defineSchedule } from "#public/definitions/schedule.js";
 import { defineSkill } from "#public/definitions/skill.js";
 import { defineTool, type ToolDefinition } from "#public/tools/index.js";
@@ -413,18 +413,6 @@ function typeOnlyFixtures(): void {
     },
   });
 
-  const environment = VercelSandbox.environment();
-  defineSandbox(async ({ session }) => {
-    const sandbox = await environment.open({
-      mounts: {},
-      networkPolicy: "deny-all",
-      resources: { vcpus: 4 },
-    });
-    const sessionId: string = session.id;
-    await sandbox.setNetworkPolicy("allow-all");
-    void sessionId;
-    return sandbox;
-  });
   const dockerEnvironment = DockerSandbox.environment();
   defineSandbox(() => dockerEnvironment.open({ networkPolicy: "deny-all" }));
 

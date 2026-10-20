@@ -54,18 +54,7 @@ export type HeadersValue =
  */
 export type ClientAuth =
   | { readonly basic: { readonly username: string; readonly password: TokenValue } }
-  | { readonly bearer: TokenValue }
-  // The client-side mirror of the framework's server `vercelOidc()` channel
-  // auth: one token the client expands into both Vercel deployment-protection
-  // headers (Authorization and {@link VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER}).
-  | { readonly vercelOidc: { readonly token: TokenValue } };
-
-/**
- * Vercel header that presents a trusted OIDC token as proof the caller is
- * authorized for a protected deployment. The client emits it alongside
- * `Authorization` for the {@link ClientAuth} `vercelOidc` variant.
- */
-export const VERCEL_TRUSTED_OIDC_IDP_TOKEN_HEADER = "x-vercel-trusted-oidc-idp-token";
+  | { readonly bearer: TokenValue };
 
 /** Redirect modes supported by the configured fetch implementation. */
 export type ClientRedirectPolicy = NonNullable<RequestInit["redirect"]>;

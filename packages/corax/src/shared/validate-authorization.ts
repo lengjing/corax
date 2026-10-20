@@ -9,7 +9,6 @@ import type {
   InteractiveAuthorizationDefinition,
   NonInteractiveAuthorizationDefinition,
 } from "#shared/connection-types.js";
-import { extractVercelConnectMetadata } from "#shared/vercel-connect-metadata.js";
 
 /**
  * Validates that authored `auth` conforms to the connection auth contract.
@@ -94,7 +93,6 @@ export function normalizeAuthorizationSpec(
   }
 
   const auth = authorization as Record<string, unknown>;
-  const vercelConnect = extractVercelConnectMetadata(auth.vercelConnect);
   const displayName = auth.displayName as string | undefined;
   const evict =
     typeof auth.evict === "function" ? (auth.evict as AuthorizationDefinition["evict"]) : undefined;
@@ -107,7 +105,6 @@ export function normalizeAuthorizationSpec(
       startAuthorization:
         auth.startAuthorization as InteractiveAuthorizationDefinition["startAuthorization"],
     };
-    if (vercelConnect !== undefined) interactive = { ...interactive, vercelConnect };
     if (displayName !== undefined) interactive = { ...interactive, displayName };
     if (evict !== undefined) interactive = { ...interactive, evict };
     return interactive;
@@ -119,7 +116,6 @@ export function normalizeAuthorizationSpec(
       auth.principalType ??
       "app") as NonInteractiveAuthorizationDefinition["principalType"],
   };
-  if (vercelConnect !== undefined) nonInteractive = { ...nonInteractive, vercelConnect };
   if (displayName !== undefined) nonInteractive = { ...nonInteractive, displayName };
   if (evict !== undefined) nonInteractive = { ...nonInteractive, evict };
   return nonInteractive;

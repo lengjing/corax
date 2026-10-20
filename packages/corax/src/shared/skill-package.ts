@@ -9,7 +9,7 @@ import type { NamedSkillDefinition } from "#shared/skill-definition.js";
 import { resolveSandboxSkillRoot, resolveSandboxSkillWritePath } from "#shared/skill-paths.js";
 
 /**
- * Each sandbox write is a remote round trip (Vercel Sandbox also resolves the
+ * Each sandbox write is a remote round trip (remote sandboxes also resolve the
  * path with a command first), so writing a package's files one at a time makes
  * a dynamic skill's first sync cost seconds.
  */

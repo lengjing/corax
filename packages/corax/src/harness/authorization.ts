@@ -30,7 +30,7 @@ import {
  *    `completeAuthorization({ resume, callback })`.
  *
  * `resume` is serialized across workflow steps to survive the park.
- * Provider-owned strategies (Vercel Connect) omit it so nothing crosses
+ * Provider-owned strategies (managed OAuth brokers) omit it so nothing crosses
  * the boundary; a custom PKCE strategy uses it to carry the verifier (or a
  * nonce that re-derives it) from start to finish.
  */
@@ -58,7 +58,7 @@ export interface AuthorizationChallenge {
   readonly candidateId?: string;
   /**
    * Credential this sign-in grants, shared by every scope that uses it (the
-   * Vercel Connect connector). Attempts for the same grant and principal are
+   * OAuth connector). Attempts for the same grant and principal are
    * one sign-in, so only one is shown.
    */
   readonly grant?: string;

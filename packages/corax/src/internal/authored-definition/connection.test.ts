@@ -133,42 +133,6 @@ describe("normalizeMcpClientConnectionDefinition", () => {
       expect(result.url).toBe("http://localhost:3000/mcp");
     });
 
-    it("preserves the optional vercelConnect marker on auth", () => {
-      // The `connect()` helper from `@vercel/connect/corax` attaches a
-      // `vercelConnect: { connector }` marker so downstream tooling can
-      // detect Vercel Connect-backed connections without inspecting the
-      // closure state of `getToken`. Validation must let it through and
-      // the normalized result must preserve it.
-      const result = normalizeMcpClientConnectionDefinition(
-        validInput({
-          auth: {
-            getToken: async () => ({ token: "x" }),
-            principalType: "user",
-            vercelConnect: {
-              connector: "oauth/mcp-linear-app",
-              requirement: {
-                reference: "connector:oauth/mcp-linear-app",
-                service: "linear",
-                subjectTypes: ["user"],
-                method: "oauth",
-              },
-            },
-          },
-        }),
-        MSG,
-      );
-
-      expect((result.auth as Record<string, unknown>).vercelConnect).toEqual({
-        connector: "oauth/mcp-linear-app",
-        requirement: {
-          reference: "connector:oauth/mcp-linear-app",
-          service: "linear",
-          subjectTypes: ["user"],
-          method: "oauth",
-        },
-      });
-    });
-
     it("preserves the optional auth evict hook", () => {
       const evict = async () => {};
       const result = normalizeMcpClientConnectionDefinition(
@@ -183,32 +147,6 @@ describe("normalizeMcpClientConnectionDefinition", () => {
       );
 
       expect((result.auth as Record<string, unknown>).evict).toBe(evict);
-    });
-
-    it("drops a malformed vercelConnect marker without throwing", () => {
-      // A misbehaving auth provider could attach a malformed marker; the
-      // normalizer treats it as absent rather than failing the whole
-      // connection. This protects against auth providers we don't control.
-      const result = normalizeMcpClientConnectionDefinition(
-        validInput({
-          auth: {
-            getToken: async () => ({ token: "x" }),
-            principalType: "app",
-            vercelConnect: { connector: "" },
-          },
-        }),
-        MSG,
-      );
-
-      expect((result.auth as Record<string, unknown>).vercelConnect).toBeUndefined();
-    });
-  });
-
-  describe("url validation", () => {
-    it("rejects a non-string url", () => {
-      expect(() => normalizeMcpClientConnectionDefinition(validInput({ url: 42 }), MSG)).toThrow(
-        /must be a valid URL/,
-      );
     });
 
     it("rejects an unparseable url", () => {

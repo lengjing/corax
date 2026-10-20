@@ -44,16 +44,6 @@ const KNOWN_AUTHORIZATION_KEYS = [
   "getToken",
   "principalType",
   "startAuthorization",
-  // Optional metadata marker that auth-provider helpers may attach so
-  // downstream tooling (eg. the corax compiler / Vercel dashboard) can
-  // detect Vercel Connect-backed connections without opening the
-  // closure state of `getToken`. The runtime never reads it; it
-  // survives `normalizeAuthorizationSpec` so consumers can pick it
-  // off the normalized auth definition. See
-  // `runtime/connections/types.ts#AuthorizationDefinitionBase` for
-  // the type and `@vercel/connect/corax`'s `connect()` for the
-  // canonical producer.
-  "vercelConnect",
 ] as const;
 const KNOWN_TOOL_CALL_KEYS = ["providedArguments"] as const;
 

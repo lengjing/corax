@@ -33,9 +33,8 @@ test("AI Gateway routing is disabled unless the operator opts in", (t) => {
   withoutGatewayOptIn(t);
   assert.equal(isGatewayModelRoutingEnabled(), false);
   assert.equal(isGatewayModelRoutingEnabled({ AI_GATEWAY_API_KEY: "key" }), true);
-  for (const connection of ["vercel", "vercel-cli", "ai-gateway-key", "ai-gateway-project"])
-    assert.equal(isGatewayModelRoutingEnabled({ CORAX_MODEL_CONNECTION: connection }), true);
-  for (const connection of ["openai", "anthropic", "chatgpt", ""])
+  assert.equal(isGatewayModelRoutingEnabled({ CORAX_MODEL_CONNECTION: "ai-gateway-key" }), true);
+  for (const connection of ["vercel", "vercel-cli", "ai-gateway-project", "openai", "anthropic", "chatgpt", ""])
     assert.equal(isGatewayModelRoutingEnabled({ CORAX_MODEL_CONNECTION: connection }), false);
   Reflect.set(globalThis, "AI_SDK_DEFAULT_PROVIDER", { languageModel() {} });
   assert.equal(isGatewayModelRoutingEnabled({}), true);

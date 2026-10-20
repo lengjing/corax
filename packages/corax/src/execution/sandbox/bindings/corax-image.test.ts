@@ -8,8 +8,6 @@ vi.mock("#internal/application/package.js", () => ({
 import {
   DEFAULT_CORAX_SANDBOX_IMAGE,
   resolveCoraxSandboxImage,
-  resolveVercelCoraxSandboxImage,
-  VERCEL_CORAX_SANDBOX_IMAGE,
 } from "#execution/sandbox/bindings/corax-image.js";
 
 describe("corax sandbox image", () => {
@@ -22,14 +20,9 @@ describe("corax sandbox image", () => {
     vi.resetModules();
   });
 
-  it("uses the versioned GHCR image outside Vercel Sandbox", () => {
+  it("uses the versioned GHCR image", () => {
     expect(resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:1.2.3");
     expect(DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:1.2.3");
-  });
-
-  it("uses the versioned VCR image for Vercel Sandbox", () => {
-    expect(resolveVercelCoraxSandboxImage()).toBe("vcr.vercel.com/vercel/eve/base:1.2.3");
-    expect(VERCEL_CORAX_SANDBOX_IMAGE).toBe("vcr.vercel.com/vercel/eve/base:1.2.3");
   });
 
   it.each([
@@ -42,11 +35,9 @@ describe("corax sandbox image", () => {
     const images = await import("#execution/sandbox/bindings/corax-image.js");
     expect(images.resolveCoraxSandboxImage()).toBe(`ghcr.io/vercel/eve:${tag}`);
     expect(images.DEFAULT_CORAX_SANDBOX_IMAGE).toBe(`ghcr.io/vercel/eve:${tag}`);
-    expect(images.resolveVercelCoraxSandboxImage()).toBe(`vcr.vercel.com/vercel/eve/base:${tag}`);
-    expect(images.VERCEL_CORAX_SANDBOX_IMAGE).toBe(`vcr.vercel.com/vercel/eve/base:${tag}`);
   });
 
-  it("uses CORAX_SANDBOX_IMAGE_TAG for both registries", async () => {
+  it("uses CORAX_SANDBOX_IMAGE_TAG when set", async () => {
     packageInfo.version = "0.56.0+git.4c27b3e37fa36d84";
     vi.stubEnv("CORAX_SANDBOX_IMAGE_TAG", "latest");
     vi.resetModules();
@@ -54,7 +45,5 @@ describe("corax sandbox image", () => {
     const images = await import("#execution/sandbox/bindings/corax-image.js");
     expect(images.resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:latest");
     expect(images.DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:latest");
-    expect(images.resolveVercelCoraxSandboxImage()).toBe("vcr.vercel.com/vercel/eve/base:latest");
-    expect(images.VERCEL_CORAX_SANDBOX_IMAGE).toBe("vcr.vercel.com/vercel/eve/base:latest");
   });
 });

@@ -2,7 +2,6 @@ import { access } from "node:fs/promises";
 
 export async function verifyBuiltinExtensions() {
   for (const path of [
-    "extensions/code/extension/extension.ts",
     "extensions/git/extension/extension.ts",
     "computer-use/extension/extension.ts",
   ]) {

@@ -25,11 +25,11 @@ export type OpenAPISpecSource = string | Record<string, unknown>;
  *
  * The connection's runtime name is derived from its filename (the slug
  * under `agent/connections/`, without the extension). A connection
- * authored at `agent/connections/vercel.ts` is registered as
- * `"vercel"`.
+ * authored at `agent/connections/petstore.ts` is registered as
+ * `"petstore"`.
  *
  * Each operation in the document becomes a connection tool the model can
- * find with `corax__search` and call with `corax__tool` as `vercel__getProjects`, the
+ * find with `corax__search` and call with `corax__tool` as `petstore__listPets`, the
  * name events report the call under. The tool name is the operation's
  * `operationId`; operations without one get a deterministic synthesized
  * name (`<method>_<sanitized-path>`).

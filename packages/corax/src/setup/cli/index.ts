@@ -5,7 +5,6 @@ export {
   type ChannelSetupChoice,
   type ChannelSetupChoiceOptions,
   type ChannelSetupLog,
-  type DisabledChannelReasons,
   withPhase,
 } from "./channel-setup-prompter.js";
 export { createPromptCommandOutput, type PromptCommandLog } from "./command-output.js";
@@ -32,4 +31,3 @@ export {
   type PromptValue,
 } from "./prompt-ui.js";
 export { createRailLog, type RailLog, type RailLogOptions, type RailSpinner } from "./rail-log.js";
-export { whimsyFor, WHIMSY_POOLS, type WhimsyTask } from "./whimsy.js";

@@ -1,8 +1,5 @@
-import { join } from "node:path";
-
 import type { AgentInfoResult } from "#client/index.js";
 import { hasEnvValue, resolveGatewayCredential } from "#internal/resolve-model-endpoint-status.js";
-import { pathExists } from "#setup/path-exists.js";
 
 /** One boot-time setup problem the TUI can point at a fixing command. */
 export interface SetupIssue {
@@ -41,7 +38,7 @@ type ModelProviderAccess =
   | {
       kind: "gateway";
       runtime:
-        | { status: "connected"; credential: "api-key" | "oidc" | "oauth" }
+        | { status: "connected"; credential: "api-key" }
         | { status: "disconnected" }
         | { status: "unknown" };
     };
@@ -101,18 +98,14 @@ function modelProviderAccess(
   if (model?.routing?.kind !== "gateway") return { kind: "unknown" };
 
   // The compiled routing decides whether gateway credentials apply. Local
-  // ranking delegates to the one precedence authority; the server-reported
-  // endpoint snapshot slots between a freshly loaded key (which outranks a
-  // stale snapshot) and a local OIDC token (which the snapshot outranks).
+  // ranking delegates to the one precedence authority; a freshly loaded key
+  // outranks a stale server-reported endpoint snapshot.
   const selected = context.env.CORAX_MODEL_CONNECTION;
   const local = resolveGatewayCredential({
     apiKeyInEnv:
       (selected === undefined ||
         (selected === "ai-gateway-key" && context.env.CORAX_MODEL_KEY_SOURCE !== "secret")) &&
       hasEnvValue(context.env.AI_GATEWAY_API_KEY),
-    oidcAvailable:
-      (selected === undefined || selected === "ai-gateway-project") &&
-      hasEnvValue(context.env.VERCEL_OIDC_TOKEN),
   });
   if (local?.credential === "api-key") {
     return { kind: "gateway", runtime: { status: "connected", credential: "api-key" } };
@@ -124,9 +117,6 @@ function modelProviderAccess(
       runtime: { status: "connected", credential: endpoint.credential },
     };
   }
-  if (local !== undefined) {
-    return { kind: "gateway", runtime: { status: "connected", credential: local.credential } };
-  }
   if (endpoint?.kind === "gateway") return { kind: "gateway", runtime: { status: "disconnected" } };
   return { kind: "gateway", runtime: { status: "unknown" } };
 }
@@ -134,16 +124,14 @@ function modelProviderAccess(
 /**
  * One diagnosis for the model-provider path. An external-provider model is
  * skipped entirely: it reaches the model with its own provider key, so gateway
- * linking and credentials don't apply (and /model can't reconfigure it). For a
- * gateway model it reports only the most-root cause; an unlinked directory
- * implies missing OIDC, so listing both would double-count what /model's
- * provider step fixes in one pass. The header and detection receive the same
- * local-credential-normalized endpoint snapshot. A hint, not an error: the
- * model call stays the source of truth.
+ * credentials don't apply (and /model can't reconfigure it). For a gateway
+ * model it reports only the missing credential. The header and detection
+ * receive the same local-credential-normalized endpoint snapshot. A hint, not
+ * an error: the model call stays the source of truth.
  */
 const modelProvider: BootDetection = {
   id: "model-provider",
-  async detect({ appRoot, env, info }) {
+  detect({ env, info }) {
     const access = modelProviderAccess({ env, info });
 
     // Dynamic selectors can return any provider; their credentials cannot be
@@ -152,11 +140,10 @@ const modelProvider: BootDetection = {
     if (access.kind !== "gateway" || access.runtime.status === "unknown") return [];
     if (access.runtime.status === "connected") return [];
 
-    const linked = await pathExists(join(appRoot, ".vercel", "project.json"));
     return [
       {
         kind: "attention",
-        label: linked ? "AI Gateway credentials missing" : "connect a model",
+        label: "AI Gateway credentials missing",
         command: "/login",
       },
     ];
@@ -166,30 +153,6 @@ const modelProvider: BootDetection = {
 /** The built-in boot detections, run in order. */
 export const BOOT_DETECTIONS: readonly BootDetection[] = [modelProvider];
 
-/**
- * The logged-out hint. Deliberately not a {@link BootDetection}: confirming
- * Vercel login is a `vercel whoami` subprocess, too costly for the cheap,
- * local detections that run between the header and the first prompt. The
- * runner probes it off the critical path and renders this issue only when the
- * probe resolves logged-out.
- */
-export const LOGIN_SETUP_ISSUE: SetupIssue = {
-  kind: "attention",
-  label: "not logged in",
-  command: "/deploy",
-};
-
-/**
- * The CLI-missing hint, surfaced by the same off-critical-path probe as
- * {@link LOGIN_SETUP_ISSUE}. When the `vercel` binary is absent the probe
- * reports this instead of the login hint, so the diagnostic points at its fix
- * command (`/deploy`) rather than a logged-out state the probe can't determine.
- */
-export const CLI_MISSING_SETUP_ISSUE: SetupIssue = {
-  kind: "attention",
-  label: "Vercel CLI not found",
-  command: "/deploy",
-};
 
 /**
  * Runs the boot detections and aggregates their issues. Each detection is

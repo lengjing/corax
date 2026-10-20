@@ -30,18 +30,12 @@ interface NitroAppLike {
  *
  * - `corax dev` workers are excluded: the dev CLI parent already stops
  *   dev-tagged sandboxes when the dev server closes.
- * - Vercel serverless instances are excluded: instance recycling is not
- *   a server stop, and persistent session sandboxes must keep serving
- *   later invocations.
  */
 export function shouldInstallSandboxShutdown(env: Record<string, string | undefined>): boolean {
   if (isCoraxDevEnvironment()) {
     return false;
   }
   if (env.CORAX_DEVELOPMENT_SANDBOX_RUN_ID !== undefined) {
-    return false;
-  }
-  if (env.VERCEL !== undefined) {
     return false;
   }
   return true;

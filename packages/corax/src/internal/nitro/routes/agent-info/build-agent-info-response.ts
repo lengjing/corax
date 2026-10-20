@@ -99,7 +99,7 @@ export function buildAgentInfoResponse(
       connectionName: connection.connectionName,
       description: connection.description,
       hasApproval: false,
-      hasAuthorization: connection.vercelConnect !== undefined,
+      hasAuthorization: false,
       hasHeaders: false,
       protocol: connection.protocol,
       url: connection.url,

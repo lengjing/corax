@@ -1,18 +1,12 @@
 import { Client } from "#client/client.js";
 import type { ClientOptions } from "#client/types.js";
-import { readVercelProjectLink } from "#internal/vercel/project-link.js";
 import { resolveDevelopmentClientOptions } from "#services/dev-client/client-options.js";
-import {
-  resolveVerifiedRemoteDevelopmentClient,
-  type VerifiedRemoteDevelopmentClientDeps,
-} from "#setup/verified-remote-client.js";
 
 import type { CoraxEvalTargetHandle } from "#evals/types.js";
 
 /**
- * Synchronous {@link ClientOptions} for an eval target: local needs no auth,
- * remote stays anonymous unless `CORAX_EVAL_AUTH_TOKEN` sets a static bearer.
- * Ambient Vercel credentials need the async {@link createEvalClient}.
+ * {@link ClientOptions} for an eval target: local needs no auth, remote stays
+ * anonymous unless `CORAX_EVAL_AUTH_TOKEN` sets a static bearer.
  */
 export function resolveEvalClientOptions(
   target: Pick<CoraxEvalTargetHandle, "kind" | "url">,
@@ -31,35 +25,14 @@ export function resolveEvalClientOptions(
 }
 
 interface CreateEvalClientOptions {
-  /** Working directory for Vercel lookup and the fallback on-disk project link. */
+  /** Working directory of the project under evaluation; kept for call-site compatibility. */
   readonly workspaceRoot?: string;
-  /** Test seams for the two authority-resolution boundaries. */
-  readonly deps?: Partial<VerifiedRemoteDevelopmentClientDeps>;
 }
 
-/** Creates one eval client, authorizing ambient Vercel credentials only after origin proof. */
+/** Creates one eval client. Remote targets only ever use explicit credentials. */
 export async function createEvalClient(
   target: Pick<CoraxEvalTargetHandle, "kind" | "url">,
-  options: CreateEvalClientOptions = {},
+  _options: CreateEvalClientOptions = {},
 ): Promise<Client> {
-  const base = resolveEvalClientOptions(target);
-  if (target.kind === "local" || base.auth !== undefined || options.workspaceRoot === undefined) {
-    return new Client(base);
-  }
-
-  const orgId = process.env.VERCEL_ORG_ID?.trim();
-  const projectId = process.env.VERCEL_PROJECT_ID?.trim();
-  const projectSource =
-    orgId && projectId ? { orgId, projectId } : await readVercelProjectLink(options.workspaceRoot);
-
-  const { options: verified } = await resolveVerifiedRemoteDevelopmentClient({
-    projectSource,
-    serverUrl: target.url,
-    workspaceRoot: options.workspaceRoot,
-    deps: options.deps,
-  });
-  return new Client({
-    ...base,
-    ...verified,
-  });
+  return new Client(resolveEvalClientOptions(target));
 }

@@ -7,14 +7,6 @@ import { randomUUID } from "node:crypto";
 import { secrets } from "#compiled/just-secrets/index.js";
 import { isObject } from "#shared/guards.js";
 
-export interface VercelSession {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-  teamId: string;
-  teamName: string;
-}
-
 export async function readModelSecret(name: string): Promise<string | undefined> {
   try {
     const value = await secrets.get({ service: "corax", name });
@@ -34,56 +26,12 @@ export async function writeModelSecret(name: string, value: string): Promise<voi
   }
 }
 
-let cachedVercelSession: VercelSession | undefined;
-let cachedVercelSessionClientId: string | undefined;
-
-export async function writeVercelSession(session: VercelSession, clientId: string): Promise<void> {
-  const { accessToken: _accessToken, expiresAt: _expiresAt, ...stored } = session;
-  await writeModelSecret("vercel", JSON.stringify({ clientId, ...stored }));
-  cachedVercelSession = session;
-  cachedVercelSessionClientId = clientId;
-}
-
-export async function readVercelSession(clientId: string): Promise<VercelSession | undefined> {
-  const raw = await readModelSecret("vercel");
-  if (raw === undefined) return undefined;
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    throw new Error("Saved Vercel login is invalid. Run /login to sign in again.");
-  }
-  if (!isObject(value) || value.clientId !== clientId) return undefined;
-  if (
-    typeof value.refreshToken !== "string" ||
-    typeof value.teamId !== "string" ||
-    typeof value.teamName !== "string"
-  ) {
-    throw new Error("Saved Vercel login is invalid. Run /login to sign in again.");
-  }
-  return {
-    accessToken:
-      cachedVercelSessionClientId === clientId &&
-      cachedVercelSession?.refreshToken === value.refreshToken
-        ? cachedVercelSession.accessToken
-        : "",
-    refreshToken: value.refreshToken,
-    expiresAt:
-      cachedVercelSessionClientId === clientId &&
-      cachedVercelSession?.refreshToken === value.refreshToken
-        ? cachedVercelSession.expiresAt
-        : 0,
-    teamId: value.teamId,
-    teamName: value.teamName,
-  };
-}
-
 export async function readDefaultConnection(): Promise<ModelConnectionSelection | undefined> {
   try {
     const value: unknown = JSON.parse(
       await readFile(join(homedir(), ".corax", "connection.json"), "utf8"),
     );
-    if (isObject(value) && (isModelConnection(value.selected) || value.selected === "vercel-cli"))
+    if (isObject(value) && isModelConnection(value.selected))
       return value.selected;
   } catch {
     /* A missing preference does not require authentication. */

@@ -1,6 +1,6 @@
 import type { AgentReasoningDefinition } from "#shared/agent-definition.js";
 
-import type { GatewayCatalogModel } from "./select-model.js";
+import type { GatewayCatalogModel } from "#shared/gateway-model-catalog.js";
 
 /** A concrete reasoning effort level — every choice except the provider default. */
 export type ReasoningLevel = Exclude<AgentReasoningDefinition, "provider-default">;

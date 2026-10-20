@@ -30,8 +30,6 @@ import {
 import { traceChannelRequest } from "#internal/nitro/routes/channel-request-instrumentation.js";
 import { resolveNitroChannelRuntimeBundle } from "#internal/nitro/routes/runtime-stack.js";
 import { createRouteInvokeTool } from "#internal/nitro/routes/route-invoke-tool.js";
-import { readVercelProjectLink } from "#internal/vercel/project-link.js";
-import { withVercelOidcProjectResolver } from "#channel/auth/vercel-oidc-project.js";
 import { withLocalDevRequestScope } from "#runtime/local-dev-capability.js";
 import { getWorld } from "#internal/workflow/runtime.js";
 
@@ -104,7 +102,7 @@ export async function dispatchChannelRequest(
     let response: Response;
 
     try {
-      response = await withDevelopmentVercelOidcContext(config, event.req, async () => {
+      response = await withDevelopmentRequestContext(config, event.req, async () => {
         if (matchedChannel.handler) {
           // Authored CompiledChannel route — build RouteHandlerArgs.
           return await matchedChannel.handler(event.req, routeArgs.args);
@@ -174,7 +172,7 @@ export async function dispatchChannelWebSocketRequest(
   );
 
   try {
-    const hooks = await withDevelopmentVercelOidcContext(
+    const hooks = await withDevelopmentRequestContext(
       config,
       event.req,
       async () => await websocket(event.req, routeArgs.args),
@@ -194,7 +192,7 @@ export async function dispatchChannelWebSocketRequest(
   }
 }
 
-async function withDevelopmentVercelOidcContext<T>(
+async function withDevelopmentRequestContext<T>(
   config: NitroArtifactsConfig,
   request: Request,
   callback: () => Promise<T>,
@@ -203,22 +201,7 @@ async function withDevelopmentVercelOidcContext<T>(
     return await callback();
   }
 
-  return await withLocalDevRequestScope(
-    request,
-    async () =>
-      await withVercelOidcProjectResolver(
-        {
-          request,
-          resolveCurrentProject: async () => {
-            const link = await readVercelProjectLink(config.appRoot);
-            return link === undefined
-              ? undefined
-              : { environment: "development", projectId: link.projectId };
-          },
-        },
-        callback,
-      ),
-  );
+  return await withLocalDevRequestScope(request, callback);
 }
 
 async function buildRouteArgs(
@@ -229,7 +212,7 @@ async function buildRouteArgs(
   config: NitroArtifactsConfig,
   requestTraceContext: SpanContext | undefined,
 ): Promise<BuiltRouteArgs> {
-  const requestId = readVercelRequestId(event.req.headers);
+  const requestId = readRequestId(event.req.headers);
   const requestIp = extractRequestIp(event, config);
   const backgroundTasks: Promise<unknown>[] = [];
   const rawParams = (event.context.params as Record<string, string>) ?? {};
@@ -343,8 +326,8 @@ function validateDeploymentId(deploymentId: string): string {
   return deploymentId;
 }
 
-function readVercelRequestId(headers: Headers): string | undefined {
-  const requestId = headers.get("x-vercel-id")?.trim();
+function readRequestId(headers: Headers): string | undefined {
+  const requestId = headers.get("x-request-id")?.trim();
   return requestId === "" ? undefined : requestId;
 }
 

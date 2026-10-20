@@ -2,7 +2,7 @@
 export const WEB_SEARCH_FALLBACK_PROVIDERS = ["exa", "parallel", "browserbase"] as const;
 
 /**
- * Web search providers available through Vercel AI Gateway. `native` is the model vendor's own
+ * Web search providers available through the AI Gateway. `native` is the model vendor's own
  * hosted search, which only some vendors' models have.
  */
 export const WEB_SEARCH_PROVIDERS = [...WEB_SEARCH_FALLBACK_PROVIDERS, "native"] as const;

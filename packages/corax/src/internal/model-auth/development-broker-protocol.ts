@@ -4,10 +4,8 @@ export type DevelopmentModelProvider = "gateway" | "openai" | "anthropic" | "cha
 
 /** Only transported over the authenticated local control plane; never persisted. */
 export interface DevelopmentModelCredential {
-  readonly kind: "api-key" | "oauth" | "oidc";
+  readonly kind: "api-key" | "oauth";
   readonly token: string;
-  readonly teamId?: string;
-  readonly teamName?: string;
   readonly accountId?: string;
   readonly accountLabel?: string;
 }
