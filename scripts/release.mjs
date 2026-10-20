@@ -84,18 +84,17 @@ async function stageRelease(stage) {
     "--filename", join(stage, "packages/corax.tgz"),
   ], target);
 
-  await cp(join(root, "cli"), join(stage, "cli"), { recursive: true });
   await cp(join(root, "docs/deployment.md"), join(stage, "README.md"));
+  // The `corax` command comes from the SDK's own bin; this manifest only pins the install.
   await writeFile(join(stage, "package.json"), JSON.stringify({
     name: "corax-cli",
     version,
     private: true,
     type: "module",
-    bin: { "corax": "./cli/bin/corax.ts" },
     engines: manifest.engines,
     packageManager: manifest.packageManager,
     dependencies: { corax: "file:./packages/corax.tgz" },
-    scripts: { start: "bun --no-env-file cli/bin/corax.ts" },
+    scripts: { corax: "bun --no-env-file node_modules/corax/bin/corax.js" },
   }, null, 2));
   await runCommand([process.execPath, "install", "--production"], stage);
 }

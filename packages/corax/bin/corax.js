@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import { spawn } from "node:child_process";
 import { access, readdir, realpath, stat } from "node:fs/promises";

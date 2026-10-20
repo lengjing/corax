@@ -39,10 +39,10 @@ my-agent/
 源码 checkout 中使用：
 
 ```sh
-bun --no-env-file cli/bin/corax.ts dev --root examples/channels
-bun --no-env-file cli/bin/corax.ts dev --root examples/basic-agent --no-ui
-bun --no-env-file cli/bin/corax.ts build --root examples/basic-agent
-bun --no-env-file cli/bin/corax.ts start --root examples/basic-agent
+bun --no-env-file packages/corax/bin/corax.js dev --root examples/channels
+bun --no-env-file packages/corax/bin/corax.js dev --root examples/basic-agent --no-ui
+bun --no-env-file packages/corax/bin/corax.js build --root examples/basic-agent
+bun --no-env-file packages/corax/bin/corax.js start --root examples/basic-agent
 ```
 
 安装发布包的命令入口后使用：
@@ -89,8 +89,8 @@ CLI 使用 `CORAX_HOST`、`CORAX_PORT` 配置默认监听地址和端口，显�
 ## 目录结构
 
 ```text
-cli/                    通用 CLI 入口与项目接线
-packages/corax/src/       核心框架与内置能力
+packages/corax/bin/       `corax` 命令入口
+packages/corax/src/       核心框架、CLI 与内置能力
 packages/corax/scripts/   核心编译、vendoring、打包
 packages/corax-catalog/   集成目录库
 packages/tracing/       追踪库
@@ -100,7 +100,7 @@ tests/                  CLI、持久化及发布回归
 docs/                   架构、运行和部署说明
 ```
 
-CLI 命令与 SDK 包名均为 `corax`，公共 API 通过 `corax/*` 导入。仓库根包 `corax-workspace` 仅用于开发编排，发布压缩包中的 `corax-cli` 负责安装命令入口和本地 SDK。SDK 保留内部 bootstrap 导出，由 CLI 调用，不单独注册同名命令。
+CLI 命令与 SDK 包名均为 `corax`，命令由 `corax` 包的 `bin` 提供，公共 API 通过 `corax/*` 导入。仓库根包 `corax-workspace` 仅用于开发编排，发布压缩包中的 `corax-cli` 只负责安装本地 SDK 及其生产依赖。
 
 Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 
@@ -110,9 +110,8 @@ Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 | --- | --- |
 | `bun run build` | 构建 CLI 所需核心与运行资产 |
 | `bun run build:example` | 构建 basic-agent 示例 |
-| `bun run typecheck` | 检查核心、内部依赖、CLI 和示例类型 |
+| `bun run typecheck` | 检查核心、内部依赖和示例类型 |
 | `bun run typecheck:packages` | 仅检查 packages 中的 workspace 包 |
-| `bun run typecheck:cli` | 仅检查 CLI 类型 |
 | `bun run typecheck:examples` | 仅检查全部示例类型 |
 | `bun run test` | 构建核心后使用 Bun Test 运行产品回归 |
 | `bun run release` | 构建并验证可独立运行的 CLI 发布包 |

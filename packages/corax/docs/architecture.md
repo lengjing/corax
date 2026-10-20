@@ -7,7 +7,6 @@ corax 是 Bun 原生的本地 agent CLI 运行器：用户提供模块，CLI 负
 ## 仓库结构
 
 ```text
-cli/                    Bun 可执行入口、项目与环境接线
 packages/corax/           核心发现、编译、执行、CLI 及服务宿主
 packages/corax-catalog/   内部集成目录库
 packages/tracing/       内部追踪库
@@ -24,13 +23,13 @@ docs/                  产品文档
 ## 运行链路
 
 ```text
-cli/bin/corax.ts
-    → cli/src/main.ts
-      → 解析 --root、加载目标环境、设置项目路径
-      → corax/bin
-        → 核心 CLI 命令解析
-        → 模块发现与编译
-        → 终端/API 服务或生产构建
+packages/corax/bin/corax.js
+    → 校验 Bun 版本、按需构建
+    → dist/src/cli/run.js
+      → 解析 --root、读取 CORAX_* 启动默认值、切换到项目目录
+      → 命令解析
+      → 模块发现与编译
+      → 终端/API 服务或生产构建
 ```
 
 项目根即 agent 根，agent.ts 与 channels/、memory/、sandbox.ts 同级。沿用框架已有 flat 发现能力，不复制临时 agent/ 目录。
@@ -47,7 +46,7 @@ CLI 不重复实现命令解析或执行引擎。packages 内部暂不重组，�
 - 发布：Bun 安装生产依赖，生成通用运行器压缩包。
 - 类型检查：Bun 执行 TypeScript 编译器，保留独立静态检查。
 
-安装、构建和类型检查命令直接定义在根 package.json 中。类型检查分别覆盖 packages workspace、CLI 和全部示例；scripts/ 仅保留包含实际打包与验证逻辑的 release.mjs。
+安装、构建和类型检查命令直接定义在根 package.json 中。类型检查分别覆盖 packages workspace 和全部示例；scripts/ 仅保留包含实际打包与验证逻辑的 release.mjs。
 
 使用 Bun 支持的 node:* 标准兼容 API，不意味着保留 Node 可执行程序依赖。第三方编译器及框架插件继续由 Bun 执行，不是以 Bun 包管理、Node 运行的混合模式。
 

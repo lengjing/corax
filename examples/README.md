@@ -13,8 +13,8 @@
 在仓库根目录执行 `bun install` 和 `bun run build` 后，将所选示例的 `.env.example` 复制为同目录 `.env` 并填写模型配置。例如：
 
 ```sh
-bun --no-env-file cli/bin/corax.ts dev --root examples/channels
-bun --no-env-file cli/bin/corax.ts build --root examples/memory
+bun --no-env-file packages/corax/bin/corax.js dev --root examples/channels
+bun --no-env-file packages/corax/bin/corax.js build --root examples/memory
 ```
 
 `memory` 和 `sandbox` 刻意不附带渠道。要通过终端/API 交互，可将 `channels/channels/corax.ts` 复制到目标项目的 `channels/corax.ts`；按用户隔离的 memory 需要渠道提供认证主体。完整交互也可以直接运行 `basic-agent`。

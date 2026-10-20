@@ -37,6 +37,9 @@
     "NOTICE",
     "README.md"
   ],
+  "bin": {
+    "corax": "./bin/corax.js"
+  },
   "type": "module",
   "sideEffects": true,
   "main": "./dist/src/index.js",
@@ -511,7 +514,7 @@
     "build:js": "bun ./scripts/build-js.mjs",
     "build:types": "bun run build:compiled && bun run tsc -p tsconfig.build.json",
     "check:bin-runtime-dependencies": "bun ./scripts/check-bin-runtime-dependencies.mjs",
-    "dev": "bun ../../cli/bin/corax.ts dev",
+    "dev": "bun --no-env-file ./bin/corax.js dev",
     "prepack": "bun ./scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.build.json --noEmit --emitDeclarationOnly false"
   },

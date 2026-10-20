@@ -5,7 +5,7 @@
 ```sh
 bun install --frozen-lockfile
 bun run build
-bun --no-env-file cli/bin/corax.ts dev --root examples/channels
+bun --no-env-file packages/corax/bin/corax.js dev --root examples/channels
 ```
 
 需要 Bun 1.4.2+。模型配置位于目标项目的 `.env`，实际调用模型需要可用凭证。
@@ -16,14 +16,14 @@ bun --no-env-file cli/bin/corax.ts dev --root examples/channels
 bun run release
 ```
 
-输出 `release/corax-<版本>-<系统>-<架构>.tgz`。压缩包包含 CLI、编译后的核心 SDK 和生产依赖，解压后不需要构建 corax 本身。使用匹配系统和架构的包。
+输出 `release/corax-<版本>-<系统>-<架构>.tgz`。压缩包包含编译后的核心 SDK（含 `corax` 命令）和生产依赖，解压后不需要构建 corax 本身。使用匹配系统和架构的包。
 
 ```sh
-bun --no-env-file /path/to/corax/cli/bin/corax.ts --help
-bun --no-env-file /path/to/corax/cli/bin/corax.ts dev --root /path/to/my-agent
+bun --no-env-file /path/to/corax/node_modules/corax/bin/corax.js --help
+bun --no-env-file /path/to/corax/node_modules/corax/bin/corax.js dev --root /path/to/my-agent
 ```
 
-可在解压目录执行 `bun link`，在 Bun 的全局 bin 目录已加入 PATH 时使用 `corax`。入口 shebang 会禁用自动加载启动目录环境文件。
+解压目录的 `package.json` 提供 `bun run corax -- <命令>` 快捷方式。在 `node_modules/corax` 目录执行 `bun link` 后，若 Bun 全局 bin 目录已加入 PATH，可直接使用 `corax`。入口 shebang 会禁用自动加载启动目录环境文件。
 
 ### 用户项目依赖
 

@@ -26,19 +26,21 @@ test("the released Bun CLI builds and serves an external flat project", { timeou
   await execute("tar", ["-xf", archive, "-C", root], { timeout: 30_000 });
   const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   assert.equal(manifest.name, "corax-cli");
-  assert.equal(manifest.bin.corax, "./cli/bin/corax.ts");
-  const sdk = JSON.parse(await readFile(join(root, "packages/corax/package.json"), "utf8"));
+  assert.equal(manifest.bin, undefined, "the command is provided by the corax package itself");
+  const sdk = JSON.parse(await readFile(join(root, "node_modules/corax/package.json"), "utf8"));
   assert.equal(sdk.name, "corax");
-  assert.equal(sdk.bin, undefined, "the internal bootstrap must not shadow the public corax CLI");
+  assert.equal(sdk.bin.corax, "./bin/corax.js");
   assert.equal(manifest.engines.bun, ">=1.4.2");
   assert.equal(manifest.engines.node, undefined);
+  const cli = join(root, "node_modules/corax/bin/corax.js");
   for (const args of [["--help"], ["--version"]]) {
     const { stdout } = await execute(process.execPath,
-      ["--no-env-file", join(root, "cli/bin/corax.ts"), ...args],
+      ["--no-env-file", cli, ...args],
       { cwd: tmpdir(), timeout: 20_000 });
     assert.match(stdout, args[0] === "--help" ? /corax.*\[options\]/ : new RegExp(version.replaceAll(".", "\\.")));
   }
-  assert.equal(await Bun.file(join(root, "packages/corax/src/index.ts")).exists(), false);
+  assert.equal(await Bun.file(join(root, "node_modules/corax/src/index.ts")).exists(), false);
+  assert.equal(await Bun.file(join(root, "cli")).exists(), false);
   assert.equal(await Bun.file(join(root, "agent.ts")).exists(), false);
 
   await writeFile(join(project, "package.json"), JSON.stringify({
@@ -58,7 +60,7 @@ export default coraxChannel({ auth: [httpBasic({ username: 'smoke-user', passwor
 `);
   await writeFile(join(project, ".env"), "OPENAI_API_KEY=smoke-key\nCORAX_PASSWORD=smoke-password\n");
   await execute(process.execPath, ["install"], { cwd: project, timeout: 60_000 });
-  await execute(process.execPath, ["--no-env-file", join(root, "cli/bin/corax.ts"), "build", "--root", project],
+  await execute(process.execPath, ["--no-env-file", cli, "build", "--root", project],
     { cwd: tmpdir(), timeout: 90_000, maxBuffer: 4 * 1024 * 1024 });
   const nitro = await Bun.file(join(project, ".output/nitro.json")).json();
   assert.equal(nitro.preset, "bun");

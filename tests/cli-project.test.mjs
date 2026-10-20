@@ -11,7 +11,7 @@ import { discoverAgent } from "../packages/corax/dist/src/discover/discover-agen
 import { resolveAuthoredPackageRoot } from "../packages/corax/dist/src/internal/authored-module-loader.js";
 
 const execute = promisify(execFile);
-const cli = fileURLToPath(new URL("../cli/bin/corax.ts", import.meta.url));
+const cli = fileURLToPath(new URL("../packages/corax/bin/corax.js", import.meta.url));
 
 test("each capability example is a valid flat agent with optional instructions", async () => {
   for (const name of ["minimal", "channels", "memory", "sandbox", "basic-agent"]) {

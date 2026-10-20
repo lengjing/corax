@@ -9,7 +9,7 @@ let production;
 let development;
 try {
   const load = (name) => import(pathToFileURL(join(root,
-    `packages/corax/dist/src/internal/nitro/host/${name}.js`)).href);
+    `node_modules/corax/dist/src/internal/nitro/host/${name}.js`)).href);
   const { startProductionServer } = await load("start-production-server");
   production = await startProductionServer(project, { host: "127.0.0.1", port: 0 });
   const health = await fetch(new URL("/corax/v1/health", production.url));
@@ -25,7 +25,7 @@ try {
   production = undefined;
 
   const { createDevelopmentServer } = await import(pathToFileURL(join(root,
-    "packages/corax/dist/src/cli/dev/local-server-process.js")).href);
+    "node_modules/corax/dist/src/cli/dev/local-server-process.js")).href);
   development = createDevelopmentServer(project, {
     host: "127.0.0.1", port: 0, developmentExtensions: { enabled: [] },
   });

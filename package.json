@@ -3,8 +3,6 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "bin": { "corax": "./cli/bin/corax.ts" },
-  "files": ["cli", "README.md", "docs"],
   "workspaces": {
     "packages": ["packages/corax", "packages/corax-catalog", "packages/tracing", "examples/*"],
     "catalog": {
@@ -41,15 +39,14 @@
     "setup": "bun install --frozen-lockfile && bun run build",
     "build": "bun packages/corax/scripts/build.mjs",
     "build:core": "bun packages/corax/scripts/build.mjs",
-    "build:example": "bun --no-env-file cli/bin/corax.ts build --root examples/basic-agent",
-    "dev": "bun --no-env-file cli/bin/corax.ts dev",
-    "start": "bun --no-env-file cli/bin/corax.ts start",
+    "build:example": "bun --no-env-file packages/corax/bin/corax.js build --root examples/basic-agent",
+    "dev": "bun --no-env-file packages/corax/bin/corax.js dev",
+    "start": "bun --no-env-file packages/corax/bin/corax.js start",
     "release": "bun scripts/release.mjs",
     "test:release": "bun test tests/release-smoke.scenario.mjs",
     "test": "bun run build:core && bun test ./tests",
-    "typecheck": "bun run typecheck:packages && bun run typecheck:cli && bun run typecheck:examples",
+    "typecheck": "bun run typecheck:packages && bun run typecheck:examples",
     "typecheck:packages": "bun run --filter './packages/*' typecheck",
-    "typecheck:cli": "bun run tsc --noEmit -p cli/tsconfig.json",
     "typecheck:examples": "bun run tsc --noEmit -p examples/tsconfig.json"
   },
   "dependencies": { "corax": "workspace:*" },

@@ -2,6 +2,7 @@ import { InvalidArgumentError, type Command } from "#compiled/commander/index.js
 import type { CliApplicationContext } from "#cli/application-command.js";
 import { agentCommand } from "#cli/agent-command.js";
 import { coraxCliBanner } from "#cli/banner.js";
+import type { CliLaunchContext } from "#cli/launch.js";
 import { FORCED_EXIT_BACKSTOP_MS, installShutdownSignal } from "#cli/shutdown.js";
 import { startCliLiveRow } from "#cli/ui/live-row.js";
 import { createCliTheme, renderCliTaggedLine } from "#cli/ui/output.js";
@@ -54,21 +55,25 @@ function hasInteractiveTerminal(): boolean {
 /** Registers the local development server command. */
 export function registerDevelopmentCommand(input: {
   applicationContext: CliApplicationContext;
+  launch: Pick<CliLaunchContext, "host" | "port">;
   logger: DevelopmentCommandLogger;
   program: Command;
   runtime: DevelopmentCommandRuntime;
   telemetry: DevelopmentCommandTelemetry;
 }): void {
-  const { applicationContext, logger, program, runtime, telemetry } = input;
+  const { applicationContext, launch, logger, program, runtime, telemetry } = input;
   const theme = createCliTheme();
 
   agentCommand(program.command("dev"), applicationContext)
     .description("Start the local corax development server.")
-    .option("--host <host>", "Host interface to bind")
-    .option("--port <port>", "Port to listen on (defaults to $PORT, then 2000)", parsePortOption)
+    .option("--host <host>", "Host interface to bind (defaults to $CORAX_HOST, then 127.0.0.1)")
+    .option("--port <port>", "Port to listen on (defaults to $CORAX_PORT, then 2000)", parsePortOption)
     .option("--no-ui", "Start the server without an interactive UI")
     .option("--resume", "Attempt recovery of retained runs from previous local dev invocations")
-    .option("--no-default-extensions", "Do not mount default development extensions")
+    .option(
+      "--default-extensions",
+      "Mount the built-in development extensions (self-modification, computer-use, git)",
+    )
     .option("--name <name>", "Title shown in the terminal UI (defaults to the app folder name)")
     .option("--input <text>", "Pre-fill the prompt input")
     .option(
@@ -146,14 +151,15 @@ export function registerDevelopmentCommand(input: {
       try {
         const startHost = runtime.startHost ?? (await loadStartHost());
         server = startHost(applicationContext.root, {
-          ...(options.defaultExtensions === false
-            ? { developmentExtensions: noDevelopmentExtensions() }
-            : {}),
+          // Built-in extensions stay off unless requested so dev matches `build`/`start`.
+          ...(options.defaultExtensions === true
+            ? {}
+            : { developmentExtensions: noDevelopmentExtensions() }),
           resume: options.resume,
           existing: mode === "tui" ? "attach-if-unconfigured" : "reject",
-          host: options.host,
+          host: options.host ?? launch.host,
           onBootProgress,
-          port: options.port,
+          port: options.port ?? launch.port ?? 2000,
         });
         const [outcome, startup] = await Promise.all([
           Promise.race([
