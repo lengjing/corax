@@ -36,26 +36,27 @@ my-agent/
 
 ## 运行
 
-源码 checkout 中使用：
+源码 checkout 中，每个示例都带有 `dev` / `build` / `start` 脚本：
 
 ```sh
-bun --no-env-file packages/corax/bin/corax.js dev --root examples/channels
-bun --no-env-file packages/corax/bin/corax.js dev --root examples/basic-agent --no-ui
-bun --no-env-file packages/corax/bin/corax.js build --root examples/basic-agent
-bun --no-env-file packages/corax/bin/corax.js start --root examples/basic-agent
+bun run --cwd examples/channels dev
+bun run --cwd examples/basic dev -- --no-ui
+bun run --cwd examples/basic build
+bun run --cwd examples/basic start
 ```
 
-安装发布包的命令入口后使用：
+安装发布包的命令入口后，在 agent 项目目录中使用：
 
 ```sh
-corax dev --root ./my-agent
-corax build --root ./my-agent
-corax start --root ./my-agent
+cd my-agent
+corax dev
+corax build
+corax start
 ```
 
-`--root` 默认当前目录。`dev` 启动服务和终端交互，`--no-ui` 只运行服务；`build` 生成生产产物，`start` 运行已有产物。默认监听 `127.0.0.1:2000`，健康接口为 `/corax/v1/health`。
+CLI 和 git、npm 一样从当前目录向上查找 agent 项目。`dev` 启动服务和终端交互，`--no-ui` 只运行服务；`build` 生成生产产物，`start` 运行已有产物。`dev` 默认监听 `127.0.0.1:2000`，`start` 默认监听 `0.0.0.0:3000`；两者都接受 `--host` / `--port`，端口也可由 `PORT` 环境变量指定。健康接口为 `/corax/v1/health`。
 
-使用 `--no-env-file` 防止 Bun 自动读取启动目录的环境文件；CLI 显式加载目标项目环境。已存在的进程环境变量优先。
+项目的 `.env` 由 Bun 原生加载，进程已有的变量优先；`dev` 模式下 CLI 会监听 env 文件并热重载其中的值。
 
 ## 按能力拆分的示例
 
@@ -65,7 +66,7 @@ corax start --root ./my-agent
 | [`channels`](examples/channels/) | 只增加终端/API 渠道和认证 |
 | [`memory`](examples/memory/) | 只增加按用户隔离的 SQLite memory |
 | [`sandbox`](examples/sandbox/) | 只增加 JustBash sandbox |
-| [`basic-agent`](examples/basic-agent/) | 指令、渠道、memory、sandbox 完整组合 |
+| [`basic`](examples/basic/) | 指令、渠道、memory、sandbox 完整组合 |
 
 将所选示例的 `.env.example` 复制为同目录 `.env`，填写模型配置。示例之间不互相依赖，可以复制能力模块进行组合。memory 与 sandbox 示例不额外附带渠道；交互使用时加入 channels 示例中的渠道定义。详见 [示例说明](examples/README.md)。
 
@@ -81,8 +82,6 @@ corax start --root ./my-agent
 | `CORAX_CONTEXT_WINDOW` | `128000` | 模型上下文 token 数 |
 | `CORAX_USERNAME` | `admin` | 示例 HTTP Basic 用户名 |
 | `CORAX_PASSWORD` | 空 | 示例生产会话 API 密码 |
-
-CLI 使用 `CORAX_HOST`、`CORAX_PORT` 配置默认监听地址和端口，显式命令行选项优先；`CORAX_DATA_DIR` 配置数据目录，相对路径以目标项目为基准。
 
 模型请传入 AI SDK provider 实例并指定 `modelContextWindowTokens`。裸字符串模型 ID 会被 AI SDK 路由到 Vercel AI Gateway，Corax 默认拒绝并提示修改；如确需 Gateway，设置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 与 `AI_GATEWAY_API_KEY` 显式开启。详见 [运行说明](docs/runtime.md)。
 
@@ -109,7 +108,7 @@ Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 | 命令 | 用途 |
 | --- | --- |
 | `bun run build` | 构建 CLI 所需核心与运行资产 |
-| `bun run build:example` | 构建 basic-agent 示例 |
+| `bun run build:example` | 构建 basic 示例 |
 | `bun run typecheck` | 检查核心、内部依赖和示例类型 |
 | `bun run typecheck:packages` | 仅检查 packages 中的 workspace 包 |
 | `bun run typecheck:examples` | 仅检查全部示例类型 |
@@ -119,7 +118,7 @@ Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 
 ## 持久化与部署
 
-每个项目的 `.corax/` 保存工作流和会话状态，`data/` 默认保存 SQLite memory 和动态调度数据库；`.output/` 保存生产产物。配置与数据写入目标项目，不写入 CLI 安装目录。
+每个项目的 `.corax/` 保存工作流、会话状态，以及默认的 SQLite memory 和动态调度数据库（可通过各自的 `path` 选项改到别处）；`.output/` 保存生产产物。配置与数据写入目标项目，不写入 CLI 安装目录。
 
 默认本地持久化使用 `bun:sqlite`。动态调度保留稳定 executionId、租约与重试，提供至少一次投递。示例使用本地 Workflow World 和 JustBash，不要求托管平台账号。JustBash 是虚拟文件系统沙箱，不等同于本机原生 shell。
 

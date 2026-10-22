@@ -1465,7 +1465,6 @@ export class TerminalRenderer implements AgentTUIRenderer {
     });
   }
 
-
   reset(): void {
     this.#blocks = [];
     this.#blockById.clear();

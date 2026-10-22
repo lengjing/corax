@@ -183,7 +183,7 @@ describe("renderCommandSuggestions", () => {
     const state = typeaheadFor(PROMPT_COMMANDS, "/");
     const rows = renderCommandSuggestions(state, theme, 80).map(stripAnsi);
     expect(rows).toHaveLength(PROMPT_COMMANDS.length);
-    expect(rows[0]).toContain("/model");
+    expect(rows[0]).toContain("/new");
   });
 
   it("clips rows to the terminal width", () => {
@@ -193,10 +193,10 @@ describe("renderCommandSuggestions", () => {
     }
   });
 
-  it("renders the real registry on a bare slash with /model leading", () => {
+  it("renders the real registry on a bare slash with /new leading", () => {
     const state = typeaheadFor(PROMPT_COMMANDS, "/");
     const rows = renderCommandSuggestions(state, theme, 80).map(stripAnsi);
-    expect(rows[0]).toContain("/model");
+    expect(rows[0]).toContain("/new");
     expect(rows[0]).toContain(theme.glyph.selectedPointer);
   });
 });

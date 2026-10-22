@@ -46,7 +46,7 @@ export function registerBuildCommand(input: {
       const projectContext = await input.applicationContext.resolveAgent();
       if (projectContext.kind === "workspace") {
         throw new Error(
-          "`corax build` must run from an individual agent directory. Pass --root <agent-directory> or run it inside the agent.",
+          "`corax build` must run from an individual agent directory. Run it inside the agent, or pass --agent <name>.",
         );
       }
       const buildHost =

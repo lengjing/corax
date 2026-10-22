@@ -2,20 +2,18 @@
 
 ## 项目与模块
 
-`--root` 选择项目，默认当前目录。CLI 的 dev/build 要求项目根目录有 `agent.ts`。定义、指令、渠道、memory 和 sandbox 在同一级；其他能力沿用核心支持的目录约定。
+CLI 和 git、npm 一样从当前目录向上查找 agent 项目，不需要额外的位置参数。定义、指令、渠道、memory 和 sandbox 在同一级；其他能力沿用核心支持的目录约定。
 
 项目通过普通 TypeScript import 组合模块。CLI 不生成文件、不自动安装依赖。
 
 ## 环境与路径
 
-- 使用 Bun 运行，入口使用 `--no-env-file` 禁用启动目录的自动环境加载。
-- 目标项目 `.env` 在导入框架和用户定义前加载，进程已有变量优先。
-- `CORAX_HOST` / `CORAX_PORT`：默认监听地址和端口，命令行选项优先。
-- `CORAX_DATA_DIR`：默认 `<root>/data`，相对路径按目标项目解析。
-- `.corax/`：本地工作流与会话状态。
+- 使用 Bun 运行，`.env` 由 Bun 原生加载，进程已有的变量始终优先。dev 模式下 CLI 监听项目的 env 文件（含 `.env.development.local`）并热重载其中的值。
+- `PORT`：默认监听端口（dev 2000，start 3000）；`--host` / `--port` 命令行选项优先。
+- `.corax/`：本地工作流、会话状态，以及默认的 SQLite memory 与动态调度数据库（可用各自的 `path` 选项改到别处）。
 - `.output/`：用户 agent 的生产构建产物。
 
-不要把这些运行数据放入 CLI 安装目录。不同项目默认使用各自的数据目录。
+不要把这些运行数据放入 CLI 安装目录。
 
 ## 模型路由
 

@@ -7,10 +7,6 @@ const { findCoraxProjectContext } = vi.hoisted(() => ({
 }));
 
 vi.mock("#internal/project-context.js", () => ({ findCoraxProjectContext }));
-vi.mock("#services/dev-client/runtime-artifacts.js", () => ({
-  resumeDevelopmentRuntimeArtifacts: vi.fn(),
-  suspendDevelopmentRuntimeArtifacts: vi.fn(),
-}));
 
 import { runInteractiveDevelopmentUi } from "./run-interactive-ui.js";
 

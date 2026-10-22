@@ -7,7 +7,6 @@ import { agentCommand } from "#cli/agent-command.js";
 import { resolveCliApplicationProject } from "#cli/application-root.js";
 import { coraxCliBanner } from "#cli/banner.js";
 import { registerDevelopmentCommand } from "#cli/dev/command.js";
-import { extractRootOption, prepareCliLaunch, type CliLaunchContext } from "#cli/launch.js";
 import { resolveDevUiMode, resolveTuiDisplayOptions } from "#cli/dev/ui-options.js";
 import { waitForShutdownSignal } from "#cli/shutdown.js";
 import type { ProductionCliOptions } from "#cli/dev/command-options.js";
@@ -17,8 +16,6 @@ import { parsePortOption } from "#cli/option-parsers.js";
 import { resolveCoraxProjectContext } from "#internal/project-context.js";
 import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
 import { createCliTheme, renderCliTaggedLine } from "#cli/ui/output.js";
-import { disabledCliTelemetry } from "#cli/telemetry/disabled.js";
-import { canonicalCommand, type CoraxCliTelemetry } from "#cli/telemetry/index.js";
 import type {
   DevelopmentServer,
   DevelopmentServerOptions,
@@ -27,15 +24,12 @@ import type {
 
 export { resolveDevUiMode, resolveTuiDisplayOptions };
 
-const DEFAULT_PORT = 2000;
-
 interface CliLogger {
   error(message: string): void;
   log(message: string): void;
 }
 
 interface CliRuntimeDependencies {
-  findApplicationRoot(cwd: string): Promise<string | undefined>;
   buildHost: BuildHost;
   printApplicationInfo(
     logger: CliLogger,
@@ -78,8 +72,6 @@ export function createCliProgram(
   logger: CliLogger,
   runtime: CliRuntimeOverrides,
   applicationContext: CliApplicationContext,
-  telemetry: Pick<CoraxCliTelemetry, "trackDevContext" | "trackSetupStep" | "trackSetupTerminal">,
-  launch: Pick<CliLaunchContext, "host" | "port"> = { host: "127.0.0.1", port: undefined },
 ): Command {
   const packageVersion = resolveInstalledPackageInfo().version;
   const program = new Command();
@@ -87,9 +79,8 @@ export function createCliProgram(
 
   program
     .name("corax")
-    .description("Discover, build and run local agent projects with Bun.")
+    .description("Build and run a corax agent with Bun.")
     .version(packageVersion)
-    .option("--root <directory>", "Agent project directory (defaults to the current directory)")
     .showHelpAfterError()
     .exitOverride()
     .hook("preAction", (_program, actionCommand) => {
@@ -116,8 +107,8 @@ export function createCliProgram(
 
   agentCommand(program.command("start"), applicationContext)
     .description("Start a built corax application.")
-    .option("--host <host>", "Host interface to bind (defaults to $CORAX_HOST, then 127.0.0.1)")
-    .option("--port <port>", "Port to listen on (defaults to $CORAX_PORT, then 2000)", parsePortOption)
+    .option("--host <host>", "Host interface to bind")
+    .option("--port <port>", "Port to listen on (defaults to $PORT, then 3000)", parsePortOption)
     .action(async (options: ProductionCliOptions) => {
       const { loadDevelopmentEnvironmentFiles } = await import("#cli/dev/environment.js");
 
@@ -125,8 +116,8 @@ export function createCliProgram(
 
       const startProductionHost = runtime.startProductionHost ?? (await loadStartProductionHost());
       const server = await startProductionHost(applicationContext.root, {
-        host: options.host ?? launch.host,
-        port: options.port ?? launch.port ?? DEFAULT_PORT,
+        host: options.host,
+        port: options.port,
       });
 
       logger.log(
@@ -140,15 +131,7 @@ export function createCliProgram(
       await waitForShutdownSignal({ close: () => server.close(), wait: () => server.wait() });
     });
 
-
-  registerDevelopmentCommand({
-    applicationContext,
-    launch,
-    logger,
-    program,
-    runtime,
-    telemetry,
-  });
+  registerDevelopmentCommand({ applicationContext, logger, program, runtime });
 
   const logs = program
     .command("logs")
@@ -209,7 +192,7 @@ export function createCliProgram(
     applicationContext,
     (command) => command.opts<EvalCliOptions>().url === undefined,
   )
-    .description("Run evals against an corax agent.")
+    .description("Run evals against a corax agent.")
     .argument(
       "[evalIds...]",
       "Eval ids (or directory prefixes) to run (all discovered evals when omitted)",
@@ -239,11 +222,8 @@ export async function runCli(
   logger: CliLogger = console,
   runtime: CliRuntimeOverrides = {},
 ): Promise<void> {
-  const extracted = extractRootOption(argv);
-  const args = extracted.args.length === 0 ? ["--help"] : extracted.args;
-  const launch = await prepareCliLaunch({ args, root: extracted.root });
   const applicationContext: CliApplicationContext = {
-    root: resolveApplicationRoot(launch.root),
+    root: resolveApplicationRoot(),
     async resolve() {
       const project = await (runtime.resolveApplicationProject ?? resolveCliApplicationProject)(
         applicationContext.root,
@@ -255,31 +235,16 @@ export async function runCli(
       return resolveCoraxProjectContext(applicationContext.root);
     },
   };
-  const telemetry = disabledCliTelemetry;
-  const program = createCliProgram(logger, runtime, applicationContext, telemetry, launch);
-  const input = args;
-  const command = canonicalCommand(input);
-  telemetry.trackCommand(command);
-  if (command !== "telemetry") await telemetry.notify(logger);
+  const program = createCliProgram(logger, runtime, applicationContext);
+  const input = argv.length === 0 ? ["--help"] : argv;
 
   try {
-    await program.parseAsync(input, {
-      from: "user",
-    });
-    telemetry.trackOutcome("success");
+    await program.parseAsync(input, { from: "user" });
   } catch (error) {
-    if (error instanceof CommanderError && error.exitCode === 0) {
-      telemetry.trackOutcome("success");
-      return;
-    }
-
-    telemetry.trackOutcome(error instanceof CommanderError ? "usage_error" : "error");
     if (error instanceof CommanderError) {
+      if (error.exitCode === 0) return;
       throw new Error(error.message);
     }
-
     throw error;
-  } finally {
-    await telemetry.flush();
   }
 }

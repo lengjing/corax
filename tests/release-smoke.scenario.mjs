@@ -35,7 +35,7 @@ test("the released Bun CLI builds and serves an external flat project", { timeou
   const cli = join(root, "node_modules/corax/bin/corax.js");
   for (const args of [["--help"], ["--version"]]) {
     const { stdout } = await execute(process.execPath,
-      ["--no-env-file", cli, ...args],
+      [cli, ...args],
       { cwd: tmpdir(), timeout: 20_000 });
     assert.match(stdout, args[0] === "--help" ? /corax.*\[options\]/ : new RegExp(version.replaceAll(".", "\\.")));
   }
@@ -60,13 +60,13 @@ export default coraxChannel({ auth: [httpBasic({ username: 'smoke-user', passwor
 `);
   await writeFile(join(project, ".env"), "OPENAI_API_KEY=smoke-key\nCORAX_PASSWORD=smoke-password\n");
   await execute(process.execPath, ["install"], { cwd: project, timeout: 60_000 });
-  await execute(process.execPath, ["--no-env-file", cli, "build", "--root", project],
-    { cwd: tmpdir(), timeout: 90_000, maxBuffer: 4 * 1024 * 1024 });
+  await execute(process.execPath, [cli, "build"],
+    { cwd: project, timeout: 90_000, maxBuffer: 4 * 1024 * 1024 });
   const nitro = await Bun.file(join(project, ".output/nitro.json")).json();
   assert.equal(nitro.preset, "bun");
   assert.equal(await Bun.file(join(project, ".output/.corax/compile/module-map.mjs")).exists(), true);
 
-  const checked = await execute(process.execPath, ["--no-env-file",
+  const checked = await execute(process.execPath, [
     fileURLToPath(new URL("./support/runtime-check.mjs", import.meta.url)), root, project],
     { cwd: tmpdir(), timeout: 90_000, maxBuffer: 4 * 1024 * 1024 });
   assert.match(checked.stdout, /RUNTIME_SMOKE=ok/);

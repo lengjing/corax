@@ -8,8 +8,7 @@ import { Client, type AgentInfoResult } from "#client/index.js";
 import { createTestAgentInfoResult } from "#internal/testing/agent-info-fixture.js";
 
 import { CoraxTUIRunner, type AgentTUIRenderer } from "./runner.js";
-import { detectSetupIssues } from "./setup-issues.js";
-import { createFakeSetupFlowRenderer } from "./test/fake-setup-flow-renderer.js";
+import { detectSetupIssues, formatSetupIssuesLine, type SetupIssue } from "./setup-issues.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -73,7 +72,7 @@ describe("BOOT_DETECTIONS against a real directory", () => {
     ]);
   });
 
-  it("opens only login during onboarding when inspection is unavailable", async () => {
+  it("renders boot setup issues before opening the composer when inspection is unavailable", async () => {
     const appRoot = await linkedAppRoot();
     const client = new Client({ host: "http://localhost:3000" });
     vi.spyOn(client, "info").mockRejectedValue(new Error("inspection unavailable"));
@@ -82,9 +81,13 @@ describe("BOOT_DETECTIONS against a real directory", () => {
       vi.fn(async () => Response.json({ revision: "snapshot-a" })),
     );
     const order: string[] = [];
-    const handle = vi.fn(async (command: { name: string }) => {
-      order.push(command.name);
-      return { message: `/${command.name} dismissed.` };
+    const issue: SetupIssue = {
+      kind: "attention",
+      label: "Local configuration needs attention",
+      command: "/info",
+    };
+    const renderSetupWarning = vi.fn(() => {
+      order.push("warning");
     });
     const readInput = vi.fn(async () => {
       order.push("prompt");
@@ -92,26 +95,20 @@ describe("BOOT_DETECTIONS against a real directory", () => {
     });
     const renderer: AgentTUIRenderer = {
       readInput,
-      setupFlow: createFakeSetupFlowRenderer(),
+      renderSetupWarning,
     };
     const runner = new CoraxTUIRunner({
       appRoot,
       client,
-      detectProjectIdentity: vi.fn(async () => undefined),
-      getVercelAuthStatus: vi.fn(async (): Promise<"authenticated"> => "authenticated"),
-      promptCommandHandler: { handle },
+      bootDetections: [{ id: "test-configuration", detect: () => [issue] }],
       renderer,
       serverUrl: "http://localhost:3000",
-      onboard: true,
     });
 
     await runner.run();
 
-    expect(handle).toHaveBeenCalledExactlyOnceWith(
-      { type: "extension", name: "login", argument: "" },
-      expect.objectContaining({ renderer, title: "corax", initialModelStep: "provider" }),
-    );
+    expect(renderSetupWarning).toHaveBeenCalledExactlyOnceWith(formatSetupIssuesLine([issue]));
     expect(readInput).toHaveBeenCalledOnce();
-    expect(order).toEqual(["login", "prompt"]);
+    expect(order).toEqual(["warning", "prompt"]);
   });
 });

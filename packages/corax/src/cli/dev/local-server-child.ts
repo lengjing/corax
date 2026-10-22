@@ -61,20 +61,28 @@ const intentReady = server.start().then(
     if (handle.kind === "existing" && process.connected) process.disconnect?.();
   },
   (error: unknown) => {
-    const value = error instanceof Error ? error : new Error(String(error));
-    const messages = [value.message];
-    const stacks = [value.stack ?? value.message];
-    let cause = value.cause;
-    const seen = new Set<unknown>([value]);
-    while (cause instanceof Error && !seen.has(cause)) {
-      seen.add(cause);
-      messages.push(cause.message);
-      stacks.push(`Caused by: ${cause.stack ?? cause.message}`);
-      cause = cause.cause;
-    }
-    send({ type: "failed", message: messages.join("\nCaused by: "), stack: stacks.join("\n") });
+    const { message, stack } = describeErrorChain(error);
+    send({ type: "failed", message, stack });
     process.exitCode = 1;
     if (process.connected) process.disconnect?.();
   },
 );
 void intentReady;
+
+/**
+ * Flattens an error and its `cause` chain so the parent can show the root
+ * failure (e.g. a provider error wrapped by boot) rather than only the outer
+ * wrapper. Cycles are cut by identity.
+ */
+function describeErrorChain(error: unknown): { message: string; stack: string } {
+  const root = error instanceof Error ? error : new Error(String(error));
+  const messages = [root.message];
+  const stacks = [root.stack ?? root.message];
+  const seen = new Set<unknown>([root]);
+  for (let cause = root.cause; cause instanceof Error && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+    messages.push(cause.message);
+    stacks.push(`Caused by: ${cause.stack ?? cause.message}`);
+  }
+  return { message: messages.join("\nCaused by: "), stack: stacks.join("\n") };
+}

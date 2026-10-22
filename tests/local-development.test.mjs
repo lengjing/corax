@@ -9,10 +9,7 @@ import test from "./support/test.mjs";
 
 import { createDevDiagnosticDump } from "../packages/corax/dist/src/cli/dev/diagnostic-dump.js";
 import { resolveLocalDevelopmentClientOptions } from "../packages/corax/dist/src/services/dev-client/client-options.js";
-import {
-  isPromptCommandAvailableFor,
-  promptCommandsFor,
-} from "../packages/corax/dist/src/cli/dev/tui/prompt-commands.js";
+import { promptCommandsFor } from "../packages/corax/dist/src/cli/dev/tui/prompt-commands.js";
 
 test("local diagnostic collection needs no external CLI or network", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "corax-diagnostics-"));
@@ -73,11 +70,8 @@ test("local TUI credentials are explicit rather than inherited from a cloud acco
   );
 });
 
-test("local command discovery does not offer the upstream hosted deployment flow", () => {
-  assert.equal(isPromptCommandAvailableFor("deploy", "local"), false);
-  assert.equal(
-    promptCommandsFor("local").some(({ name }) => name === "deploy"),
-    false,
-  );
-  assert.ok(promptCommandsFor("local").some(({ name }) => name === "info"));
+test("local command discovery does not offer the upstream hosted setup flows", () => {
+  const names = promptCommandsFor("local").map(({ name }) => name);
+  for (const hosted of ["deploy", "login", "model", "add"]) assert.ok(!names.includes(hosted));
+  assert.ok(names.includes("info"));
 });

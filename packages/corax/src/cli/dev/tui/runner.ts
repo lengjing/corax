@@ -11,11 +11,9 @@ import {
 import { isAbortError } from "#client/corax-agent-store-helpers.js";
 import { formatStrandedSessionNotice } from "./stranded-session.js";
 import { normalizeActionRequest, normalizeActionResult } from "#client/message-action-parts.js";
-import { isTerminalToolCallPart } from "./terminal-tool-part.js";
 import { userText } from "./transcript-parts.js";
 import { isTaskRetryRefusal } from "#protocol/task-tools.js";
 import type { SendTurnPayload } from "#client/types.js";
-import type { ModelAccessChange } from "#shared/model-connection.js";
 import type {
   AgentInfoResult,
   Client,
@@ -25,9 +23,6 @@ import type {
   MessageStreamEvent,
 } from "#client/index.js";
 import { renderApplicationInfo } from "#cli/commands/info.js";
-import type { CoraxCliSetupStepEvent, CoraxCliSetupTerminalEvent } from "#cli/telemetry/index.js";
-
-import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
 import {
   createDevelopmentRuntimeArtifactRefresher,
   type DevelopmentRuntimeArtifactRefresher,
@@ -42,7 +37,6 @@ import {
   type TuiSessionData,
 } from "./conversation-view.js";
 import { devBootPhase, type DevBootProgressReporter } from "#internal/dev-boot-progress.js";
-
 import {
   failureKey,
   formatFailureDetail,
@@ -52,7 +46,6 @@ import {
   isInterruptedError,
   localFailureHint,
 } from "./errors.js";
-
 import { probeAgentInfo } from "#services/dev-client/agent-info-probe.js";
 import { parseLogDisplayMode } from "./log-display-mode.js";
 import {
@@ -64,7 +57,6 @@ import {
   type ArgumentTypeaheadCommand,
 } from "./prompt-commands.js";
 import type { PromptArgumentSuggestion } from "./argument-typeahead.js";
-
 import {
   BOOT_DETECTIONS,
   detectSetupIssues,
@@ -74,17 +66,9 @@ import {
   type BootDetectionContext,
   type SetupIssue,
 } from "./setup-issues.js";
-import type { SetupFlowRenderer } from "./setup-flow.js";
 import type { TraceViewerRenderer } from "./traces/trace-viewer-session.js";
-
 import type { LogDisplayMode, TuiDisplayOptions } from "./types.js";
 import { TerminalRenderer, type TerminalInput, type TerminalOutput } from "./terminal-renderer.js";
-
-import {
-  createMcpConnectionStatusTracker,
-  type McpConnectionProbe,
-  type McpConnectionStatusTracker,
-} from "./mcp-connection-status.js";
 import type { DevDiagnostics } from "../diagnostics.js";
 import type { CommandLifecycle } from "../../shutdown.js";
 
@@ -197,12 +181,9 @@ export type AgentTUIRenderer = {
   renderSetupWarning?(text: string): void;
   /** Clears the setup attention line once its issue is resolved. */
   clearSetupWarning?(): void;
-  /** Commits the startup `/deploy` invocation to the transcript. */
-  renderCommandInvocation?(text: string): void;
   finishCommand?(outcome: CommandPresentation): void;
   choosePromptCommand?(commands: readonly PromptCommandSpec[]): Promise<string | undefined>;
   showInfoPanel?(text: string): Promise<void>;
-  readonly setupFlow?: SetupFlowRenderer;
   /**
    * The renderer's full-screen local trace viewer, opened by `/traces`.
    * The returned promise resolves when the user closes the viewer.
@@ -270,52 +251,16 @@ export type AgentTUIRenderer = {
   exitRequested?(): boolean;
 };
 
-export interface PromptCommandHandlerContext {
-  readonly renderer: AgentTUIRenderer;
-  readonly title: string;
-  /** Provider entry authorized by confirmed boot-time model-access evidence. */
-  readonly initialModelStep?: "provider";
-  readonly onOnboardingScreen?: (input: { readonly screen: string }) => void;
-  /** Live ChatGPT identity shown only inside model configuration UI. */
-  readonly chatGptAccountLabel?: string;
-  /** Settles runtime changes before the setup panel releases the screen. */
-  readonly settleOutcome?: (outcome: PromptCommandOutcome) => Promise<PromptCommandOutcome>;
-  readonly withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
-  readonly disabledConnectionReasons?: Readonly<Record<string, string>>;
-}
-
 /** One atomic transcript decision for an invocation, including no-output commands. */
 export type CommandPresentation =
   | { kind: "dismiss" }
   | { kind: "result"; message?: string; summary?: string };
-
-/** What one handled slash command leaves behind for the runner to apply. */
-export interface PromptCommandOutcome {
-  /** Outcome line rendered under the echoed command; absent renders nothing. */
-  message?: string;
-  /** The command failed; completed and cancelled commands share the normal settled presentation. */
-  failed?: true;
-  /** Replaces the echoed invocation once the command settles. */
-  summary?: string;
-  /** Post-command work after setup settles. */
-  effect?: ModelAccessChange;
-  cancelled?: true;
-}
-
-export interface PromptCommandHandler {
-  handle(
-    command: Extract<PromptCommand, { type: "extension" }>,
-    context: PromptCommandHandlerContext,
-  ): Promise<PromptCommandOutcome | undefined>;
-}
 
 type TuiStartup = {
   finish(): { draft: string; queuedPrompt: string | undefined };
 };
 
 export type CoraxTUIRunnerOptions = TuiDisplayOptions & {
-  /** Production TUI probe injected by the launcher; omitted in hermetic runners. */
-  probeMcpConnection?: McpConnectionProbe;
   /** Configured client for the conversation's sessions and their subagent streams. */
   client: Client;
   renderer?: AgentTUIRenderer;
@@ -332,25 +277,16 @@ export type CoraxTUIRunnerOptions = TuiDisplayOptions & {
    * artifacts while retaining its logical session.
    */
   serverUrl?: string;
-  /** Absolute local application root; omitted for remote `--url` sessions. */
+  /** Absolute local application root; omitted for remote sessions. */
   appRoot?: string;
   /** Seeds the editable prompt buffer for the first prompt. */
   initialInput?: string;
-  /** Explicit fresh-agent onboarding handoff from `corax init`. */
-  onboard?: boolean;
-  /** Reports timestamped steps and terminal result for fresh-agent onboarding. */
-  onOnboardingStep?: (input: CoraxCliSetupStepEvent) => void;
-  onOnboardingTerminal?: (input: CoraxCliSetupTerminalEvent) => void;
-  /** Handles non-core slash commands without adding feature branches to the runner. */
-  promptCommandHandler?: PromptCommandHandler;
   /** Commands shown in discovery for this local or remote session. */
   availablePromptCommands?: readonly PromptCommandSpec[];
-  /** Catalog entries available to inline `/model`, `/add`, and `/login` completion. */
+  /** Suggestions available to inline `/loglevel` completion. */
   argumentSuggestions?: (
     command: ArgumentTypeaheadCommand,
   ) => Promise<readonly PromptArgumentSuggestion[]>;
-  /** Gives setup subprocesses exclusive terminal and development-host ownership. */
-  withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
   /** Boot-time installation-state checks; defaults to the built-ins. */
   bootDetections?: readonly BootDetection[];
   /** Test seam for `/info`; defaults to the filesystem application inspector. */
@@ -379,15 +315,8 @@ export class CoraxTUIRunner {
   readonly #initialInput?: string;
   readonly #startup?: TuiStartup;
   #startupPrompt?: string;
-  /** Explicit fresh-agent onboarding handoff from `corax init`. */
-  readonly #onboard: boolean;
-  #reportedFirstResponse = false;
-  readonly #onOnboardingStep?: CoraxTUIRunnerOptions["onOnboardingStep"];
-  readonly #onOnboardingTerminal?: CoraxTUIRunnerOptions["onOnboardingTerminal"];
   #startupActive = true;
-  readonly #promptCommandHandler?: PromptCommandHandler;
   readonly #availablePromptCommands: readonly PromptCommandSpec[];
-  readonly #withExclusiveTerminal?: <T>(task: () => Promise<T>) => Promise<T>;
 
   readonly #bootDetections: readonly BootDetection[];
   readonly #inspectApplication: typeof inspectApplication;
@@ -402,17 +331,11 @@ export class CoraxTUIRunner {
   #agentInfoRevision = 0;
   /** Cheap-and-local boot detection issues. */
   #bootIssues: SetupIssue[] = [];
-  readonly #mcpConnectionStatus?: McpConnectionStatusTracker;
   #agentInfo?: AgentInfoResult;
   /** Closes the composer when something else needs the keyboard. */
   #inputController?: AbortController;
   /** Questions the user skipped; they stay open for the server to resolve. */
   readonly #dismissedInputs = new Set<string>();
-  /** Registry setups queued by tool results on root or child streams. */
-  readonly #pendingRegistrySetups: string[] = [];
-  #activeRegistrySetup?: string;
-  /** Tool calls whose registry handoff was already queued. */
-  readonly #handledHandoffs = new Set<string>();
   /** The last session error shown, so each renders once. */
   #reportedError?: Error;
   /** Failure cascades already recorded in diagnostics this turn. */
@@ -438,24 +361,11 @@ export class CoraxTUIRunner {
       prepareSend: (input) => this.#prepareSend(input),
     });
     this.#name = options.name ?? "corax";
-    this.#withExclusiveTerminal = options.withExclusiveTerminal;
     this.#formatTransportError = options.formatTransportError ?? toErrorMessage;
     if (options.initialInput !== undefined) this.#initialInput = options.initialInput;
     if (options.startup !== undefined) this.#startup = options.startup;
-    this.#onboard = options.onboard === true;
-    this.#onOnboardingStep = options.onOnboardingStep;
-    this.#onOnboardingTerminal = options.onOnboardingTerminal;
     if (options.appRoot !== undefined) {
       this.#appRoot = options.appRoot;
-      if (options.probeMcpConnection !== undefined) {
-        this.#mcpConnectionStatus = createMcpConnectionStatusTracker({
-          onChange: () => {},
-          probe: options.probeMcpConnection,
-        });
-      }
-    }
-    if (options.promptCommandHandler !== undefined) {
-      this.#promptCommandHandler = options.promptCommandHandler;
     }
     this.#availablePromptCommands = options.availablePromptCommands ?? PROMPT_COMMANDS;
 
@@ -479,7 +389,7 @@ export class CoraxTUIRunner {
     const serverUrl = this.#serverUrl;
     if (serverUrl === undefined) {
       this.#reportBeforeFirstPaint();
-      if (!this.#onboard) await this.#renderSetupIssues(undefined);
+      await this.#renderSetupIssues(undefined);
       return;
     }
 
@@ -499,7 +409,7 @@ export class CoraxTUIRunner {
     }
     this.#reportBeforeFirstPaint();
     const headerInfo = this.#replaceAgentInfo(info);
-    if (!this.#onboard) await this.#renderSetupIssues(headerInfo);
+    await this.#renderSetupIssues(headerInfo);
   }
 
   #finishStartup(): string | undefined {
@@ -549,44 +459,19 @@ export class CoraxTUIRunner {
       detachCoraxAgentStore(this.#store);
       // Restore captured stdout/stderr before a fatal error reaches the CLI.
       this.#renderer.shutdown?.();
-      this.#mcpConnectionStatus?.dispose();
     }
   }
 
   async #run() {
     const title = this.#name;
-    let prompt: string | undefined;
     this.#renderer.setStartupPhase?.("starting");
     await this.#loadInitialAgentInfo();
-    this.#mcpConnectionStatus?.refresh();
-
-    const initialAgentOnboarding =
-      (this.#onboard ||
-        (this.#agentInfo?.agent.model.endpoint?.kind === "gateway" &&
-          !this.#agentInfo.agent.model.endpoint.connected)) &&
-      this.#appRoot !== undefined &&
-      this.#promptCommandHandler !== undefined &&
-      this.#renderer.setupFlow !== undefined;
-    let startupOutcome: PromptCommandOutcome | undefined;
-    if (initialAgentOnboarding) {
-      this.#renderer.setStartupPhase?.("connecting");
-      startupOutcome = await this.#runInitialAgentOnboarding(title);
-    }
-
     let initialDraft = this.#finishStartup();
-    if (startupOutcome?.cancelled || startupOutcome?.failed) {
-      initialDraft = [this.#startupPrompt, initialDraft].filter(Boolean).join("\n\n") || undefined;
-    } else {
-      prompt = this.#startupPrompt;
-    }
+    let prompt = this.#startupPrompt;
     this.#startupActive = false;
     this.#replaceAgentInfo(this.#agentInfo);
     this.#paintSetupAttention();
     this.#renderer.setStartupPhase?.(undefined);
-    if (!initialAgentOnboarding || startupOutcome?.cancelled || startupOutcome?.failed) {
-      if (startupOutcome?.message !== undefined)
-        this.#finishCommand({ kind: "result", message: startupOutcome.message });
-    }
 
     // One loop for everything that takes the keyboard. The store streams the
     // session throughout, so the composer stays open while work runs.
@@ -595,22 +480,9 @@ export class CoraxTUIRunner {
         this.#replaceSession();
         continue;
       }
-      // Answering first lets the agent continue while setup owns the terminal.
+      // Answer pending requests before returning to the composer so the agent can continue.
       if (this.#answerableInputs().length > 0) {
         await this.#answerInputs(title);
-        continue;
-      }
-      // Setup takes the terminal, so it waits for the session to settle.
-      const registrySetup = isWorking(this.#store.snapshot.status)
-        ? undefined
-        : this.#pendingRegistrySetups.shift();
-      if (registrySetup !== undefined) {
-        this.#activeRegistrySetup = registrySetup;
-        try {
-          await this.#openRegistrySetup(registrySetup);
-        } finally {
-          this.#activeRegistrySetup = undefined;
-        }
         continue;
       }
       if (prompt === undefined) {
@@ -636,17 +508,14 @@ export class CoraxTUIRunner {
         this.#submitMessage(text);
         continue;
       }
-      const outcome = await this.#runCommand(command, title);
+      const outcome = await this.#runCommand(command);
       if (outcome === "exit") return;
       if (outcome !== undefined) initialDraft = outcome.draft;
     }
   }
 
   /** Runs one slash command; returns `"exit"` or a draft for the next prompt. */
-  async #runCommand(
-    command: PromptCommand,
-    title: string,
-  ): Promise<"exit" | { draft: string } | undefined> {
+  async #runCommand(command: PromptCommand): Promise<"exit" | { draft: string } | undefined> {
     switch (command.type) {
       case "exit":
         this.#finishCommand({ kind: "dismiss" });
@@ -680,8 +549,7 @@ export class CoraxTUIRunner {
           invoke: () => this.#store.clear(),
         });
         return;
-      // Help renders locally; unlike extension commands it must work even
-      // without a prompt-command handler (e.g. remote --url sessions).
+      // Help renders locally for both local and remote sessions.
       case "help": {
         if (this.#renderer.choosePromptCommand === undefined) {
           this.#finishCommand({
@@ -696,8 +564,7 @@ export class CoraxTUIRunner {
       case "info":
         await this.#showApplicationInfo();
         return;
-      // Like /help, /loglevel renders locally: it adjusts the renderer's own
-      // log filter, so it works without a prompt-command handler.
+      // /loglevel adjusts the renderer's own log filter.
       case "loglevel": {
         const outcome = this.#applyLogLevelCommand(command.argument);
         const error =
@@ -712,9 +579,6 @@ export class CoraxTUIRunner {
       // disk and owns the screen until the user closes it.
       case "traces":
         await this.#openTraceViewer(command.argument);
-        return;
-      case "extension":
-        await this.#executeExtensionCommand(command, title, { trigger: "command" });
         return;
     }
   }
@@ -758,14 +622,8 @@ export class CoraxTUIRunner {
     );
     this.#reportSessionError(snapshot.error, snapshot.data.sessionFailed);
     this.#recordAgentToolFailures(snapshot.conversation);
-    this.#reportFirstResponse(snapshot.conversation);
-    this.#queueRegistryHandoffs(snapshot.conversation);
     this.#restoreCancelledMessage(snapshot.conversation);
-    if (
-      snapshot.data.sessionFailed ||
-      this.#answerableInputs().length > 0 ||
-      (!isWorking(snapshot.status) && this.#pendingRegistrySetups.length > 0)
-    ) {
+    if (snapshot.data.sessionFailed || this.#answerableInputs().length > 0) {
       this.#inputController?.abort();
     }
   }
@@ -812,18 +670,6 @@ export class CoraxTUIRunner {
     if (notice === undefined) return false;
     this.#renderer.renderError?.("Session stranded", notice);
     return true;
-  }
-
-  #reportFirstResponse(conversation: ConversationState): void {
-    if (!this.#onboard || this.#reportedFirstResponse) return;
-    const responded = conversation.messages.some(
-      (message) =>
-        message.role === "assistant" &&
-        message.parts.some((part) => part.type === "text" && part.text.length > 0),
-    );
-    if (!responded) return;
-    this.#reportedFirstResponse = true;
-    this.#onOnboardingStep?.({ flow: "onboarding", step: "first_response" });
   }
 
   /** Open requests the user can answer now, including while other work runs. */
@@ -914,7 +760,6 @@ export class CoraxTUIRunner {
 
   #clearRunnerState(): void {
     this.#dismissedInputs.clear();
-    this.#handledHandoffs.clear();
     this.#recordedFailures.clear();
     this.#runtimeArtifacts?.clear();
   }
@@ -971,7 +816,7 @@ export class CoraxTUIRunner {
   }
 
   /**
-   * Reads the composer, closing it when a request or setup needs the keyboard.
+   * Reads the composer, closing it when a request needs the keyboard.
    * Resolves `undefined` only for that runner-owned close; a renderer that
    * ends input on its own ends the session.
    */
@@ -1067,28 +912,6 @@ export class CoraxTUIRunner {
     }
   }
 
-  /** Queues setup for registry items whose install needs the terminal. */
-  #queueRegistryHandoffs(conversation: ConversationState): void {
-    if (this.#appRoot === undefined) return;
-    for (const { callId, address } of registryHandoffs(conversation)) {
-      if (this.#handledHandoffs.has(callId)) continue;
-      this.#handledHandoffs.add(callId);
-      if (this.#activeRegistrySetup === address || this.#pendingRegistrySetups.includes(address)) {
-        continue;
-      }
-      this.#pendingRegistrySetups.push(address);
-    }
-  }
-
-  async #openRegistrySetup(address: string): Promise<void> {
-    this.#renderer.renderCommandInvocation?.(`/add ${address}`);
-    await this.#executeExtensionCommand(
-      { type: "extension", name: "add", argument: address },
-      "Add to your agent",
-      { trigger: "command" },
-    );
-  }
-
   async #renderSetupIssues(info: AgentInfoResult | undefined): Promise<void> {
     if (this.#appRoot === undefined) return;
     const context: BootDetectionContext = {
@@ -1113,8 +936,8 @@ export class CoraxTUIRunner {
   }
 
   /**
-   * Re-evaluates the attention line after a setup command changed local state,
-   * so resolved model or connection issues do not linger in the prompt.
+   * Re-evaluates the attention line after runtime inspection changes, so
+   * resolved model or connection issues do not linger in the prompt.
    */
   async #refreshSetupAttention(info: AgentInfoResult | undefined): Promise<void> {
     const appRoot = this.#appRoot;
@@ -1143,106 +966,6 @@ export class CoraxTUIRunner {
       if (notice !== "") this.#renderer.renderNotice?.(notice);
     }
   }
-
-  async #handleExtensionCommand(
-    command: Extract<PromptCommand, { type: "extension" }>,
-    input: Pick<PromptCommandHandlerContext, "initialModelStep" | "title">,
-  ): Promise<PromptCommandOutcome | undefined> {
-    const handler = this.#promptCommandHandler;
-    if (handler === undefined)
-      return { message: `/${command.name} is not available in this session.` };
-
-    const endpoint = this.#agentInfo?.agent.model.endpoint;
-    const baseContext: PromptCommandHandlerContext = {
-      ...input,
-      renderer: this.#renderer,
-      settleOutcome: (outcome) => this.#settleCommandOutcome(outcome),
-      chatGptAccountLabel:
-        endpoint?.kind === "chatgpt" && endpoint.state === "ready"
-          ? endpoint.accountLabel
-          : undefined,
-      withExclusiveTerminal: this.#withExclusiveTerminal,
-    };
-    const disabledConnectionReasons = this.#mcpConnectionStatus?.current();
-    const context: PromptCommandHandlerContext =
-      disabledConnectionReasons !== undefined && Object.keys(disabledConnectionReasons).length > 0
-        ? { ...baseContext, disabledConnectionReasons }
-        : baseContext;
-    return await handler.handle(command, context);
-  }
-
-  async #applyCommandEffect(effect: PromptCommandOutcome["effect"]): Promise<void> {
-    if (effect?.kind === "model-access-changed") {
-      await this.#refreshModelAccess(effect);
-    }
-  }
-
-  async #settleCommandOutcome(outcome: PromptCommandOutcome): Promise<PromptCommandOutcome> {
-    if (outcome.effect === undefined) return outcome;
-    const refreshTimer =
-      outcome.effect.kind === "model-access-changed" && outcome.effect.reload
-        ? setTimeout(() => {
-            if (this.#startupActive) this.#renderer.setStartupPhase?.("updating");
-            this.#renderer.setupFlow?.setStatus("Loading selected model…");
-          }, 150)
-        : undefined;
-    try {
-      await this.#applyCommandEffect(outcome.effect);
-      const { effect: _effect, ...settled } = outcome;
-      return settled;
-    } catch {
-      return {
-        failed: true,
-        message:
-          "Settings were saved, but the agent could not reload. Retry the command or restart corax dev.",
-      };
-    } finally {
-      clearTimeout(refreshTimer);
-    }
-  }
-
-  async #executeExtensionCommand(
-    command: Extract<PromptCommand, { type: "extension" }>,
-    title: string,
-    input: {
-      readonly trigger: "startup" | "command";
-      readonly initialModelStep?: "provider";
-      readonly onOnboardingScreen?: PromptCommandHandlerContext["onOnboardingScreen"];
-      readonly suppressSuccessfulTranscript?: true;
-      readonly suppressCancelledTranscript?: true;
-    },
-  ): Promise<PromptCommandOutcome | undefined> {
-    const pendingOutcome = await this.#handleExtensionCommand(command, { ...input, title });
-    const outcome =
-      pendingOutcome === undefined ? undefined : await this.#settleCommandOutcome(pendingOutcome);
-    const suppressTranscript =
-      (input.suppressSuccessfulTranscript === true && outcome?.failed !== true) ||
-      (input.suppressCancelledTranscript === true && outcome?.cancelled === true);
-    if (!suppressTranscript && input.trigger !== "startup") {
-      if (outcome === undefined) this.#finishCommand({ kind: "result" });
-      else
-        this.#finishCommand({ kind: "result", message: outcome.message, summary: outcome.summary });
-    }
-    return outcome;
-  }
-
-  async #runInitialAgentOnboarding(title: string): Promise<PromptCommandOutcome | undefined> {
-    this.#onOnboardingStep?.({ flow: "onboarding", step: "model_provider" });
-    const outcome = await this.#executeExtensionCommand(
-      { type: "extension", name: "login", argument: "" },
-      title,
-      { trigger: "startup", initialModelStep: "provider" },
-    );
-    if (!outcome?.cancelled && outcome?.failed !== true)
-      this.#onOnboardingStep?.({ flow: "onboarding", step: "connection_ready" });
-    this.#onOnboardingTerminal?.({
-      flow: "onboarding",
-      step: "model_provider",
-      result: outcome?.cancelled ? "cancelled" : outcome?.failed === true ? "error" : "completed",
-    });
-    return outcome;
-  }
-
 
   /**
    * Opens the renderer's trace viewer on the local spool. The viewer owns the
@@ -1325,28 +1048,6 @@ export class CoraxTUIRunner {
       case "all":
         return "Showing all logs.";
     }
-  }
-
-  async #refreshModelAccess(effect: ModelAccessChange): Promise<void> {
-    const appRoot = this.#appRoot;
-    if (appRoot === undefined) return;
-    // Invalidate inspections started before this selection, including watcher notifications.
-    ++this.#agentInfoRevision;
-    ++this.#setupAttentionRevision;
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    if (effect.reload) await this.#runtimeArtifacts?.refreshAfterSourceChange({});
-    if (effect.model && this.#agentInfo) {
-      this.#replaceAgentInfo({
-        ...this.#agentInfo,
-        agent: {
-          ...this.#agentInfo.agent,
-          model: { ...this.#agentInfo.agent.model, ...effect.model },
-        },
-      });
-    } else this.#replaceAgentInfo(this.#agentInfo);
-    this.#bootIssues = [];
-    this.#paintSetupAttention();
-    void this.#refreshAgentInfo();
   }
 
   async #refreshAgentInfo(notify = false): Promise<void> {
@@ -1495,49 +1196,6 @@ function formatAgentUpdateNotice(
   }
 
   return "Agent updated.";
-}
-
-/** Tool results in the conversation that hand a registry install to the terminal. */
-function registryHandoffs(
-  conversation: ConversationState,
-): Array<{ readonly callId: string; readonly address: string }> {
-  const handoffs: Array<{ callId: string; address: string }> = [];
-  const collect = (state: ConversationState, subagentName: string | undefined) => {
-    for (const message of state.messages) {
-      for (const part of message.parts) {
-        if (!isTerminalToolCallPart(part) || part.state !== "output-available" || part.partial) {
-          continue;
-        }
-        const address = registryHandoffAddress(subagentName, part.toolName, part.output);
-        if (address !== undefined) handoffs.push({ callId: part.toolCallId, address });
-      }
-    }
-  };
-  collect(conversation, undefined);
-  for (const agent of Object.values(conversation.agents)) {
-    if (agent.observation.status === "not-followed") continue;
-    const child = agent.observation.conversation;
-    if (child !== undefined) collect(child, agent.name);
-  }
-  return handoffs;
-}
-
-/** Returns the registry address carried by a packaged self-modification terminal handoff. */
-export function registryHandoffAddress(
-  subagentName: string | undefined,
-  toolName: string | undefined,
-  output: unknown,
-): string | undefined {
-  const isPackagedChild =
-    subagentName === "self-modification__agent" && toolName === "registry_add";
-  const isLegacyRoot = subagentName === undefined && toolName === "selfmod__registry_add";
-  if ((!isPackagedChild && !isLegacyRoot) || typeof output !== "object" || output === null) {
-    return undefined;
-  }
-  const result = output as { address?: unknown; status?: unknown };
-  return result.status === "needs-terminal" && typeof result.address === "string"
-    ? result.address
-    : undefined;
 }
 
 function inputContext(

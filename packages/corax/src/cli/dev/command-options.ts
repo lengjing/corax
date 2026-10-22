@@ -14,8 +14,6 @@ export interface DevelopmentCliOptions {
   header?: DevelopmentRequestHeaders;
   host?: string;
   input?: string;
-  /** Internal fresh-agent handoff from `corax init`. */
-  onboard?: boolean;
   logs?: LogDisplayMode;
   name?: string;
   port?: number;

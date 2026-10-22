@@ -1,9 +1,8 @@
 /**
  * Visual language for the `corax dev` terminal UI.
  *
- * The palette and iconography follow a monochrome CLI convention: a monochrome
- * base (bold white primary, dim gray secondary) anchored by the `▲` brand
- * mark, with restrained accent colors reserved for status — green `✓`, red
+ * The palette and iconography stay deliberately monochrome: a base of bold
+ * white primary and dim gray secondary anchored by the `▲` brand mark, with restrained accent colors reserved for status — green `✓`, red
  * `⨯`, yellow `⚠`/spinner — and cyan for interactive/link text. Everything
  * here is pure string composition so blocks, the live region, and the agent
  * header can share one source of truth for glyphs and color.

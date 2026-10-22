@@ -11,107 +11,77 @@ import {
 import { stripAnsi } from "#cli/ui/terminal-text.js";
 import { createTheme } from "./theme.js";
 
-const models = [
-  {
-    value: "anthropic/claude-sonnet",
-    label: "Claude Sonnet",
-    hint: "Anthropic",
-    next: [
-      { value: "default", label: "default" },
-      { value: "high", label: "high" },
-    ],
-  },
-  { value: "openai/gpt-5", label: "GPT-5", hint: "OpenAI" },
+const logLevels = [
+  { value: "error", label: "error", hint: "Errors only" },
+  { value: "warn", label: "warn", hint: "Warnings and errors" },
 ];
 
 describe("argumentTypeaheadQuery", () => {
-  it("parses a model's active model or reasoning token", () => {
-    expect(argumentTypeaheadQuery("/model ant")).toEqual({
-      command: "model",
-      argument: "ant",
+  it("parses the active log level token", () => {
+    expect(argumentTypeaheadQuery("/loglevel er")).toEqual({
+      command: "loglevel",
+      argument: "er",
       completed: [],
-      argumentStart: 7,
+      argumentStart: 10,
     });
-    expect(argumentTypeaheadQuery("/model anthropic/claude-sonnet ")).toEqual({
-      command: "model",
+    expect(argumentTypeaheadQuery("/loglevel ")).toEqual({
+      command: "loglevel",
       argument: "",
-      completed: ["anthropic/claude-sonnet"],
-      argumentStart: 31,
-    });
-    expect(argumentTypeaheadQuery("/add  channel/slack")).toEqual({
-      command: "add",
-      argument: "channel/slack",
       completed: [],
-      argumentStart: 6,
+      argumentStart: 10,
     });
-    expect(argumentTypeaheadQuery("/login ver")).toEqual({
-      command: "login",
-      argument: "ver",
+    expect(argumentTypeaheadQuery("/loglevel  warn")).toEqual({
+      command: "loglevel",
+      argument: "warn",
       completed: [],
-      argumentStart: 7,
+      argumentStart: 11,
     });
-    expect(argumentTypeaheadQuery("/add channel/slack ")).toBeUndefined();
-    expect(argumentTypeaheadQuery("/login vercel ")).toBeUndefined();
-    expect(argumentTypeaheadQuery("/model anthropic/claude-sonnet high ")).toBeUndefined();
-    expect(argumentTypeaheadQuery("/add one two")).toBeUndefined();
+    expect(argumentTypeaheadQuery("/loglevel warn ")).toBeUndefined();
+    expect(argumentTypeaheadQuery("/loglevel one two")).toBeUndefined();
     expect(argumentTypeaheadQuery("hello")).toBeUndefined();
   });
 });
 
 describe("argumentTypeaheadFor", () => {
-  it("filters models, then offers their reasoning levels", () => {
-    let state = argumentTypeaheadFor(
-      { command: "model", argument: "anth", completed: [], argumentStart: 7 },
-      models,
+  it("filters and completes log levels", () => {
+    const state = argumentTypeaheadFor(
+      { command: "loglevel", argument: "wa", completed: [], argumentStart: 10 },
+      logLevels,
     );
     expect(state.suggestions).toHaveLength(1);
     expect(argumentTypeaheadCompletion(state, selectedArgumentSuggestion(state)!)).toBe(
-      "/model anthropic/claude-sonnet",
-    );
-
-    state = argumentTypeaheadFor(
-      {
-        command: "model",
-        argument: "h",
-        completed: ["anthropic/claude-sonnet"],
-        argumentStart: 31,
-      },
-      models,
-    );
-    expect(state.suggestions.map((suggestion) => suggestion.value)).toEqual(["high"]);
-    expect(argumentTypeaheadCompletion(state, selectedArgumentSuggestion(state)!)).toBe(
-      "/model anthropic/claude-sonnet high",
+      "/loglevel warn",
     );
   });
 
   it("preserves the selected suggestion", () => {
     let state = argumentTypeaheadFor(
-      { command: "model", argument: "", completed: [], argumentStart: 7 },
-      models,
+      { command: "loglevel", argument: "", completed: [], argumentStart: 10 },
+      logLevels,
     );
     state = moveArgumentTypeaheadSelection(state, 1);
-    expect(selectedArgumentSuggestion(state)).toMatchObject({ value: "openai/gpt-5" });
+    expect(selectedArgumentSuggestion(state)).toMatchObject({ value: "warn" });
   });
 
   it("sanitizes catalog text before it can render or complete", () => {
     const state = argumentTypeaheadFor(
-      { command: "model", argument: "", completed: [], argumentStart: 7 },
-      [{ value: "openai/\u001b]52;c;clipboard\u0007gpt", label: "GPT", hint: "\u001b[31mred" }],
+      { command: "loglevel", argument: "", completed: [], argumentStart: 10 },
+      [{ value: "\u001b]52;c;clipboard\u0007warn", label: "warn", hint: "\u001b[31mred" }],
     );
-    expect(state.suggestions[0]).toMatchObject({ value: "openai/gpt", hint: "red" });
+    expect(state.suggestions[0]).toMatchObject({ value: "warn", hint: "red" });
     expect(argumentTypeaheadCompletion(state, selectedArgumentSuggestion(state)!)).toBe(
-      "/model openai/gpt",
+      "/loglevel warn",
     );
   });
 
   it("keeps the selected item visible in an eight-row window", () => {
     const suggestions = Array.from({ length: 9 }, (_, index) => ({
-      value: `provider/model-${index}`,
-      label: `Model ${index}`,
+      value: `level-${index}`,
+      label: `Level ${index}`,
     }));
     const state = {
       ...argumentTypeaheadFor(
-        { command: "model", argument: "", completed: [], argumentStart: 7 },
+        { command: "loglevel", argument: "", completed: [], argumentStart: 10 },
         suggestions,
       ),
       selectedIndex: 8,
@@ -122,7 +92,7 @@ describe("argumentTypeaheadFor", () => {
       80,
     ).map(stripAnsi);
     expect(rows).toHaveLength(8);
-    expect(rows.some((row) => row.includes("model-8"))).toBe(true);
-    expect(rows.some((row) => row.includes("model-0"))).toBe(false);
+    expect(rows.some((row) => row.includes("level-8"))).toBe(true);
+    expect(rows.some((row) => row.includes("level-0"))).toBe(false);
   });
 });

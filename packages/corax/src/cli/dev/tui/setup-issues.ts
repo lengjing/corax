@@ -153,7 +153,6 @@ const modelProvider: BootDetection = {
 /** The built-in boot detections, run in order. */
 export const BOOT_DETECTIONS: readonly BootDetection[] = [modelProvider];
 
-
 /**
  * Runs the boot detections and aggregates their issues. Each detection is
  * individually guarded: one that throws contributes nothing and never blocks

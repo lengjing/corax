@@ -41,26 +41,7 @@ describe("runDevelopmentTui", () => {
     expect(first.client).not.toBe(second.client);
   });
 
-  it("offers default but no incompatible effort for toggle-only models", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                id: "anthropic/claude-toggle-only",
-                name: "Claude Toggle Only",
-                type: "language",
-                owned_by: "anthropic",
-                tags: ["reasoning", "web-search"],
-                reasoning_options: [{ type: "toggle" }],
-              },
-            ],
-          }),
-        ),
-      ),
-    );
+  it("offers log levels for inline argument completion", async () => {
     await runDevelopmentTui({
       target: {
         kind: "local",
@@ -69,14 +50,13 @@ describe("runDevelopmentTui", () => {
       },
     });
 
-    const suggestions = await mocks.runnerOptions[0]?.argumentSuggestions?.("model");
-    expect(suggestions).toEqual([
-      {
-        value: "anthropic/claude-toggle-only",
-        label: "anthropic/claude-toggle-only",
-        hint: "Anthropic",
-        next: [{ value: "default", label: "default" }],
-      },
+    const suggestions = await mocks.runnerOptions[0]?.argumentSuggestions?.("loglevel");
+    expect(suggestions?.map((suggestion) => suggestion.value)).toEqual([
+      "none",
+      "error",
+      "warn",
+      "debug",
+      "all",
     ]);
   });
 

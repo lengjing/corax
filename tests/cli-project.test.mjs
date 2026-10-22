@@ -14,7 +14,7 @@ const execute = promisify(execFile);
 const cli = fileURLToPath(new URL("../packages/corax/bin/corax.js", import.meta.url));
 
 test("each capability example is a valid flat agent with optional instructions", async () => {
-  for (const name of ["minimal", "channels", "memory", "sandbox", "basic-agent"]) {
+  for (const name of ["minimal", "channels", "memory", "sandbox", "basic"]) {
     const root = fileURLToPath(new URL(`../examples/${name}`, import.meta.url));
     const project = await resolveDiscoveryProject(root);
     assert.equal(project.layout, "flat", name);
@@ -34,13 +34,13 @@ test("Bun starts the supervised channels development child with its console prel
   for (const name of ["corax", "@ai-sdk/openai"])
     await symlink(fileURLToPath(new URL(`node_modules/${name}`, example)), join(project, "node_modules", name),
       process.platform === "win32" ? "junction" : "dir");
-  const { stdout } = await execute(process.execPath, ["--no-env-file",
+  const { stdout } = await execute(process.execPath, [
     fileURLToPath(new URL("./support/development-check.mjs", import.meta.url)), project],
     { cwd: tmpdir(), timeout: 50_000, maxBuffer: 2 * 1024 * 1024 });
   assert.match(stdout, /DEVELOPMENT_SMOKE=ok/);
 });
 
-test("--root selects an external flat project instead of the caller's directory", async (t) => {
+test("the CLI resolves the agent project from the working directory", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "corax-project-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }));
   const target = join(root, "target");
@@ -48,16 +48,16 @@ test("--root selects an external flat project instead of the caller's directory"
   await writeFile(join(target, "agent.ts"), "export default {};\n");
   await writeFile(join(target, "package.json"), JSON.stringify({ name: "external", dependencies: { corax: "0.1.0" } }));
   const { stdout } = await execute(process.execPath,
-    ["--no-env-file", cli, "dev", "--root", target, "--help"],
-    { cwd: root, timeout: 30_000 });
+    [cli, "dev", "--help"],
+    { cwd: target, timeout: 30_000 });
   assert.match(stdout, /dev/);
   assert.equal((await resolveDiscoveryProject(target)).agentRoot, target);
   assert.equal(resolveAuthoredPackageRoot(target), target);
   assert.equal(resolveAuthoredPackageRoot(join(target, "agent.ts")), target);
   await assert.rejects(execute(process.execPath,
-    ["--no-env-file", cli, "build", "--root", root],
-    { cwd: target, timeout: 10_000 }), (error) => {
-      assert.match(error.stderr, /Missing .*agent\.ts/);
+    [cli, "build"],
+    { cwd: root, timeout: 10_000 }), (error) => {
+      assert.match(error.stderr, /No corax project contains/);
       return true;
     });
 });

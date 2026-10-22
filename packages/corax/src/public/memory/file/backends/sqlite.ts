@@ -8,16 +8,15 @@ import {
 } from "#public/memory/file/backend.js";
 
 export interface SqliteMemoryOptions {
+  /** Database file; defaults to `.corax/memory.sqlite` under the working directory. */
   readonly path?: string;
 }
 
+const DEFAULT_MEMORY_PATH = ".corax/memory.sqlite";
+
 /** Process-independent, optimistic document writes backed by a local SQLite database. */
 export function sqliteMemory(options: SqliteMemoryOptions = {}): MemoryDocumentBackend {
-  const path = resolve(
-    options.path ||
-      process.env.CORAX_MEMORY_SQLITE_PATH ||
-      `${process.env.CORAX_DATA_DIR || ".corax"}/memory.sqlite`,
-  );
+  const path = resolve(options.path ?? DEFAULT_MEMORY_PATH);
   const open = () => {
     mkdirSync(dirname(path), { recursive: true });
     const db = new Database(path);

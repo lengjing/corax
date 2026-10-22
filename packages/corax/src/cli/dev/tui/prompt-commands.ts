@@ -1,5 +1,3 @@
-export type PromptCommandExtensionName = "login" | "model" | "add" | "deploy";
-
 type PromptCommandTarget = "local" | "remote";
 
 /** The slash commands the prompt accepts. */
@@ -12,21 +10,20 @@ export type PromptCommand =
   | { type: "help" }
   | { type: "info" }
   | { type: "loglevel"; argument: string }
-  | { type: "traces"; argument: string }
-  | { type: "extension"; name: PromptCommandExtensionName; argument: string };
+  | { type: "traces"; argument: string };
 
 /**
  * Metadata for one slash command. The registry describes commands — their
  * names, aliases, and discovery copy — it never executes them: dispatch stays
- * with the runner and the prompt-command handler.
+ * with the runner.
  */
 export interface PromptCommandSpec {
-  /** Canonical name without the slash, e.g. "model". */
+  /** Canonical name without the slash, e.g. "loglevel". */
   readonly name: string;
   readonly aliases: readonly string[];
   /** One-line discovery copy shown by the typeahead. */
   readonly description: string;
-  /** Optional argument shape shown dim after the name, e.g. "[provider/model]". */
+  /** Optional argument shape shown dim after the name, e.g. "[trace]". */
   readonly argumentHint?: string;
   /** Accepts a trailing argument (enables `/name <arg>` parsing). */
   readonly takesArgument: boolean;
@@ -48,17 +45,6 @@ interface PromptCommandDefinition extends PromptCommandSpec {
  * transcript-echo suppression, and command discovery cannot drift apart.
  */
 const PROMPT_COMMAND_DEFINITIONS = [
-  {
-    name: "model",
-    history: "omit",
-    aliases: [],
-    description: "Show or save the self-hosted model configuration",
-    argumentHint: "[model-id]",
-    takesArgument: true,
-    typeahead: { maxArguments: 2, loadingLabel: "models" },
-    build: (argument) => ({ type: "extension", name: "model", argument }),
-    targets: ["local"],
-  },
   {
     name: "new",
     history: "keep",
@@ -94,27 +80,6 @@ const PROMPT_COMMAND_DEFINITIONS = [
     takesArgument: false,
     build: () => ({ type: "cancel" }),
     targets: ["local", "remote"],
-  },
-  {
-    name: "login",
-    history: "omit",
-    aliases: [],
-    description: "Show local API credential configuration",
-    argumentHint: "",
-    takesArgument: true,
-    typeahead: { maxArguments: 1, loadingLabel: "connections" },
-    build: (argument) => ({ type: "extension", name: "login", argument }),
-    targets: ["local"],
-  },
-  {
-    name: "add",
-    history: "omit",
-    aliases: [],
-    description: "Show how to add local tools and connections",
-    takesArgument: true,
-    typeahead: { maxArguments: 1, loadingLabel: "registry" },
-    build: (argument) => ({ type: "extension", name: "add", argument }),
-    targets: ["local"],
   },
   {
     name: "traces",
@@ -177,7 +142,7 @@ export function promptCommandsFor(target: PromptCommandTarget): readonly PromptC
   const commands = PROMPT_COMMAND_DEFINITIONS.filter((definition) =>
     definition.targets.some((supportedTarget) => supportedTarget === target),
   );
-  // Remote sessions have no model picker, so keep bare `/` from defaulting to /new.
+  // Lead remote discovery with help rather than the session-reset command.
   if (target === "remote") {
     return [
       ...commands.filter((command) => command.name === "help"),
@@ -187,23 +152,12 @@ export function promptCommandsFor(target: PromptCommandTarget): readonly PromptC
   return commands;
 }
 
-/** Whether a command runs against this target — the one authority dispatch shares with discovery. */
-export function isPromptCommandAvailableFor(
-  name: PromptCommandExtensionName,
-  target: PromptCommandTarget,
-): boolean {
-  const definition = PROMPT_COMMAND_DEFINITIONS.find((entry) => entry.name === name);
-  const targets: readonly PromptCommandTarget[] | undefined = definition?.targets;
-  return targets?.includes(target) ?? false;
-}
-
 /**
  * Recognizes the slash commands the prompt accepts. `/new` (and `/reset`)
  * starts a fresh session and transcript; `/cancel` stops the running turn;
  * `/clear` clears context in place; `/compact` queues context compaction; `/exit` (and
- * `/quit`) terminate the TUI like Ctrl+C; extension commands are dispatched
- * outside the runner. Anything else — including unknown `/text` — is a normal
- * message.
+ * `/quit`) terminate the TUI like Ctrl+C. Anything else — including unknown
+ * `/text` — is a normal message.
  */
 export function parsePromptCommand(prompt: string): PromptCommand | null {
   const match = promptCommandSpec(prompt);

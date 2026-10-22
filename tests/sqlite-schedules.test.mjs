@@ -46,13 +46,15 @@ function pump(path, at, deliver, application = "test-agent") {
 }
 
 test("the public dynamic-schedule default persists locally and rejects hosted-only definitions", async (t) => {
-  const { path, now } = await setup(t);
-  const previous = process.env.CORAX_SCHEDULES_SQLITE_PATH;
-  process.env.CORAX_SCHEDULES_SQLITE_PATH = path;
-  t.after(() => {
-    if (previous === undefined) delete process.env.CORAX_SCHEDULES_SQLITE_PATH;
-    else process.env.CORAX_SCHEDULES_SQLITE_PATH = previous;
+  const root = await mkdtemp(join(tmpdir(), "corax-schedules-"));
+  const previousCwd = process.cwd();
+  process.chdir(root);
+  t.after(async () => {
+    process.chdir(previousCwd);
+    await rm(root, { recursive: true, force: true });
   });
+  const path = join(root, ".corax", "schedules.sqlite");
+  const now = Date.now();
   const definition = defineDynamicSchedules({
     inputSchema: { "~standard": { version: 1, vendor: "test", validate: (value) => ({ value }) } },
     auth: () => null,

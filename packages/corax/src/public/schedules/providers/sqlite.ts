@@ -12,6 +12,7 @@ import type {
 import type { ScheduleProviderContext } from "#public/schedules/provider-types.js";
 
 const PATH = Symbol.for("corax.sqlite-schedules.path");
+const DEFAULT_SCHEDULES_PATH = ".corax/schedules.sqlite";
 const LEASE_MS = 5 * 60_000;
 const MAX_DELIVERIES = 10;
 type Row = Record<string, string | number | bigint | Uint8Array | null>;
@@ -129,12 +130,11 @@ function enqueue(
 }
 
 /** Durable schedule management and occurrence queue for a self-hosted Bun service. */
-export function sqliteScheduleProvider(options: { readonly path?: string } = {}): ScheduleProvider {
-  const path = resolve(
-    options.path ||
-      process.env.CORAX_SCHEDULES_SQLITE_PATH ||
-      `${process.env.CORAX_DATA_DIR || ".corax"}/schedules.sqlite`,
-  );
+export function sqliteScheduleProvider(
+  /** `path` defaults to `.corax/schedules.sqlite` under the working directory. */
+  options: { readonly path?: string } = {},
+): ScheduleProvider {
+  const path = resolve(options.path ?? DEFAULT_SCHEDULES_PATH);
   const once = <T>(
     context: ScheduleProviderContext,
     operation: string,

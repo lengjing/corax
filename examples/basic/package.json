@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "bun ../../packages/corax/bin/corax.js dev",
+    "build": "bun ../../packages/corax/bin/corax.js build",
+    "start": "bun ../../packages/corax/bin/corax.js start",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

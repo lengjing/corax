@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -79,15 +79,15 @@ catch(error) { if(error.name!=='MemoryDocumentConflictError') throw error; conso
 });
 
 test("default memory persists locally even when cloud environment markers are present", async (t) => {
-  const path = await database(t);
-  const previous = { path: process.env.CORAX_MEMORY_SQLITE_PATH, vercel: process.env.VERCEL };
-  process.env.CORAX_MEMORY_SQLITE_PATH = path;
+  const root = await mkdtemp(join(tmpdir(), "corax-memory-"));
+  const previous = { cwd: process.cwd(), vercel: process.env.VERCEL };
+  process.chdir(root);
   process.env.VERCEL = "1";
-  t.after(() => {
-    if (previous.path === undefined) delete process.env.CORAX_MEMORY_SQLITE_PATH;
-    else process.env.CORAX_MEMORY_SQLITE_PATH = previous.path;
+  t.after(async () => {
+    process.chdir(previous.cwd);
     if (previous.vercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = previous.vercel;
+    await rm(root, { recursive: true, force: true });
   });
   const signal = new AbortController().signal;
   const saved = await defaultFileMemoryBackend().write({
@@ -96,6 +96,7 @@ test("default memory persists locally even when cloud environment markers are pr
     expectedVersion: null,
     signal,
   });
+  await access(join(root, ".corax", "memory.sqlite"));
   assert.deepEqual(await defaultFileMemoryBackend().read({ key: "private", signal }), saved);
   const aborted = AbortSignal.abort();
   await assert.rejects(

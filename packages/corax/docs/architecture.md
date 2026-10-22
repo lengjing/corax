@@ -14,7 +14,7 @@ examples/minimal/      最小根定义
 examples/channels/     根定义加渠道
 examples/memory/       根定义加 memory
 examples/sandbox/      根定义加 sandbox
-examples/basic-agent/  完整组合
+examples/basic/        完整组合
 scripts/release.mjs     发布包组装与验证
 tests/                 Bun Test 产品回归
 docs/                  产品文档
@@ -26,8 +26,8 @@ docs/                  产品文档
 packages/corax/bin/corax.js
     → 校验 Bun 版本、按需构建
     → dist/src/cli/run.js
-      → 解析 --root、读取 CORAX_* 启动默认值、切换到项目目录
       → 命令解析
+      → 从当前目录向上发现 agent 项目
       → 模块发现与编译
       → 终端/API 服务或生产构建
 ```

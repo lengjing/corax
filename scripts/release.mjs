@@ -94,7 +94,7 @@ async function stageRelease(stage) {
     engines: manifest.engines,
     packageManager: manifest.packageManager,
     dependencies: { corax: "file:./packages/corax.tgz" },
-    scripts: { corax: "bun --no-env-file node_modules/corax/bin/corax.js" },
+    scripts: { corax: "bun node_modules/corax/bin/corax.js" },
   }, null, 2));
   await runCommand([process.execPath, "install", "--production"], stage);
 }
