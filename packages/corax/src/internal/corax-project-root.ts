@@ -22,7 +22,7 @@ async function packageDeclaresCorax(
   return isJsonObject(dependencies) && typeof dependencies.corax === "string";
 }
 
-/** Find the nearest package boundary and return it only when it owns an corax project. */
+/** Find the nearest package boundary and return it only when it owns a corax project. */
 export async function findCoraxProjectRoot(
   startPath: string,
   options: { readonly source?: ProjectSource } = {},

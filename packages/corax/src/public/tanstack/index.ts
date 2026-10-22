@@ -99,7 +99,7 @@ function stopSpawnedDevServer(appRoot: string): void {
 }
 
 /**
- * Vite plugin for running an corax agent alongside a TanStack Start app.
+ * Vite plugin for running a corax agent alongside a TanStack Start app.
  *
  * TanStack Start serves through Nitro, so the app must register `nitro()` from
  * `nitro/vite`; `coraxTanStack` configures Nitro to route corax.

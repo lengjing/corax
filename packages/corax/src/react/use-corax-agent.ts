@@ -28,7 +28,7 @@ import type {
 export type { PrepareSend };
 
 /**
- * Lifecycle status of an corax agent session.
+ * Lifecycle status of a corax agent session.
  *
  * - `"ready"`: idle, accepting a new turn.
  * - `"resuming"`: checking an attached session for events; submission is disabled.
@@ -39,7 +39,7 @@ export type { PrepareSend };
 export type UseCoraxAgentStatus = CoraxAgentStoreStatus;
 
 /**
- * Snapshot of an corax agent session: `conversation` (canonical state), `data`
+ * Snapshot of a corax agent session: `conversation` (canonical state), `data`
  * (the selected view), `events` (the authoritative server stream), `session`
  * (resumable cursor), `status`, and `error`.
  */
@@ -94,7 +94,7 @@ export interface UseCoraxAgentOptions<TData> extends CoraxAgentStoreCallbacks<TD
    *
    * Defaults to same-origin corax routes such as `/corax/v1/...`. Pass a same-origin
    * prefix such as `/api` for an app-owned proxy, or an absolute origin to talk
-   * to an corax server directly.
+   * to a corax server directly.
    *
    * @default ""
    */
@@ -151,7 +151,7 @@ export function useCoraxAgent<TData>(
 ): UseCoraxAgentHelpers<TData>;
 
 /**
- * React hook that drives an corax session and projects its event stream into UI data.
+ * React hook that drives a corax session and projects its event stream into UI data.
  *
  * Returns the current snapshot (`data`, `events`, `session`, `status`, `error`)
  * plus the commands `prewarm`, `send`, `respond`, `resume`, `cancel`, and `reset`. With no reducer, `data` is the

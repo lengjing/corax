@@ -57,7 +57,7 @@ export async function resolveEffectiveRuntimeModel(input: {
   if (input.ctx === undefined) {
     const reference = input.session.agent.modelReference;
     if (reference === undefined) {
-      throw new Error("Dynamic model selection is unavailable outside an corax runtime context.");
+      throw new Error("Dynamic model selection is unavailable outside a corax runtime context.");
     }
     return {
       model: await input.config.resolveModel(reference),

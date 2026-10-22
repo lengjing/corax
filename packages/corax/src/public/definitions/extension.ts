@@ -72,7 +72,7 @@ function validateConfig(
 }
 
 /**
- * Declares an corax extension. Optionally takes a `config` schema — any Standard
+ * Declares a corax extension. Optionally takes a `config` schema — any Standard
  * Schema (e.g. a Zod object) — describing the settings a consuming agent passes
  * at the mount site.
  *

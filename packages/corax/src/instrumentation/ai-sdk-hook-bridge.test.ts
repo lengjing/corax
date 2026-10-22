@@ -219,7 +219,7 @@ describe("createAiSdkHookBridge", () => {
     expect(inputTokens).toBe(10);
   });
 
-  it("uses an corax-owned context runner while executing the model exactly once", async () => {
+  it("uses a corax-owned context runner while executing the model exactly once", async () => {
     const order: string[] = [];
     const hooks = createInstrumentationHooks([]);
     const bridge = createAiSdkHookBridge(scope, hooks, async (_operation, execute) => {

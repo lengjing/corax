@@ -83,7 +83,7 @@ export interface SandboxRemovePathOptions {
  * `readTextFile`, `writeFile`, `writeBinaryFile`, `writeTextFile`) are
  * pulled directly from the AI SDK {@link AiSdkSandbox} type, so authored
  * code that targets either surface uses identical signatures. `resolvePath`
- * is an corax-specific extension for `/workspace` path anchoring.
+ * is a corax-specific extension for `/workspace` path anchoring.
  *
  * Relative paths resolve from `/workspace`, the live working directory
  * for every provider. Absolute paths pass through unchanged.

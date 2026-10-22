@@ -55,7 +55,7 @@ describe("stageAttachmentsForAdapter", () => {
     expect(sandbox.commandLog).toEqual([]);
   });
 
-  it("stages a FilePart into the sandbox, rewrites data to an corax-sandbox: ref, and preserves mediaType", async () => {
+  it("stages a FilePart into the sandbox, rewrites data to a corax-sandbox: ref, and preserves mediaType", async () => {
     const sandbox = mockSandbox();
     const data = Buffer.from("id,name\n1,alpha\n", "utf8");
     const content: UserContent = [
@@ -76,7 +76,7 @@ describe("stageAttachmentsForAdapter", () => {
     // mediaType is preserved in parallel with the ref so AI SDK
     // consumers still see the expected shape.
     expect(filePart.mediaType).toBe("text/csv");
-    // data is an corax-sandbox: ref URL (NOT raw bytes) — the key
+    // data is a corax-sandbox: ref URL (NOT raw bytes) — the key
     // invariant the refactor establishes.
     expect(isSandboxRefUrl(filePart.data)).toBe(true);
     const ref = decodeSandboxRef(filePart.data as URL);

@@ -185,7 +185,7 @@ function once(child: ChildProcess, event: "exit"): Promise<void> {
 }
 
 /**
- * Starts a built Nitro server for an corax application.
+ * Starts a built Nitro server for a corax application.
  */
 export async function startProductionServer(
   rootDir: string,

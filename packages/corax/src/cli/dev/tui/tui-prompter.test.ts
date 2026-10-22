@@ -46,7 +46,7 @@ describe("createTuiPrompter", () => {
     await prompter.select({
       message: "extension/agent-browser",
       helpText: "Press Enter to continue.",
-      description: "Add browser automation tools to an corax agent.",
+      description: "Add browser automation tools to a corax agent.",
       metadata: [{ label: "Source", value: "Official corax registry" }],
       options: [{ value: "add", label: "Add to project" }],
     });
@@ -55,7 +55,7 @@ describe("createTuiPrompter", () => {
       expect.objectContaining({
         kind: "single",
         helpText: "Press Enter to continue.",
-        description: "Add browser automation tools to an corax agent.",
+        description: "Add browser automation tools to a corax agent.",
         metadata: [{ label: "Source", value: "Official corax registry" }],
       }),
     );

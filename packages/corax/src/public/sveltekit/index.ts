@@ -48,7 +48,7 @@ async function resolveCoraxDevProxyTarget(appRoot: string): Promise<string> {
 }
 
 /**
- * Vite plugin for running an corax agent alongside a SvelteKit app.
+ * Vite plugin for running a corax agent alongside a SvelteKit app.
  *
  * In development and local preview, `coraxSvelteKit` proxies corax protocol
  * endpoints to a local corax server. It resolves the server in order: the

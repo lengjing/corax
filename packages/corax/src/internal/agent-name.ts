@@ -1,6 +1,6 @@
 const PUBLIC_AGENT_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/;
 
-/** Whether a name is safe to expose as an corax public route segment. */
+/** Whether a name is safe to expose as a corax public route segment. */
 function isValidPublicAgentName(name: string): boolean {
   return PUBLIC_AGENT_NAME_PATTERN.test(name);
 }

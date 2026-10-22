@@ -110,7 +110,7 @@ export interface WithCoraxOptions {
    */
   readonly devServerTimeoutMs?: number;
   /**
-   * Path to an corax project root, relative to the Next.js app root unless
+   * Path to a corax project root, relative to the Next.js app root unless
    * absolute. The root may contain one `agent/` or an `agents/` workspace.
    * Defaults to the Next.js app root.
    */

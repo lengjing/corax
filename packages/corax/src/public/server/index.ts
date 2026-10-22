@@ -1,5 +1,5 @@
 /**
- * Server-side session access for code running inside an corax deployment,
+ * Server-side session access for code running inside a corax deployment,
  * such as hooks, tools, schedules, and channel routes.
  */
 

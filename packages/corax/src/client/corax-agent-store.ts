@@ -302,7 +302,7 @@ export class CoraxAgentStore<TData> {
       throw new Error("corax session is already processing a turn.");
     }
     if (this.#session === undefined) {
-      throw new Error("An corax session is required before resuming.");
+      throw new Error("A corax session is required before resuming.");
     }
 
     const session = this.#session;

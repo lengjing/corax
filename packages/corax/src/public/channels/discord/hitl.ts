@@ -170,8 +170,8 @@ export function isDiscordFreeformComponent(customId: string): boolean {
 }
 
 /**
- * Decodes an corax HITL component interaction into input responses. Empty array
- * if the custom id is not an corax HITL id; otherwise one response from the
+ * Decodes a corax HITL component interaction into input responses. Empty array
+ * if the custom id is not a corax HITL id; otherwise one response from the
  * encoded option id (buttons) or the first selected value (selects).
  */
 export function deriveComponentInputResponses(
@@ -193,7 +193,7 @@ export function deriveComponentInputResponses(
 }
 
 /**
- * Decodes an corax freeform modal submission into a single text input response.
+ * Decodes a corax freeform modal submission into a single text input response.
  * Empty array unless the custom id matches the freeform prefix and the freeform
  * text field is present.
  */

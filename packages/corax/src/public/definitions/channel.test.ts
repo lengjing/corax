@@ -99,7 +99,7 @@ describe("defineChannel", () => {
     expect(channel.cors).toEqual({});
   });
 
-  it("declares websocket routes with an corax-owned route discriminator", () => {
+  it("declares websocket routes with a corax-owned route discriminator", () => {
     const channel = defineChannel({
       routes: [
         WS("/ws", () => ({

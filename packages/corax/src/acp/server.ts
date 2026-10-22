@@ -5,7 +5,7 @@ import { CoraxAcpAdapter, type CoraxAcpAdapterOptions } from "#acp/adapter.js";
 import type { ClientOptions } from "#client/types.js";
 import { limitAcpLineBytes } from "#acp/line-limit.js";
 
-/** Configuration for one ACP stdio connection backed by an corax server. */
+/** Configuration for one ACP stdio connection backed by a corax server. */
 export interface RunAcpServerOptions {
   readonly auth?: ClientOptions["auth"];
   readonly coraxVersion: string;

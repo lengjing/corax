@@ -58,7 +58,7 @@ export interface ClientSessionContext {
   resolveHeaders(perRequest?: Readonly<Record<string, string>>): Promise<Headers>;
 }
 
-/** One fixed, ID-addressed conversation with an corax agent. */
+/** One fixed, ID-addressed conversation with a corax agent. */
 export class ClientSession {
   readonly #context: ClientSessionContext;
   #state: ClientSessionState;

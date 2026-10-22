@@ -66,7 +66,7 @@ export interface PhotonIMessageChannelConfig {
 export interface PhotonIMessageChannel extends ChatSdkChannel {}
 
 /**
- * Creates an corax channel for Photon-powered iMessage.
+ * Creates a corax channel for Photon-powered iMessage.
  *
  * @example
  * ```ts

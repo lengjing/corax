@@ -77,7 +77,7 @@ async function resolveCoraxProxyTarget(input: {
 }
 
 /**
- * Nuxt module that wires an corax agent into a Nuxt app. Register under `modules`
+ * Nuxt module that wires a corax agent into a Nuxt app. Register under `modules`
  * (configured via the `corax` config key). It auto-imports the `useCoraxAgent()`
  * composable and routes corax transport requests (`/corax/v1/**`) to the corax
  * service: a shared dev server spawned on demand in dev and a configured

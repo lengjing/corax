@@ -26,7 +26,7 @@ describe("runAcpServerOnStreams", () => {
     await expect(server).resolves.toBeUndefined();
   });
 
-  it("closes the transport without creating an corax session before the first prompt", async () => {
+  it("closes the transport without creating a corax session before the first prompt", async () => {
     const reset = vi.fn(async () => ({ status: "reset" }));
     const session = {
       cancel: vi.fn(async () => ({ sessionId: "session_test", status: "accepted" })),

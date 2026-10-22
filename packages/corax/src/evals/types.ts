@@ -143,7 +143,7 @@ export interface CoraxEvalTraceContext extends RuntimeTraceContext {
 }
 
 /**
- * Full result of executing one eval against an corax agent.
+ * Full result of executing one eval against a corax agent.
  */
 export interface CoraxEvalTaskResult {
   /**

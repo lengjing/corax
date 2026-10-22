@@ -320,7 +320,7 @@ export async function locateExtensionMountPackage(input: {
       diagnostics: [
         createDiscoverErrorDiagnostic({
           code: DISCOVER_EXTENSION_PACKAGE_INVALID,
-          message: `Package "${specifier}" is not an corax extension: its package.json must declare \`corax.extension.dist\`.`,
+          message: `Package "${specifier}" is not a corax extension: its package.json must declare \`corax.extension.dist\`.`,
           sourcePath: manifestPath,
         }),
       ],

@@ -143,7 +143,7 @@ function validateReference(input: {
   const schemaPhase = input.phase === "inputSchema" || input.phase === "outputSchema";
   const authoringHint = schemaPhase
     ? "Write the schema expression inline in defineTool() or use defineDurableSchema() for a provider package."
-    : "Author the callback inline in transformed source or use an corax durable callback helper.";
+    : "Author the callback inline in transformed source or use a corax durable callback helper.";
   if (input.stamped === undefined) {
     if (input.required) {
       throw new Error(

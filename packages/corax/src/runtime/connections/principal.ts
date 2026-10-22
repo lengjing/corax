@@ -116,7 +116,7 @@ function buildUserPrincipalRequiredMessage(
 ): string {
   let detail: string;
   if (ctx === undefined) {
-    detail = "it was invoked outside an corax context, so no authenticated user can be resolved.";
+    detail = "it was invoked outside a corax context, so no authenticated user can be resolved.";
   } else if (current === undefined || current === null) {
     detail = "the active session has no authenticated user.";
   } else {

@@ -131,12 +131,12 @@ export function renderAnsweredInputRequestMessage(input: {
   return result;
 }
 
-/** Returns true when a Teams activity carries an corax HITL submit payload. */
+/** Returns true when a Teams activity carries a corax HITL submit payload. */
 export function isTeamsInputResponseActivity(activity: TeamsActivity): boolean {
   return deriveTeamsInputResponses(activity).length > 0;
 }
 
-/** Returns whether an corax HITL activity answers a tool approval. */
+/** Returns whether a corax HITL activity answers a tool approval. */
 export function isTeamsToolApprovalResponseActivity(activity: TeamsActivity): boolean {
   const value = readActivityValue(activity);
   const payload = value && readHitlPayload(value);
@@ -189,7 +189,7 @@ export function deriveTeamsInputResponses(
  * Defaults to statusCode 200 and message "Answer received."; `type` is always
  * the Teams activity-message content type.
  */
-/** Reads the recorded thread root carried by an corax HITL card submission. */
+/** Reads the recorded thread root carried by a corax HITL card submission. */
 export function readTeamsInputReplyToActivityId(activity: TeamsActivity): string | null {
   const value = readActivityValue(activity);
   if (!value) return null;

@@ -9,7 +9,7 @@ import {
 } from "#internal/attachments/sandbox-refs.js";
 
 describe("encodeSandboxRef", () => {
-  it("builds an corax-sandbox: URL carrying path, size, and media type as query params", () => {
+  it("builds a corax-sandbox: URL carrying path, size, and media type as query params", () => {
     const url = encodeSandboxRef({
       mediaType: "image/png",
       path: "/workspace/attachments/abcdef0123456789/chart.png",

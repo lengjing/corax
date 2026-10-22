@@ -34,7 +34,7 @@ async function withDevHost<T>(callback: () => Promise<T>): Promise<T> {
 }
 
 describe("self-modification local agent", () => {
-  it("is available on an corax dev host without a request scope", async () => {
+  it("is available on a corax dev host without a request scope", async () => {
     await withDevHost(async () => {
       const agent = defineSelfModificationAgent({ config: { local: { enabled: true } } });
 
@@ -96,7 +96,7 @@ describe("self-modification local agent", () => {
     },
   );
 
-  it("is available to a direct remote request on an corax dev host", async () => {
+  it("is available to a direct remote request on a corax dev host", async () => {
     await withDevHost(async () => {
       const secret = "test-secret";
       process.env[DEVELOPMENT_WORKFLOW_SECRET_ENV] = secret;

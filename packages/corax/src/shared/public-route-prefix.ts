@@ -1,5 +1,5 @@
 /**
- * Environment variable naming the public route prefix an corax agent's
+ * Environment variable naming the public route prefix a corax agent's
  * `/corax/v1/*` transport surface is mounted under on its callback origin.
  *
  * Multi-agent host integrations mount each named agent under

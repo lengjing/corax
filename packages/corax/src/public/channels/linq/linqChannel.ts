@@ -81,7 +81,7 @@ export interface LinqChannel extends Channel<
 > {}
 
 /**
- * Creates an corax channel for Linq-powered iMessage and SMS conversations.
+ * Creates a corax channel for Linq-powered iMessage and SMS conversations.
  *
  * @example
  * ```ts

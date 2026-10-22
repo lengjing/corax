@@ -357,7 +357,7 @@ describe("workflowEntry integration", () => {
       expect(output.unexpected(workflowSdkNotice.unpinnedDelivery, HANDOFF_LOG)).toEqual([]);
     });
 
-    it("continues an corax 0.66 checkpoint on a current successor and stops its idle children", async () => {
+    it("continues a corax 0.66 checkpoint on a current successor and stops its idle children", async () => {
       const output = captureConsoleOutput();
       const runtime = await createTestRuntime({ agent: { name: "handoff-corax-066-owner" } });
       await runtime.run(async () => {
@@ -720,8 +720,8 @@ describe("workflowEntry integration", () => {
   });
 });
 
-/** The handoff input an corax 0.66 owner sends, per a captured checkpoint version 8. */
-/** The idle session's lifecycle as an corax 0.66 owner kept it: an emission position. */
+/** The handoff input a corax 0.66 owner sends, per a captured checkpoint version 8. */
+/** The idle session's lifecycle as a corax 0.66 owner kept it: an emission position. */
 function corax066LifecycleState(state: Record<string, unknown> | undefined) {
   const projection = storedProjection(state);
   const {

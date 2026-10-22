@@ -326,7 +326,7 @@ describe("renderSelectQuestion", () => {
       {
         kind: "single",
         message: "extension/agent-browser",
-        description: "Add browser automation tools backed by agent-browser to an corax agent.",
+        description: "Add browser automation tools backed by agent-browser to a corax agent.",
         metadata: [
           { label: "Source", value: "Official corax registry" },
           { label: "Packages", value: "@agent-browser/corax" },
@@ -348,7 +348,7 @@ describe("renderSelectQuestion", () => {
 
     expect(rows.slice(0, 7)).toEqual([
       "  extension/agent-browser",
-      "  Add browser automation tools backed by agent-browser to an corax agent.",
+      "  Add browser automation tools backed by agent-browser to a corax agent.",
       "  Source: Official corax registry",
       "  Packages: @agent-browser/corax",
       "",

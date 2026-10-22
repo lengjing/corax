@@ -595,7 +595,7 @@ async function startNitroDevelopmentServer(
 }
 
 /**
- * Creates a development server for an corax application. Call `start()` to boot an
+ * Creates a development server for a corax application. Call `start()` to boot an
  * owned Nitro server or attach to a running owner, and `close()` to tear down a
  * server this instance started. `close()` waits for an in-progress `start()`,
  * resolves after failed-start cleanup, and is a no-op when it attached to an

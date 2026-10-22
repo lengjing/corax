@@ -191,7 +191,7 @@ describe("stageAttachmentsToSandbox (integration)", () => {
     expect(filePart.filename).toMatch(
       new RegExp(`^${ATTACHMENTS_ROOT.replaceAll(".", "\\.")}/[0-9a-f]{16}/report\\.csv$`),
     );
-    // `data` is replaced with an corax-sandbox: ref — the bytes live in
+    // `data` is replaced with a corax-sandbox: ref — the bytes live in
     // the sandbox and are rehydrated at the model call site. The
     // URL is fully consumed here.
     expect(isSandboxRefUrl(filePart.data)).toBe(true);
@@ -668,7 +668,7 @@ describe("hydrateSandboxAttachments (integration)", () => {
     );
 
     // Original ref-only messages are preserved — the staged FilePart
-    // still carries an corax-sandbox: URL, not bytes, so it remains
+    // still carries a corax-sandbox: URL, not bytes, so it remains
     // safe to persist into session.history.
     const refPart = (stagedContent as FilePart[]).find((p) => p.type === "file");
     expect(refPart).toBeDefined();

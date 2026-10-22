@@ -1,7 +1,7 @@
 import { joinCoraxRoutePath } from "#shared/corax-route-path.js";
 
 /**
- * Builds a fetchable URL from a caller-provided host and an corax route path.
+ * Builds a fetchable URL from a caller-provided host and a corax route path.
  *
  * `host` may be an absolute origin (`https://agent.example.com`) or a
  * same-origin prefix (`/api`). Prefixes are important for browser clients that

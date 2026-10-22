@@ -1,5 +1,5 @@
 /**
- * Display text for an corax identifier, such as a tool, agent, or skill name:
+ * Display text for a corax identifier, such as a tool, agent, or skill name:
  * `code__code_reviewer` → `code reviewer`, `getPRStatus` → `get PR status`.
  * Only the last `__` segment names the thing; the segments before it are the
  * extension or memory namespace it was mounted under, which means nothing to

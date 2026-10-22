@@ -87,7 +87,7 @@ describe("createCrossChannelToFn", () => {
     expect(typeOnlyCalls).toBeTypeOf("function");
   });
 
-  it("requires an corax channel reference at compile time", () => {
+  it("requires a corax channel reference at compile time", () => {
     const fn = createCrossChannelToFn(makeRuntime(), []);
     const invalidCalls = () => {
       // @ts-expect-error arbitrary strings are not authored channel references.

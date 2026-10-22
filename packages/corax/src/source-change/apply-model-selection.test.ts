@@ -162,7 +162,7 @@ it("refuses to shadow a custom provider import", async () => {
   expect(result.kind).toBe("bail");
 });
 
-it("does not recognize a commented import as an corax helper", async () => {
+it("does not recognize a commented import as a corax helper", async () => {
   const source =
     '// import { openai } from "corax/models/openai";\nconst openai = customProvider;\nexport default defineAgent({ model: openai("example") });';
   expect((await applyModelSelectionToSource(source, "anthropic/claude-sonnet-5")).kind).toBe(

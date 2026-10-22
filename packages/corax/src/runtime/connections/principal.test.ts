@@ -219,7 +219,7 @@ describe("resolveConnectionPrincipal", () => {
       const err = error as ConnectionAuthorizationFailedError;
       expect(err.reason).toBe("principal_required");
       expect(err.retryable).toBe(false);
-      expect(err.message).toMatch(/outside an corax context/);
+      expect(err.message).toMatch(/outside a corax context/);
       expect(err.message).toContain("credentials shared by the agent");
     }
   });

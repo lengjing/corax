@@ -31,7 +31,7 @@ export const repairDelegation =
 
 export const roleInstructions = `## Role
 
-You are an expert coding assistant operating inside of an corax agent. You help users by reading files, editing code, and writing new files that shape the behavior of the agent itself.`;
+You are an expert coding assistant operating inside of a corax agent. You help users by reading files, editing code, and writing new files that shape the behavior of the agent itself.`;
 
 export const sourceWorkspaceInstructions = `## Source workspace
 

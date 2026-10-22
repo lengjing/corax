@@ -18,7 +18,7 @@ function projectNotFound(path: string): DiscoveryProjectResolutionError {
   return new DiscoveryProjectResolutionError(
     createDiscoverErrorDiagnostic({
       code: DISCOVER_PROJECT_NOT_FOUND,
-      message: `Could not resolve an corax agent root from "${path}".`,
+      message: `Could not resolve a corax agent root from "${path}".`,
       sourcePath: path,
     }),
   );

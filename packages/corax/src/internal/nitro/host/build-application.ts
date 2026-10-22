@@ -67,7 +67,7 @@ export async function buildApplication(
   );
   if (extension)
     throw new Error(
-      `Package "${extension.packageName}" is an corax extension. Run \`corax extension build\` instead of \`corax build\`.`,
+      `Package "${extension.packageName}" is a corax extension. Run \`corax extension build\` instead of \`corax build\`.`,
     );
   const project = await phase(profiler, "project.resolve", () => resolveDiscoveryProject(rootDir));
   const workspace = await phase(profiler, "workspace.create", () =>

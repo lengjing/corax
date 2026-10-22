@@ -340,7 +340,7 @@ await buildWithNitroRolldown({
     // every dist file would carry an `import "../_virtual/_rolldown/runtime.js"`
     // side-effect import, and the workflow bundler (which runs under
     // `platform: "neutral"`) would warn about the unresolved Node
-    // builtin every time it pulled an corax file into its graph. Dependencies
+    // builtin every time it pulled a corax file into its graph. Dependencies
     // with CommonJS code are vendored under `#compiled/*` instead.
     polyfillRequire: false,
     preserveModules: true,

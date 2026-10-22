@@ -23,7 +23,7 @@ function assertSecureRemoteProtocol(url: URL, value: string): void {
 }
 
 /**
- * Parse and normalize an corax server URL for the development REPL.
+ * Parse and normalize a corax server URL for the development REPL.
  */
 export function parseDevelopmentServerUrl(value: string): string {
   const normalizedValue = value.trim();

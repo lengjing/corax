@@ -47,7 +47,7 @@ export interface OtelOptions {
    */
   readonly functionId?: string;
   /**
-   * Whether to emit an corax-owned HTTP `SERVER` span around each channel
+   * Whether to emit a corax-owned HTTP `SERVER` span around each channel
    * request. For a one-to-one delivery, the activation remains a separate
    * trace root and links to this span; when disabled, it links to any
    * already-active upstream request or function span instead. Defaults to

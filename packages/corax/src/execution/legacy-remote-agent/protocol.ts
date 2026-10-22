@@ -1,5 +1,5 @@
 /**
- * Remote agent protocol 1: what an corax 0.66–0.68 caller sends a remote agent
+ * Remote agent protocol 1: what a corax 0.66–0.68 caller sends a remote agent
  * and expects back. A remote agent keeps serving those callers so it can
  * deploy before them.
  *
@@ -99,7 +99,7 @@ export async function forwardLegacySessionInput(
  * Renames a `task.*` callback that a remote agent sends a protocol-1 caller to
  * the payload kind the caller's session reads. The callback URL resolves to the
  * caller's newest deployment, while the session waiting on it may still run on
- * an corax 0.66–0.68 build; both read the renamed kinds. The caller still
+ * a corax 0.66–0.68 build; both read the renamed kinds. The caller still
  * validates the result.
  */
 export function renameLegacyTaskCallback(body: unknown): unknown {

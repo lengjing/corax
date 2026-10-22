@@ -67,7 +67,7 @@ interface ScopeEntry {
 }
 
 /**
- * Transforms every `defineTool()` call imported from an corax authoring entry
+ * Transforms every `defineTool()` call imported from a corax authoring entry
  * point. This includes tools created in authored helper modules, not only the
  * file containing `defineDynamic()`.
  */

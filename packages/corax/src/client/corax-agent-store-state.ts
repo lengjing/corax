@@ -13,7 +13,7 @@ import type {
 } from "#client/types.js";
 
 /**
- * Lifecycle state of an corax frontend session store: `ready` (idle),
+ * Lifecycle state of a corax frontend session store: `ready` (idle),
  * `resuming` (checking an attached session for continuation), `submitted`
  * (turn sent, awaiting the first event), `streaming` (events arriving), and
  * `error` (session creation, streaming, resume, or a turn failed).
@@ -26,7 +26,7 @@ export type CoraxAgentStoreStatus = "error" | "ready" | "resuming" | "streaming"
  */
 export type PrepareSend = (input: SendTurnPayload) => SendTurnPayload | Promise<SendTurnPayload>;
 
-/** Immutable projected state of an corax frontend session store. */
+/** Immutable projected state of a corax frontend session store. */
 export interface CoraxAgentStoreSnapshot<TData> {
   readonly data: TData;
   /** Canonical session facts, independent of the caller's data projection. */
@@ -51,7 +51,7 @@ export interface CoraxAgentStoreCallbacks<TData> {
 }
 
 /**
- * Configuration for constructing an corax frontend session store. Pass connection
+ * Configuration for constructing a corax frontend session store. Pass connection
  * options or a configured `Client` for store-owned sessions, or an existing
  * `ClientSession`. Saved events must be an ordered prefix of the same session stream.
  */

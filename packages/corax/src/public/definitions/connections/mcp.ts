@@ -39,7 +39,7 @@ export interface McpClientConnectionDefinition {
   readonly protocolVersionDiscovery?: boolean;
   /**
    * Whether to forward the calling turn's user and initiator to the server in
-   * the `corax-forwarded-principal` header, so an corax agent's `mcpChannel` can
+   * the `corax-forwarded-principal` header, so a corax agent's `mcpChannel` can
    * run its published tools as that user. The server must set
    * `trustedForwarders` and trust this connection's route-authenticated
    * identity; otherwise it refuses the request with 403. Anonymous callers

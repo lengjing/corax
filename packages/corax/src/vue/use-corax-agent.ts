@@ -35,7 +35,7 @@ export type { PrepareSend };
 export type UseCoraxAgentStatus = CoraxAgentStoreStatus;
 
 /**
- * Point-in-time projected state for an corax agent session (`data`, `error`,
+ * Point-in-time projected state for a corax agent session (`data`, `error`,
  * `events`, `session`, `status`).
  *
  * `useCoraxAgent` passes this shape to callbacks such as `onFinish`, but exposes
@@ -112,7 +112,7 @@ export interface UseCoraxAgentOptions<TData> extends CoraxAgentStoreCallbacks<TD
    *
    * By default, requests target same-origin corax routes such as `/corax/v1/...`.
    * Pass a same-origin prefix such as `/api` to use an app-owned proxy, or an
-   * absolute origin to talk to an corax server directly.
+   * absolute origin to talk to a corax server directly.
    *
    * @default ""
    */

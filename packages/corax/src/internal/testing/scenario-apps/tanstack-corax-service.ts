@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import type { ScenarioAppDescriptor } from "#internal/testing/scenario-app.js";
 
 // Not resolved from the installed workspace like the Next.js descriptor's
-// dependencies: TanStack Start is not an corax dependency, so no copy is
+// dependencies: TanStack Start is not a corax dependency, so no copy is
 // installed to resolve a version from. `nitro` is the copy corax ships.
 const require = createRequire(import.meta.url);
 const TANSTACK_ROUTER_VERSION = "^1.170.0";

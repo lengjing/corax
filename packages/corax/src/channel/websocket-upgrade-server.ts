@@ -26,7 +26,7 @@ interface NodeWebSocketUpgradeRequest extends WebSocketUpgradeRequest {
 
 /**
  * Escape hatch for SDKs and frameworks that need a Node HTTP server-shaped
- * upgrade target inside an corax `WS()` route.
+ * upgrade target inside a corax `WS()` route.
  *
  * Prefer normal `WS()` lifecycle hooks for corax-owned websocket behavior. Use
  * this bridge only when an integration expects to register

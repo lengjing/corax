@@ -157,7 +157,7 @@ export function messageFromLinearAgentSessionEvent(event: LinearAgentSessionEven
   return "Linear agent session started.";
 }
 
-/** Formats Linear issue/session context as an corax context block. */
+/** Formats Linear issue/session context as a corax context block. */
 export function formatLinearContextBlock(event: LinearAgentSessionEvent): string {
   const session = event.agentSession;
   const issue = session.issue;

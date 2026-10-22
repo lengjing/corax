@@ -72,7 +72,7 @@ function buildSession(init: ActiveSessionInit): Session {
 }
 
 /**
- * Runs `fn` with an corax {@link ContextContainer} bound to the active
+ * Runs `fn` with a corax {@link ContextContainer} bound to the active
  * async scope.
  */
 export async function runWithActiveSessionContext<T>(

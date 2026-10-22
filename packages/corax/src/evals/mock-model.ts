@@ -109,7 +109,7 @@ export interface MockModelOptions {
 }
 
 /**
- * Creates a deterministic local language model for an corax eval fixture.
+ * Creates a deterministic local language model for a corax eval fixture.
  *
  * Pass a string for a static reply, a callback for prompt-aware behavior, or
  * an options object when the model identity or advanced responses need to be

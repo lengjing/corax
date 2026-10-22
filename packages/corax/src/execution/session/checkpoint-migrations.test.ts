@@ -8,7 +8,7 @@ import { readHitlState } from "#harness/hitl/requests.js";
 import { readTurnState } from "#harness/session-machine/state.js";
 
 describe("migrateSessionCheckpoint", () => {
-  it("upgrades a checkpoint written by an corax 0.66 owner to the current shape", () => {
+  it("upgrades a checkpoint written by a corax 0.66 owner to the current shape", () => {
     expect(migrateSessionCheckpoint(corax066Checkpoint())).toEqual({
       kind: "current",
       childRunIdsToStop: ["child-local"],
@@ -315,7 +315,7 @@ const CALLBACK = {
   url: "https://caller.example/corax/v1/callback/callback-token",
 };
 
-/** Trimmed from a handoff checkpoint captured from an corax 0.66.1 owner. */
+/** Trimmed from a handoff checkpoint captured from a corax 0.66.1 owner. */
 function corax066Checkpoint({
   settledTask = true,
   subagentPhase = "parked",

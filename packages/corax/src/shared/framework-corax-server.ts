@@ -7,7 +7,7 @@ import { resolvePackageRoot } from "#internal/application/package.js";
 import { readDevelopmentRuntimeArtifactsRevision } from "#services/dev-client/runtime-artifacts.js";
 import { isLoopbackHostname } from "#shared/network-address.js";
 
-/** Default time to wait for an corax server spawned by a framework integration. */
+/** Default time to wait for a corax server spawned by a framework integration. */
 export const DEFAULT_CORAX_SERVER_TIMEOUT_MS = 180_000;
 
 const DEV_SERVER_REGISTRY_POLL_MS = 100;

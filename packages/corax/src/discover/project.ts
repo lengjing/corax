@@ -29,7 +29,7 @@ export interface ResolvedDiscoveryProject {
 }
 
 /**
- * Error raised when discovery cannot resolve an corax agent root from a
+ * Error raised when discovery cannot resolve a corax agent root from a
  * {@link ProjectSource}.
  */
 export class DiscoveryProjectResolutionError extends Error {
@@ -98,7 +98,7 @@ export async function resolveDiscoveryProject(
   throw new DiscoveryProjectResolutionError(
     createDiscoverErrorDiagnostic({
       code: DISCOVER_PROJECT_NOT_FOUND,
-      message: `Could not resolve an corax agent root from "${startDirectory}".`,
+      message: `Could not resolve a corax agent root from "${startDirectory}".`,
       sourcePath: startDirectory,
     }),
   );

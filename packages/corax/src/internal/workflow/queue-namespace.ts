@@ -1,6 +1,6 @@
 export const WORKFLOW_QUEUE_NAMESPACE_ENV = "WORKFLOW_QUEUE_NAMESPACE";
 
-/** Derives a stable Workflow queue namespace from an corax agent's unique name. */
+/** Derives a stable Workflow queue namespace from a corax agent's unique name. */
 export function deriveCoraxWorkflowQueueNamespace(agentName: string): string {
   const encodedAgentName = Array.from(new TextEncoder().encode(agentName), (byte) =>
     byte.toString(16).padStart(2, "0"),
@@ -9,7 +9,7 @@ export function deriveCoraxWorkflowQueueNamespace(agentName: string): string {
   return `corax${encodedAgentName}`;
 }
 
-/** Derives the queue prefix consumed by an corax agent's workflow handler. */
+/** Derives the queue prefix consumed by a corax agent's workflow handler. */
 export function deriveCoraxWorkflowQueuePrefix(agentName: string): string {
   return `__${deriveCoraxWorkflowQueueNamespace(agentName)}_wkf_workflow_`;
 }

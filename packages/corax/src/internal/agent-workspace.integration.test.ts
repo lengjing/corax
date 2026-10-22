@@ -277,7 +277,7 @@ describe("resolveCoraxProjectContext", () => {
     await expect(findCoraxProjectContext(packageRoot)).resolves.toBeUndefined();
   });
 
-  it("rejects an corax package without agent files", async () => {
+  it("rejects a corax package without agent files", async () => {
     const root = await mkdtemp(join(tmpdir(), "corax-invalid-shape-"));
     await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { corax: "*" } }));
 

@@ -242,7 +242,7 @@ export interface ChatSdkChannelBridge<TAdapters extends ChatSdkAdapters = ChatSd
   readonly bot: Chat<TAdapters>;
   readonly channel: ChatSdkChannel;
   /**
-   * Starts or resumes an corax session from inside a Chat SDK webhook handler.
+   * Starts or resumes a corax session from inside a Chat SDK webhook handler.
    * Use `channel.receive(...)` for proactive sends that are not handling an
    * inbound Chat SDK webhook.
    */
@@ -258,7 +258,7 @@ export interface ChatSdkChannelBridge<TAdapters extends ChatSdkAdapters = ChatSd
 }
 
 /**
- * Creates an corax channel backed by one Chat SDK runtime and its adapters.
+ * Creates a corax channel backed by one Chat SDK runtime and its adapters.
  *
  * @example
  * ```ts

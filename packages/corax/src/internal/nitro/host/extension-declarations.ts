@@ -166,6 +166,6 @@ async function resolveTypeScriptBinary(appRoot: string): Promise<string> {
     }
   }
   throw new Error(
-    "Cannot build an corax extension without TypeScript. Add `typescript` to the package's devDependencies.",
+    "Cannot build a corax extension without TypeScript. Add `typescript` to the package's devDependencies.",
   );
 }

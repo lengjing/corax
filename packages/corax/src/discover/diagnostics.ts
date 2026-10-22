@@ -50,7 +50,7 @@ export const discoverDiagnosticsSummarySchema = z
   .strict();
 
 /**
- * Root-resolution error code emitted when discovery cannot locate an corax agent.
+ * Root-resolution error code emitted when discovery cannot locate a corax agent.
  */
 export const DISCOVER_PROJECT_NOT_FOUND = "discover/project-not-found";
 

@@ -760,7 +760,7 @@ export interface SlackChannelConfig {
   onSlashCommand?(command: SlackSlashCommand, ctx: SlackSlashCommandContext): void | Promise<void>;
 
   /**
-   * Authorizes an corax-owned HITL answer before the pending input resolves.
+   * Authorizes a corax-owned HITL answer before the pending input resolves.
    * Return `{ auth }` to accept the response, or `null` to reject it and keep
    * the request pending. Thrown errors are logged and treated as rejection.
    *

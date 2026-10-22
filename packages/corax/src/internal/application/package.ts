@@ -489,7 +489,7 @@ export function resolveExpectedWorkflowVersion(): string | undefined {
  *
  * Older Workflow builder output still uses `workflow/*` specifiers. corax maps
  * those historical specifiers to the smaller `@workflow/*` packages it actually
- * needs, plus an corax-owned builtins module for response body step helpers.
+ * needs, plus a corax-owned builtins module for response body step helpers.
  */
 export function resolveWorkflowModulePath(specifier: string): string {
   if (specifier === "workflow") {

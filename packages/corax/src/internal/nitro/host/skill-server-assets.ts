@@ -33,7 +33,7 @@ export interface SkillServerAssetDirectory {
  * is dropped by Nitro's `r.default || r`. So each shipped file is written as
  * `<stagingDirectory>/files/<sha256>.bin`, which Nitro always inlines as a
  * `Uint8Array`. Identical files share one asset. Real paths, sizes, and
- * digests go into an corax-owned index registered as its own server asset.
+ * digests go into a corax-owned index registered as its own server asset.
  * Files over {@link MAX_SKILL_FILE_BYTES} are indexed by size only, and
  * directories are indexed so empty ones survive the build.
  */

@@ -36,7 +36,7 @@ export type { PrepareSend };
 export type UseCoraxAgentStatus = CoraxAgentStoreStatus;
 
 /**
- * Immutable point-in-time view of an corax agent session: projected `data`, the
+ * Immutable point-in-time view of a corax agent session: projected `data`, the
  * last `error`, the raw `events` stream, the `session` cursor, and `status`.
  * `useCoraxAgent` passes this snapshot to the `onFinish` callback.
  */
@@ -115,7 +115,7 @@ export interface UseCoraxAgentOptions<TData> extends CoraxAgentStoreCallbacks<TD
   /**
    * Base URL for corax client requests. Do not combine with `agent`. Empty targets same-origin corax routes
    * such as `/corax/v1/...`; a same-origin prefix like `/api` routes through an
-   * app-owned proxy; an absolute origin hits an corax server directly.
+   * app-owned proxy; an absolute origin hits a corax server directly.
    *
    * @default ""
    */
@@ -248,7 +248,7 @@ export function useCoraxAgent<TData>(
 ): UseCoraxAgentReturn<TData>;
 
 /**
- * Svelte 5 binding that drives an corax session and projects its events into
+ * Svelte 5 binding that drives a corax session and projects its events into
  * rune-friendly reactive data.
  *
  * Without a `reducer`, projects conversation state including message parts;

@@ -151,7 +151,7 @@ export interface RuntimeIdentity {
 }
 
 /**
- * Portable trace coordinates for correlating an corax run with an external
+ * Portable trace coordinates for correlating a corax run with an external
  * observability backend. The fields follow the W3C trace-context model while
  * remaining owned by corax rather than exposing an OpenTelemetry type.
  */
@@ -915,7 +915,7 @@ export type TurnFailureStreamEvent =
   | TurnFailedStreamEvent;
 
 /**
- * One event read from an corax session stream.
+ * One event read from a corax session stream.
  *
  * corax stamps the durable identity and emission time before writing the event.
  */

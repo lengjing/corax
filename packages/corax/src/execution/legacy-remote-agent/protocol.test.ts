@@ -17,7 +17,7 @@ vi.mock("#compiled/@workflow/core/runtime.js", () => ({
 const DIGEST = "0123456789abcdef0123456789abcdef";
 const inputResponses = [{ optionId: "approve", requestId: "request-1" }];
 
-// What an corax 0.66–0.68 caller posts to answer a remote agent's question or approval.
+// What a corax 0.66–0.68 caller posts to answer a remote agent's question or approval.
 function postAnswers(token: string, body: unknown = { inputResponses }) {
   return legacyTaskInputRoute.handler(
     new Request(`https://remote.example.com/corax/v1/task-input/${token}`, {

@@ -1535,7 +1535,7 @@ describe("coraxChannel — remote agent protocol 1 callers", () => {
     token: "tok123",
     url: "https://caller.example.com/corax/v1/callback/tok123",
   };
-  // What an corax 0.66–0.68 background task adds when it delegates.
+  // What a corax 0.66–0.68 background task adds when it delegates.
   const legacyTaskFields = {
     activityObserver: {
       sink: {

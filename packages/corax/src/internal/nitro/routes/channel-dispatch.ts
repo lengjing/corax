@@ -60,7 +60,7 @@ export async function dispatchChannelRequest(
   config: NitroArtifactsConfig,
 ): Promise<Response> {
   return await traceChannelRequest({ request: event.req, routeKey }, async (span) => {
-    // Correlation does not require an corax-owned request span. Preserve any
+    // Correlation does not require a corax-owned request span. Preserve any
     // active platform request or function span before route resolution.
     const requestTraceContext =
       span?.reference ?? otelTrace.getSpan(otelContext.active())?.spanContext();

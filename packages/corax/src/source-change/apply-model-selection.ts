@@ -34,7 +34,7 @@ export async function readModelSelectionFromSource(
   return value === undefined ? undefined : currentSelection(value, parsed.program);
 }
 
-/** Rewrites between a Gateway string model and an corax-owned model helper. */
+/** Rewrites between a Gateway string model and a corax-owned model helper. */
 export async function applyModelSelectionToSource(
   sourceText: string,
   selection: string,
@@ -54,7 +54,7 @@ export async function applyModelSelectionToSource(
   if (current === undefined) {
     return {
       kind: "bail",
-      reason: "`model` is neither a string literal nor an corax model helper",
+      reason: "`model` is neither a string literal nor a corax model helper",
       line: lineAt(sourceText, value.start),
     };
   }

@@ -19,7 +19,7 @@ export function normalizeOrigin(origin: string): string {
 }
 
 /**
- * Resolve the local production port the module proxies to when an corax service
+ * Resolve the local production port the module proxies to when a corax service
  * runs alongside a self-hosted Nuxt deployment. Defaults to
  * {@link DEFAULT_CORAX_NUXT_PRODUCTION_PORT}.
  */

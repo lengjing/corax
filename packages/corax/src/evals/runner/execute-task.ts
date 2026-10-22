@@ -52,7 +52,7 @@ interface ExecuteTaskResult {
 }
 
 /**
- * Executes one eval's `test(t)` against an corax agent target: drives the
+ * Executes one eval's `test(t)` against a corax agent target: drives the
  * session(s), captures the run, then finalizes the recorded assertions
  * against the completed task result.
  */

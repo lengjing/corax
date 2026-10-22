@@ -81,7 +81,7 @@ const ACP_TOOL_STATUS: Record<SessionCallStatus | "interrupted", ToolCallStatus>
   interrupted: "failed",
 };
 
-/** Configuration for translating one ACP client connection to an corax server. */
+/** Configuration for translating one ACP client connection to a corax server. */
 export interface CoraxAcpAdapterOptions {
   readonly coraxVersion: string;
   readonly auth?: ClientOptions["auth"];

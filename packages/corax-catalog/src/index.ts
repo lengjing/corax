@@ -280,7 +280,7 @@ export const INTEGRATIONS: readonly IntegrationEntry[] = [
     slug: "agent-browser",
     name: "agent-browser",
     kind: "extension",
-    tagline: "Add browser automation tools backed by agent-browser to an corax agent.",
+    tagline: "Add browser automation tools backed by agent-browser to a corax agent.",
     surfaces: { scaffoldable: false, registry: true, gallery: true },
   },
   {

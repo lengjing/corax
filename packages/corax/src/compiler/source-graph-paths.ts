@@ -55,7 +55,7 @@ export function validateProgrammaticLogicalPathInternal(
     (allowExtensionMount && root === "extensions" && segments.length === 2);
   if (!supported) {
     throw new Error(
-      `Programmatic module logical path "${input}" does not select an corax module slot.`,
+      `Programmatic module logical path "${input}" does not select a corax module slot.`,
     );
   }
   return logicalPath;
