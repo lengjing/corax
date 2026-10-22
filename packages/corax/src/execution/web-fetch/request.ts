@@ -2,7 +2,7 @@ import { lookup } from "node:dns";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 
-import type { Dispatcher1Wrapper } from "undici";
+import type { Agent, Response as UndiciResponse } from "undici";
 
 import { isLoopbackHostname, isPrivateOrReservedIpAddress } from "#shared/network-address.js";
 
@@ -10,10 +10,6 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 10;
 const UNSAFE_DESTINATION_ERROR =
   "URL must not target localhost, private, link-local, or reserved IP addresses.";
-
-type DispatcherRequestInit = Omit<RequestInit, "dispatcher"> & {
-  readonly dispatcher: Dispatcher1Wrapper;
-};
 
 /** Options for an SSRF-safe HTTPS request. */
 interface PublicUrlRequestOptions {
@@ -36,7 +32,7 @@ export async function requestPublicUrl(
   let url = parseHttpsUrl(urlText);
 
   for (let redirectCount = 0; ; redirectCount++) {
-    const { dispatcher, response } = await requestOnce(url, options);
+    const { agent, response } = await requestOnce(url, options);
 
     try {
       const location = response.headers.get("location");
@@ -53,9 +49,19 @@ export async function requestPublicUrl(
 
       return await consumeResponse(response, options.maxResponseSize);
     } finally {
-      await dispatcher.close();
+      await agent.close();
     }
   }
+}
+
+/**
+ * Bun maps the bare `undici` specifier to its own stub, whose `Agent` cannot
+ * dispatch and whose `fetch` is the native one that ignores `dispatcher`. The
+ * package entry file bypasses that mapping so the pinned-DNS connector
+ * actually carries the request.
+ */
+function loadUndici() {
+  return import("undici/index.js");
 }
 
 function parseHttpsUrl(urlText: string): URL {
@@ -77,36 +83,37 @@ function parseHttpsUrl(urlText: string): URL {
 async function requestOnce(
   url: URL,
   options: PublicUrlRequestOptions,
-): Promise<{ readonly dispatcher: Dispatcher1Wrapper; readonly response: Response }> {
+): Promise<{ readonly agent: Agent; readonly response: UndiciResponse }> {
   assertPublicHostname(url.hostname);
-  const { Agent, Dispatcher1Wrapper } = await import("undici");
+  const { Agent, fetch } = await loadUndici();
   const agent = new Agent({
     connect: {
       lookup: createPublicLookup(),
     },
   });
-  const dispatcher = new Dispatcher1Wrapper(agent);
 
   try {
-    const response = await fetchWithDispatcher(url, {
-      dispatcher,
+    const response = await fetch(url, {
+      dispatcher: agent,
       headers: options.headers,
       redirect: "manual",
       signal: options.signal,
     });
-    return { dispatcher, response };
+    return { agent, response };
   } catch (error) {
-    await dispatcher.close();
-    throw error;
+    await agent.close();
+    throw unwrapFetchFailure(error);
   }
 }
 
-function fetchWithDispatcher(url: URL, options: DispatcherRequestInit): Promise<Response> {
-  // Node's fetch types describe its bundled undici version, while the wrapper
-  // adapts the installed undici dispatcher to that runtime protocol.
-  const fetchWithUndici = fetch as typeof fetch &
-    ((input: URL, init: DispatcherRequestInit) => Promise<Response>);
-  return fetchWithUndici(url, options);
+/**
+ * undici reports every dispatch failure as `TypeError: fetch failed` and
+ * keeps the reason (DNS, policy, socket) on `cause`; surface that instead.
+ */
+function unwrapFetchFailure(error: unknown): unknown {
+  return error instanceof TypeError && error.message === "fetch failed" && error.cause !== undefined
+    ? error.cause
+    : error;
 }
 
 function assertPublicHostname(hostname: string): void {
@@ -123,10 +130,13 @@ function assertPublicHostname(hostname: string): void {
   }
 }
 
-function assertPublicAddress(address: string): void {
-  if (isPrivateOrReservedIpAddress(address)) {
-    throw new Error(UNSAFE_DESTINATION_ERROR);
-  }
+function assertPublicAddress(address: string, hostname?: string): void {
+  if (!isPrivateOrReservedIpAddress(address)) return;
+  throw new Error(
+    hostname === undefined
+      ? UNSAFE_DESTINATION_ERROR
+      : `${UNSAFE_DESTINATION_ERROR} ("${hostname}" resolved to ${address}.)`,
+  );
 }
 
 function createPublicLookup(): LookupFunction {
@@ -139,7 +149,7 @@ function createPublicLookup(): LookupFunction {
 
       try {
         for (const { address } of addresses) {
-          assertPublicAddress(address);
+          assertPublicAddress(address, hostname);
         }
       } catch (error) {
         callback(error as Error, "", 0);
@@ -171,7 +181,10 @@ function createPublicLookup(): LookupFunction {
   };
 }
 
-async function consumeResponse(response: Response, maxResponseSize: number): Promise<Response> {
+async function consumeResponse(
+  response: UndiciResponse,
+  maxResponseSize: number,
+): Promise<Response> {
   const declaredLength = parseContentLength(response.headers.get("content-length"));
 
   if (declaredLength !== undefined && declaredLength > maxResponseSize) {
@@ -183,7 +196,7 @@ async function consumeResponse(response: Response, maxResponseSize: number): Pro
   const responseBody = body.byteLength === 0 ? null : Uint8Array.from(body).buffer;
 
   return new Response(responseBody, {
-    headers: response.headers,
+    headers: Array.from(response.headers),
     status: response.status,
     statusText: response.statusText,
   });
@@ -198,7 +211,10 @@ function parseContentLength(value: string | null): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-async function readBoundedBody(response: Response, maxResponseSize: number): Promise<Uint8Array> {
+async function readBoundedBody(
+  response: UndiciResponse,
+  maxResponseSize: number,
+): Promise<Uint8Array> {
   if (response.body === null) {
     return new Uint8Array();
   }
@@ -235,11 +251,11 @@ async function readBoundedBody(response: Response, maxResponseSize: number): Pro
   return body;
 }
 
-async function cancelResponseBody(response: Response): Promise<void> {
+async function cancelResponseBody(response: UndiciResponse): Promise<void> {
   try {
     await response.body?.cancel();
   } catch {
-    // The connection will still be closed with its per-request dispatcher.
+    // The connection will still be closed with its per-request agent.
   }
 }
 

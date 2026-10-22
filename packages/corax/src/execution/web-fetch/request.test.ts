@@ -1,7 +1,7 @@
 import type { LookupAddress } from "node:dns";
 import { isIP, type LookupFunction } from "node:net";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requestPublicUrl } from "#execution/web-fetch/request.js";
 
@@ -9,8 +9,6 @@ const networkMocks = vi.hoisted(() => ({
   agentClose: vi.fn(),
   agentInstances: [] as unknown[],
   agentOptions: [] as unknown[],
-  dispatcherInstances: [] as unknown[],
-  dispatcherTargets: [] as unknown[],
   fetch: vi.fn(),
   lookup: vi.fn(),
   socketAddresses: [] as unknown[],
@@ -20,7 +18,7 @@ vi.mock("node:dns", () => ({
   lookup: networkMocks.lookup,
 }));
 
-vi.mock("undici", () => ({
+vi.mock("undici/index.js", () => ({
   Agent: class MockAgent {
     readonly options: unknown;
 
@@ -34,19 +32,7 @@ vi.mock("undici", () => ({
       return networkMocks.agentClose();
     }
   },
-  Dispatcher1Wrapper: class MockDispatcher1Wrapper {
-    readonly dispatcher: { readonly options: unknown; close(): Promise<void> };
-
-    constructor(dispatcher: { readonly options: unknown; close(): Promise<void> }) {
-      this.dispatcher = dispatcher;
-      networkMocks.dispatcherInstances.push(this);
-      networkMocks.dispatcherTargets.push(dispatcher);
-    }
-
-    close(): Promise<void> {
-      return this.dispatcher.close();
-    }
-  },
+  fetch: networkMocks.fetch,
 }));
 
 const REQUEST_OPTIONS = {
@@ -66,10 +52,7 @@ beforeEach(() => {
   networkMocks.agentClose.mockResolvedValue(undefined);
   networkMocks.agentInstances.length = 0;
   networkMocks.agentOptions.length = 0;
-  networkMocks.dispatcherInstances.length = 0;
-  networkMocks.dispatcherTargets.length = 0;
   networkMocks.fetch.mockReset();
-  vi.stubGlobal("fetch", networkMocks.fetch);
   networkMocks.lookup.mockReset();
   networkMocks.lookup.mockImplementation(
     (
@@ -79,10 +62,6 @@ beforeEach(() => {
     ) => callback(null, [{ address: "93.184.216.34", family: 4 }]),
   );
   networkMocks.socketAddresses.length = 0;
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
 });
 
 describe("requestPublicUrl", () => {
@@ -188,20 +167,15 @@ describe("requestPublicUrl", () => {
     });
   });
 
-  it("wraps the agent for Node fetch's legacy dispatcher API", async () => {
+  it("dispatches through the pinned-lookup agent", async () => {
     queueResponse({ body: "public content" });
 
     await requestPublicUrl("https://example.com/page", REQUEST_OPTIONS);
 
     const [, fetchOptions] = networkMocks.fetch.mock.calls[0]!;
-    const fetchDispatcher = (
-      fetchOptions as RequestInit & {
-        dispatcher: unknown;
-      }
-    ).dispatcher;
-
-    expect(networkMocks.dispatcherTargets).toEqual(networkMocks.agentInstances);
-    expect(fetchDispatcher).toBe(networkMocks.dispatcherInstances[0]);
+    expect((fetchOptions as { dispatcher: unknown }).dispatcher).toBe(
+      networkMocks.agentInstances[0],
+    );
   });
 
   it("rejects private redirect targets without requesting them", async () => {
@@ -319,12 +293,8 @@ async function connectThroughDispatcher(input: URL, options: RequestInit): Promi
     return;
   }
 
-  const dispatcher = (
-    options as RequestInit & {
-      dispatcher: { dispatcher: { options: unknown } };
-    }
-  ).dispatcher;
-  const agentOptions = dispatcher.dispatcher.options as { connect: { lookup?: LookupFunction } };
+  const agent = (options as RequestInit & { dispatcher: { options: unknown } }).dispatcher;
+  const agentOptions = agent.options as { connect: { lookup?: LookupFunction } };
   const addresses = await runLookup(agentOptions.connect.lookup, hostname);
   networkMocks.socketAddresses.push(addresses);
 }

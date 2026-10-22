@@ -1,5 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import type { IFileSystem } from "just-bash";
 
@@ -97,6 +97,7 @@ export async function createBashSandbox(input: {
   const metadata = await readLocalMetadata(metadataPath);
 
   await mkdir(filesystemRootPath, { recursive: true });
+  await warmFileHandleRuntime(input.rootPath);
 
   const defaultFilesystem = new ReadWriteFs({
     allowSymlinks: true,
@@ -234,6 +235,28 @@ async function ensureLocalSandboxDirectories(filesystem: IFileSystem): Promise<v
   await filesystem.mkdir(WORKSPACE_ROOT, {
     recursive: true,
   });
+}
+
+let fileHandleRuntimeWarmed = false;
+
+/**
+ * just-bash blocks `FinalizationRegistry` while a script runs, and Bun's
+ * `fs.promises.open` lazily creates one the first time it hands out a
+ * `FileHandle`. Without this, the first `>` redirection inside the sandbox
+ * dies with an opaque `EIO`. Opening one throwaway handle before the
+ * interpreter exists lets Bun build its registry while the constructor is
+ * still available; Node creates it at module load, so this is a no-op there.
+ */
+async function warmFileHandleRuntime(rootPath: string): Promise<void> {
+  if (fileHandleRuntimeWarmed) return;
+  const probePath = join(rootPath, ".filehandle-warmup");
+  const handle = await open(probePath, "w");
+  try {
+    await handle.close();
+  } finally {
+    await rm(probePath, { force: true });
+  }
+  fileHandleRuntimeWarmed = true;
 }
 
 async function readLocalMetadata(metadataPath: string): Promise<LocalSandboxMetadata | null> {

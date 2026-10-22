@@ -32,12 +32,10 @@ export function getDevelopmentEnvironmentFilePaths(appRoot: string): string[] {
 }
 
 /**
- * Loads or reloads local development environment files from the application
- * root.
- *
- * Variables that existed before the first load keep parent-process
- * precedence. Variables supplied by env files are refreshed on subsequent
- * reloads so dev-mode file watching can pick up changed values.
+ * Loads or reloads the project's env files on top of Bun's own `.env`
+ * loading. Variables set by the parent process keep precedence; file-owned
+ * variables refresh on subsequent reloads so dev-mode file watching can pick
+ * up changed values.
  */
 export async function loadDevelopmentEnvironmentFiles(appRoot: string): Promise<void> {
   const resolvedAppRoot = resolve(appRoot);
@@ -85,15 +83,15 @@ function createDevelopmentEnvironmentLoader(
   appRoot: string,
   environmentRoot: string,
 ): DevelopmentEnvironmentLoader {
-  const protectedKeys = new Set(Object.keys(process.env));
-  const managedValues = new Map<string, string>();
+  /** The env files as of the last load; a variable still carrying its entry is file-owned. */
+  let fileValues: ReadonlyMap<string, string> = new Map();
 
   const stageReload = (): DevelopmentEnvironmentReload => {
-    const previousManagedValues = new Map(managedValues);
+    const previousFileValues = fileValues;
     const nextValues = readDevelopmentEnvironmentValues(environmentRoot);
     const settings = readProviderSettingsSync(appRoot);
     const affectedKeys = new Set([
-      ...managedValues.keys(),
+      ...previousFileValues.keys(),
       ...nextValues.keys(),
       MODEL_CONNECTION_ENV,
       "CORAX_MODEL_KEY_SOURCE",
@@ -108,11 +106,8 @@ function createDevelopmentEnvironmentLoader(
     if (keySource) process.env.CORAX_MODEL_KEY_SOURCE = keySource;
     else delete process.env.CORAX_MODEL_KEY_SOURCE;
 
-    applyDevelopmentEnvironmentValues({
-      managedValues,
-      nextValues,
-      protectedKeys,
-    });
+    applyDevelopmentEnvironmentValues(previousFileValues, nextValues);
+    fileValues = nextValues;
 
     return {
       commit() {
@@ -123,10 +118,7 @@ function createDevelopmentEnvironmentLoader(
           return;
         }
         settled = true;
-        managedValues.clear();
-        for (const [key, value] of previousManagedValues) {
-          managedValues.set(key, value);
-        }
+        fileValues = previousFileValues;
         for (const [key, value] of previousEnvironment) {
           if (value === undefined) {
             delete process.env[key];
@@ -147,29 +139,27 @@ function createDevelopmentEnvironmentLoader(
   };
 }
 
-function applyDevelopmentEnvironmentValues(input: {
-  readonly managedValues: Map<string, string>;
-  readonly nextValues: ReadonlyMap<string, string>;
-  readonly protectedKeys: ReadonlySet<string>;
-}): void {
-  for (const [key, previousValue] of input.managedValues) {
-    if (input.nextValues.has(key) || input.protectedKeys.has(key)) {
-      continue;
-    }
+/**
+ * Applies the env files with dotenv precedence: a variable the parent process
+ * set — one whose value is not what the files last provided — is never
+ * overridden, while file-owned variables follow edits and clear when their
+ * entry disappears. Bun already loads these files into `process.env` before
+ * any code runs, so the first load after Bun changes nothing; a launch from a
+ * subdirectory, which Bun does not read, fills in the project's values.
+ */
+function applyDevelopmentEnvironmentValues(
+  previous: ReadonlyMap<string, string>,
+  next: ReadonlyMap<string, string>,
+): void {
+  const fileOwned = (key: string): boolean => {
+    const current = process.env[key];
+    return current === undefined || current === previous.get(key);
+  };
 
-    if (process.env[key] === previousValue) {
-      delete process.env[key];
-    }
-
-    input.managedValues.delete(key);
+  for (const key of previous.keys()) {
+    if (!next.has(key) && fileOwned(key)) delete process.env[key];
   }
-
-  for (const [key, value] of input.nextValues) {
-    if (input.protectedKeys.has(key)) {
-      continue;
-    }
-
-    process.env[key] = value;
-    input.managedValues.set(key, value);
+  for (const [key, value] of next) {
+    if (fileOwned(key)) process.env[key] = value;
   }
 }
