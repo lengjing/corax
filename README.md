@@ -76,9 +76,9 @@ CLI 和 git、npm 一样从当前目录向上查找 agent 项目。`dev` 启动�
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | 空 | OpenAI 兼容模型服务密钥 |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | 模型接口地址 |
-| `CORAX_MODEL` | `gpt-4.1-mini` | 模型 ID |
+| `DEEPSEEK_API_KEY` | 空 | DeepSeek（OpenAI 兼容接口）密钥 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 模型接口地址 |
+| `CORAX_MODEL` | `deepseek-flash` | 模型 ID |
 | `CORAX_CONTEXT_WINDOW` | `128000` | 模型上下文 token 数 |
 | `CORAX_USERNAME` | `admin` | 示例 HTTP Basic 用户名 |
 | `CORAX_PASSWORD` | 空 | 示例生产会话 API 密码 |
