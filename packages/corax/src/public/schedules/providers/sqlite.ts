@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { Cron } from "#compiled/croner/index.js";
+import { nextSingleScheduleTime } from "#shared/schedule-time.js";
 import type {
   ScheduleExpression,
   ScheduleProvider,
@@ -70,9 +71,7 @@ function json(value: unknown): string {
 
 function nextTime(expression: ScheduleExpression, after: number): number | null {
   if (expression.type === "single") {
-    const at = Date.parse(expression.at);
-    if (!Number.isFinite(at)) throw new Error("Schedule time must be a valid date.");
-    return at > after ? at : null;
+    return nextSingleScheduleTime(expression, after);
   }
   if (expression.jitter !== undefined && expression.jitter !== 0) {
     throw new Error("SQLite schedules do not support jitter; omit it or set it to zero.");

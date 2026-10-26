@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { nextSingleScheduleTime } from "#shared/schedule-time.js";
 
 import type {
   ScheduleCreate,
@@ -47,7 +48,8 @@ export function inMemoryScheduleProvider(
           name: schedule.name,
           scheduleId: allocateScheduleId(context, schedule.name, scheduleIds, usedScheduleIds),
           state:
-            schedule.expression.type === "single" && Date.parse(schedule.expression.at) <= timestamp
+            schedule.expression.type === "single" &&
+            nextSingleScheduleTime(schedule.expression, timestamp) === null
               ? "completed"
               : "active",
           target: context.target,
