@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,14 +13,18 @@ import { resolveAuthoredPackageRoot } from "../packages/corax/dist/src/internal/
 const execute = promisify(execFile);
 const cli = fileURLToPath(new URL("../packages/corax/bin/corax.js", import.meta.url));
 
-test("each capability example is a valid flat agent with optional instructions", async () => {
-  for (const name of ["minimal", "channels", "memory", "sandbox", "basic"]) {
-    const root = fileURLToPath(new URL(`../examples/${name}`, import.meta.url));
-    const project = await resolveDiscoveryProject(root);
+test("every example is a valid flat agent that discovers without diagnostics", async () => {
+  const examplesRoot = fileURLToPath(new URL("../examples/", import.meta.url));
+  const names = (await readdir(examplesRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  assert.ok(names.includes("basic"));
+  for (const name of names) {
+    const project = await resolveDiscoveryProject(join(examplesRoot, name));
     assert.equal(project.layout, "flat", name);
     assert.equal(project.agentRoot, project.appRoot, name);
     const result = await discoverAgent(project);
-    assert.deepEqual(result.diagnostics.filter((item) => item.severity === "error"), [], name);
+    assert.deepEqual(result.diagnostics, [], name);
   }
 });
 

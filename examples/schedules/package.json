@@ -1,0 +1,14 @@
+{
+  "name": "corax-example-schedules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun ../../packages/corax/bin/corax.js dev",
+    "build": "bun ../../packages/corax/bin/corax.js build",
+    "start": "bun ../../packages/corax/bin/corax.js start"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "catalog:",
+    "corax": "workspace:*"
+  }
+}

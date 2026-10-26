@@ -10,11 +10,8 @@ corax 是 Bun 原生的本地 agent CLI 运行器：用户提供模块，CLI 负
 packages/corax/           核心发现、编译、执行、CLI 及服务宿主
 packages/corax-catalog/   内部集成目录库
 packages/tracing/       内部追踪库
-examples/minimal/      最小根定义
-examples/channels/     根定义加渠道
-examples/memory/       根定义加 memory
-examples/sandbox/      根定义加 sandbox
-examples/basic/        完整组合
+examples/<capability>/ 每个能力槽位一个扁平示例（见 examples/README.md）
+examples/basic/        全部能力的完整组合
 scripts/release.mjs     发布包组装与验证
 tests/                 Bun Test 产品回归
 docs/                  产品文档

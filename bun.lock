@@ -15,17 +15,53 @@
         "typescript": "7.0.2",
       },
     },
-    "examples/basic-agent": {
+    "examples/basic": {
       "name": "corax-example-basic",
       "version": "0.1.0",
       "dependencies": {
         "@ai-sdk/openai": "catalog:",
         "corax": "workspace:*",
         "just-bash": "3.1.0",
+        "zod": "catalog:",
       },
     },
     "examples/channels": {
       "name": "corax-example-channels",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/connections": {
+      "name": "corax-example-connections",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/evals": {
+      "name": "corax-example-evals",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/extensions": {
+      "name": "corax-example-extensions",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/hooks": {
+      "name": "corax-example-hooks",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/instrumentation": {
+      "name": "corax-example-instrumentation",
       "dependencies": {
         "@ai-sdk/openai": "catalog:",
         "corax": "workspace:*",
@@ -53,9 +89,41 @@
         "just-bash": "3.1.0",
       },
     },
+    "examples/schedules": {
+      "name": "corax-example-schedules",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/skills": {
+      "name": "corax-example-skills",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/subagents": {
+      "name": "corax-example-subagents",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+      },
+    },
+    "examples/tools": {
+      "name": "corax-example-tools",
+      "dependencies": {
+        "@ai-sdk/openai": "catalog:",
+        "corax": "workspace:*",
+        "zod": "catalog:",
+      },
+    },
     "packages/corax": {
       "name": "corax",
       "version": "0.1.0",
+      "bin": {
+        "corax": "./bin/corax.js",
+      },
       "dependencies": {
         "just-bash": "3.1.0",
         "nitro": "3.0.260903-beta",
@@ -986,15 +1054,33 @@
 
     "corax-catalog": ["corax-catalog@workspace:packages/corax-catalog"],
 
-    "corax-example-basic": ["corax-example-basic@workspace:examples/basic-agent"],
+    "corax-example-basic": ["corax-example-basic@workspace:examples/basic"],
 
     "corax-example-channels": ["corax-example-channels@workspace:examples/channels"],
+
+    "corax-example-connections": ["corax-example-connections@workspace:examples/connections"],
+
+    "corax-example-evals": ["corax-example-evals@workspace:examples/evals"],
+
+    "corax-example-extensions": ["corax-example-extensions@workspace:examples/extensions"],
+
+    "corax-example-hooks": ["corax-example-hooks@workspace:examples/hooks"],
+
+    "corax-example-instrumentation": ["corax-example-instrumentation@workspace:examples/instrumentation"],
 
     "corax-example-memory": ["corax-example-memory@workspace:examples/memory"],
 
     "corax-example-minimal": ["corax-example-minimal@workspace:examples/minimal"],
 
     "corax-example-sandbox": ["corax-example-sandbox@workspace:examples/sandbox"],
+
+    "corax-example-schedules": ["corax-example-schedules@workspace:examples/schedules"],
+
+    "corax-example-skills": ["corax-example-skills@workspace:examples/skills"],
+
+    "corax-example-subagents": ["corax-example-subagents@workspace:examples/subagents"],
+
+    "corax-example-tools": ["corax-example-tools@workspace:examples/tools"],
 
     "corax-tracing": ["corax-tracing@workspace:packages/tracing"],
 

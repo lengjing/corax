@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyAgentRootEntry,
+  classifyLocalSubagentEntry,
   classifySkillsDirectoryEntry,
   getSupportedModuleBaseName,
   isGeneratedSourceMapFileName,
   isTypeScriptDeclarationFileName,
   isAuthoredTestPath,
+  isDiscoverableAgentRootEntry,
 } from "./filesystem.js";
+
+describe("evals directory classification", () => {
+  it("ignores project evals only at the agent root", () => {
+    expect(classifyAgentRootEntry("evals", "directory")).toBe("ignored-directory");
+    expect(classifyLocalSubagentEntry("evals", "directory")).toBe("unknown");
+    expect(isDiscoverableAgentRootEntry("evals", "directory")).toBe(false);
+  });
+});
 
 describe("isAuthoredTestPath", () => {
   it.each(["ts", "cts", "mts", "js", "cjs", "mjs"])(

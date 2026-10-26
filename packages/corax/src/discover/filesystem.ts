@@ -174,6 +174,10 @@ export function classifyAgentRootEntry(
   }
 
   if (entryType === "directory") {
+    // Evals belong to the application root, which is also the agent root in
+    // flat projects. Subagent directories are not evaluation roots.
+    if (name === "evals") return "ignored-directory";
+
     if (GENERATED_AGENT_DIRECTORY_NAMES.has(name)) {
       return "ignored-directory";
     }

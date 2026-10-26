@@ -63,12 +63,21 @@ CLI 和 git、npm 一样从当前目录向上查找 agent 项目。`dev` 启动�
 | 示例 | 内容 |
 | --- | --- |
 | [`minimal`](examples/minimal/) | 只有模型与根定义 |
-| [`channels`](examples/channels/) | 只增加终端/API 渠道和认证 |
-| [`memory`](examples/memory/) | 只增加按用户隔离的 SQLite memory |
-| [`sandbox`](examples/sandbox/) | 只增加 JustBash sandbox |
-| [`basic`](examples/basic/) | 指令、渠道、memory、sandbox 完整组合 |
+| [`channels`](examples/channels/) | 终端/API 渠道和认证 |
+| [`memory`](examples/memory/) | 按用户隔离的 SQLite memory |
+| [`sandbox`](examples/sandbox/) | JustBash sandbox |
+| [`tools`](examples/tools/) | 自定义工具与 `lib/` 共享代码 |
+| [`skills`](examples/skills/) | 打包技能（`SKILL.md`）与单文件技能 |
+| [`connections`](examples/connections/) | OpenAPI 连接与按会话动态启用的 MCP 连接 |
+| [`schedules`](examples/schedules/) | Markdown 与 TypeScript 两种 cron 定时任务 |
+| [`subagents`](examples/subagents/) | 带独立指令的子 agent 委派 |
+| [`hooks`](examples/hooks/) | 观察事件流的钩子 |
+| [`extensions`](examples/extensions/) | 挂载内置 git 扩展 |
+| [`instrumentation`](examples/instrumentation/) | 本地 OpenTelemetry 追踪 |
+| [`evals`](examples/evals/) | `corax eval` 评测用例 |
+| [`basic`](examples/basic/) | 以上全部能力的完整组合 |
 
-将所选示例的 `.env.example` 复制为同目录 `.env`，填写模型配置。示例之间不互相依赖，可以复制能力模块进行组合。memory 与 sandbox 示例不额外附带渠道；交互使用时加入 channels 示例中的渠道定义。详见 [示例说明](examples/README.md)。
+将所选示例的 `.env.example` 复制为同目录 `.env`，填写模型配置。示例之间不互相依赖，可以复制能力模块进行组合。框架默认提供 corax 会话渠道；`channels`、`evals` 和 `basic` 另外展示显式渠道配置。详见 [示例说明](examples/README.md)。
 
 ## 示例配置
 

@@ -3,7 +3,10 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildMemoryAgentProject } from "#internal/testing/memory-agent-source.js";
-import { DISCOVER_SANDBOX_DIRECTORY_INVALID } from "#discover/grammar.js";
+import {
+  DISCOVER_SANDBOX_DIRECTORY_INVALID,
+  DISCOVER_UNSUPPORTED_DIRECTORY,
+} from "#discover/grammar.js";
 import { discoverAgent } from "#discover/discover-agent.js";
 import {
   DISCOVER_LOCAL_SUBAGENT_SCHEDULES_INVALID,
@@ -12,6 +15,32 @@ import {
 } from "#discover/discover-subagent.js";
 
 describe("discoverSubagents (memory)", () => {
+  it("ignores flat project evals but warns about misplaced subagent evals", async () => {
+    const project = buildMemoryAgentProject({
+      flat: true,
+      agentFiles: {
+        "agent.ts": "export default {};",
+        "instructions.md": "Delegate research.",
+        "evals/greeting.eval.ts": "throw new Error('evals must not be loaded by discovery');",
+        "subagents/researcher/agent.ts": "export default {};",
+        "subagents/researcher/instructions.md": "Research the task.",
+        "subagents/researcher/evals/misplaced.eval.ts": "export default {};",
+      },
+    });
+
+    const result = await discoverAgent(project);
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: DISCOVER_UNSUPPORTED_DIRECTORY,
+        severity: "warning",
+        sourcePath: join(resolve(project.agentRoot), "subagents", "researcher", "evals"),
+        message: 'Ignoring unsupported directory "evals/" in the local subagent root.',
+      }),
+    ]);
+    expect(result.manifest.subagents).toHaveLength(1);
+  });
+
   it("discovers recursive local subagent packages through the agent manifest", async () => {
     const project = buildMemoryAgentProject({
       agentFiles: {

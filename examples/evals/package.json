@@ -1,0 +1,15 @@
+{
+  "name": "corax-example-evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun ../../packages/corax/bin/corax.js dev",
+    "build": "bun ../../packages/corax/bin/corax.js build",
+    "start": "bun ../../packages/corax/bin/corax.js start",
+    "eval": "bun ../../packages/corax/bin/corax.js eval"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "catalog:",
+    "corax": "workspace:*"
+  }
+}

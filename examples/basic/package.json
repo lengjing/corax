@@ -7,11 +7,13 @@
     "dev": "bun ../../packages/corax/bin/corax.js dev",
     "build": "bun ../../packages/corax/bin/corax.js build",
     "start": "bun ../../packages/corax/bin/corax.js start",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "eval": "bun ../../packages/corax/bin/corax.js eval"
   },
   "dependencies": {
     "@ai-sdk/openai": "catalog:",
     "corax": "workspace:*",
-    "just-bash": "3.1.0"
+    "just-bash": "3.1.0",
+    "zod": "catalog:"
   }
 }
