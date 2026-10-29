@@ -50,6 +50,19 @@ describe("nextSingleScheduleTime", () => {
     expect(nextSingleScheduleTime({ type: "single", at }, instant)).toBeNull();
   });
 
+  it("rejects cron expressions in the single-date boundary", () => {
+    expect(() => nextSingleScheduleTime({ type: "single", at: "* * * * *" }, before)).toThrow(
+      "Schedule time must be a valid date.",
+    );
+  });
+
+  it("preserves unzoned milliseconds before comparing strict future time", () => {
+    const expression = { type: "single", at: "2030-01-01T12:00:00.123" } as const;
+    const instant = Date.parse("2030-01-01T12:00:00.123Z");
+    expect(nextSingleScheduleTime(expression, instant - 73)).toBe(instant);
+    expect(nextSingleScheduleTime(expression, instant)).toBeNull();
+  });
+
   it.each(["05:30", "05:45", "06:00", "06:30", "07:00"])(
     "does not repeat a one-time schedule during the DST fold at %sZ",
     (time) => {

@@ -10,6 +10,11 @@ export function nextSingleScheduleTime(
   expression: Extract<ScheduleExpression, { type: "single" }>,
   after: number,
 ): number | null {
+  const date =
+    /^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.(\d+))?)?)?(?:Z|[+-]\d{2}:?\d{2})?$/iu.exec(
+      expression.at,
+    );
+  if (!date) throw new Error("Schedule time must be a valid date.");
   // Direct provider callers can supply an ISO instant with sub-second
   // precision. Croner works at second precision, so preserve those instants.
   if (/(?:z|[+-]\d{2}:?\d{2})$/iu.test(expression.at)) {
@@ -17,12 +22,17 @@ export function nextSingleScheduleTime(
     if (!Number.isFinite(at)) throw new Error("Schedule time must be a valid date.");
     return at > after ? at : null;
   }
-  const schedule = new Cron(expression.at, {
+  if ((date[2]?.length ?? 0) > 3) {
+    throw new Error("Schedule wall-clock time supports at most millisecond precision.");
+  }
+  const milliseconds = Number((date[2] ?? "").padEnd(3, "0"));
+  const schedule = new Cron(expression.at.replace(/\.\d{1,3}$/u, ""), {
     paused: true,
     timezone: expression.timezone ?? "UTC",
   });
   try {
-    const next = schedule.nextRun(new Date(after))?.getTime();
+    const seconds = schedule.nextRun(new Date(after - milliseconds))?.getTime();
+    const next = seconds === undefined ? undefined : seconds + milliseconds;
     // During a repeated DST hour Croner can return the first occurrence even
     // when it is already past. A single schedule must not be queued again.
     return next !== undefined && next > after ? next : null;

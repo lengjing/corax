@@ -116,23 +116,20 @@ export function formatFailureDetail(event: FailureStreamEvent): string | undefin
 
 /**
  * Local-TUI hints keyed by the semantic-error catalog id the harness
- * writes into failure details. When the failing setup can be fixed from
- * inside the session, the catalog's hint — which names CLI commands and
- * dashboard URLs — is replaced with the in-session fix.
+ * writes into failure details, with configuration guidance for local development.
  */
 const LOCAL_HINT_OVERRIDES: Readonly<Record<string, string>> = {
   "gateway-auth-invalid-api-key":
-    "Run /model to refresh credentials, or update AI_GATEWAY_API_KEY in .env.local (a stale shell export can shadow it).",
+    "Update AI_GATEWAY_API_KEY in the launch environment or project .env.local (a shell export takes precedence), then restart corax dev. For a different provider, configure the model in agent.ts and its provider credentials.",
   "gateway-auth-invalid-oidc-token":
-    "Run /model to refresh the OIDC token, or set AI_GATEWAY_API_KEY in .env.local.",
+    "Set AI_GATEWAY_API_KEY in the launch environment or project .env.local, then restart corax dev; alternatively configure the model provider and its credentials in agent.ts.",
   "gateway-auth-missing-credentials":
-    "Run /model to connect this to a project and refresh AI Gateway credentials, or set AI_GATEWAY_API_KEY manually in .env.local.",
+    "Set AI_GATEWAY_API_KEY in the launch environment or project .env.local, then restart corax dev; alternatively configure the model provider and its credentials in agent.ts.",
 };
 
 /**
  * The surface-local hint for a failure, when the TUI can offer a better
- * fix than the catalog's (currently: gateway credential failures resolve
- * in-session via `/model`). Returns `undefined` to keep the harness hint.
+ * fix than the catalog's. Returns `undefined` to keep the harness hint.
  */
 export function localFailureHint(event: FailureStreamEvent): string | undefined {
   const id = failureDetails(event).semanticErrorId;

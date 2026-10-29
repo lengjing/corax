@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { findCoraxProjectRoot } from "#internal/corax-project-root.js";
@@ -32,10 +33,9 @@ export function getDevelopmentEnvironmentFilePaths(appRoot: string): string[] {
 }
 
 /**
- * Loads or reloads the project's env files on top of Bun's own `.env`
- * loading. Variables set by the parent process keep precedence; file-owned
- * variables refresh on subsequent reloads so dev-mode file watching can pick
- * up changed values.
+ * Captures the environment-file baseline and applies saved provider settings.
+ * Bun owns dotenv loading and interpolation. File edits require a process
+ * restart; reinterpreting process.env cannot recover where a value came from.
  */
 export async function loadDevelopmentEnvironmentFiles(appRoot: string): Promise<void> {
   const resolvedAppRoot = resolve(appRoot);
@@ -83,31 +83,26 @@ function createDevelopmentEnvironmentLoader(
   appRoot: string,
   environmentRoot: string,
 ): DevelopmentEnvironmentLoader {
-  /** The env files as of the last load; a variable still carrying its entry is file-owned. */
-  let fileValues: ReadonlyMap<string, string> = new Map();
+  const files = DEVELOPMENT_ENV_FILE_NAMES.map((name) => join(environmentRoot, name));
+  const initialContents = files.map(readEnvironmentFile);
+  // Both shell exports and Bun-loaded values take precedence over saved settings.
+  const protectedKeys = new Set(Object.keys(process.env));
 
-  const stageReload = (): DevelopmentEnvironmentReload => {
-    const previousFileValues = fileValues;
-    const nextValues = readDevelopmentEnvironmentValues(environmentRoot);
+  const stageSettings = (): DevelopmentEnvironmentReload => {
     const settings = readProviderSettingsSync(appRoot);
-    const affectedKeys = new Set([
-      ...previousFileValues.keys(),
-      ...nextValues.keys(),
-      MODEL_CONNECTION_ENV,
-      "CORAX_MODEL_KEY_SOURCE",
-    ]);
+    const affectedKeys = [MODEL_CONNECTION_ENV, "CORAX_MODEL_KEY_SOURCE"];
     const previousEnvironment = new Map(
       [...affectedKeys].map((key) => [key, process.env[key]] as const),
     );
     let settled = false;
-    if (settings) process.env[MODEL_CONNECTION_ENV] = settings.selected;
-    else delete process.env[MODEL_CONNECTION_ENV];
-    const keySource = settings?.keySource;
-    if (keySource) process.env.CORAX_MODEL_KEY_SOURCE = keySource;
-    else delete process.env.CORAX_MODEL_KEY_SOURCE;
-
-    applyDevelopmentEnvironmentValues(previousFileValues, nextValues);
-    fileValues = nextValues;
+    if (!protectedKeys.has(MODEL_CONNECTION_ENV)) {
+      if (settings) process.env[MODEL_CONNECTION_ENV] = settings.selected;
+      else delete process.env[MODEL_CONNECTION_ENV];
+    }
+    if (!protectedKeys.has("CORAX_MODEL_KEY_SOURCE")) {
+      if (settings?.keySource) process.env.CORAX_MODEL_KEY_SOURCE = settings.keySource;
+      else delete process.env.CORAX_MODEL_KEY_SOURCE;
+    }
 
     return {
       commit() {
@@ -118,7 +113,6 @@ function createDevelopmentEnvironmentLoader(
           return;
         }
         settled = true;
-        fileValues = previousFileValues;
         for (const [key, value] of previousEnvironment) {
           if (value === undefined) {
             delete process.env[key];
@@ -133,33 +127,28 @@ function createDevelopmentEnvironmentLoader(
   return {
     environmentRoot,
     reload() {
-      stageReload().commit();
+      stageSettings().commit();
     },
-    stageReload,
+    stageReload() {
+      // Only rebuilding requires the files to match the startup environment.
+      // Credential requests must keep working with that environment until restart.
+      if (files.some((path, index) => readEnvironmentFile(path) !== initialContents[index])) {
+        throw new Error(
+          "Environment files changed. Restart corax dev to load the updated environment.",
+        );
+      }
+      return stageSettings();
+    },
   };
 }
 
-/**
- * Applies the env files with dotenv precedence: a variable the parent process
- * set — one whose value is not what the files last provided — is never
- * overridden, while file-owned variables follow edits and clear when their
- * entry disappears. Bun already loads these files into `process.env` before
- * any code runs, so the first load after Bun changes nothing; a launch from a
- * subdirectory, which Bun does not read, fills in the project's values.
- */
-function applyDevelopmentEnvironmentValues(
-  previous: ReadonlyMap<string, string>,
-  next: ReadonlyMap<string, string>,
-): void {
-  const fileOwned = (key: string): boolean => {
-    const current = process.env[key];
-    return current === undefined || current === previous.get(key);
-  };
-
-  for (const key of previous.keys()) {
-    if (!next.has(key) && fileOwned(key)) delete process.env[key];
-  }
-  for (const [key, value] of next) {
-    if (fileOwned(key)) process.env[key] = value;
+function readEnvironmentFile(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
   }
 }

@@ -12,7 +12,7 @@ import {
   normalizeCatalogModelId,
 } from "#internal/model-catalog.js";
 import {
-  isGatewayModelRoutingEnabled,
+  isGatewayNetworkAllowed,
   modelLimitsRequireGatewayError,
 } from "#shared/model-helper.js";
 const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND = "corax-model-catalog-cache";
@@ -218,7 +218,7 @@ async function fetchAndPersistModelCatalog(
   appRoot: string,
 ): Promise<CompiledRuntimeModelCatalogCache> {
   // The catalog is a hosted gateway service; only contact it when the operator enabled AI Gateway.
-  if (!isGatewayModelRoutingEnabled()) {
+  if (!isGatewayNetworkAllowed()) {
     throw modelLimitsRequireGatewayError("the requested model");
   }
 

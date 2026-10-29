@@ -11,7 +11,8 @@ import { toErrorMessage } from "#shared/errors.js";
 import { parseJsonObject, type JsonObject } from "#shared/json.js";
 import {
   bareModelIdRequiresGatewayError,
-  isGatewayModelRoutingEnabled,
+  isBareModelIdAllowed,
+  isGatewayNetworkAllowed,
   modelLimitsRequireGatewayError,
 } from "#shared/model-helper.js";
 import type { ModuleSourceRef } from "#shared/source-ref.js";
@@ -214,7 +215,7 @@ async function normalizeAuthoredModelReference(input: {
   readonly value: PublicAgentStaticModelDefinition;
 }): Promise<CompiledRuntimeModelReference> {
   if (typeof input.value === "string") {
-    if (!isGatewayModelRoutingEnabled()) {
+    if (!isBareModelIdAllowed()) {
       throw bareModelIdRequiresGatewayError(input.value, input.sourcePath ?? "agent.ts");
     }
     const routing = classifyModelRouting(input.value, input.providerOptions);
@@ -296,7 +297,7 @@ async function normalizeAuthoredModelReference(input: {
 
     // Provider-model lookups below hit the AI Gateway catalog; skip them unless opted in and
     // let withCompiledRuntimeModelLimits resolve built-in limits or raise a clear error.
-    if (isGatewayModelRoutingEnabled()) {
+    if (isGatewayNetworkAllowed()) {
       try {
         const providerResult = await input.modelCatalog.getByProviderModelId(
           languageModel.provider,
@@ -384,7 +385,7 @@ async function withCompiledRuntimeModelLimits(
   try {
     limits = await input.modelCatalog.getModelLimits(model.id);
   } catch (error) {
-    if (!isGatewayModelRoutingEnabled()) {
+    if (!isGatewayNetworkAllowed()) {
       throw modelLimitsRequireGatewayError(model.id, input.purpose);
     }
     throw new Error(
@@ -393,7 +394,7 @@ async function withCompiledRuntimeModelLimits(
   }
 
   if (limits === null) {
-    if (!isGatewayModelRoutingEnabled()) {
+    if (!isGatewayNetworkAllowed()) {
       throw modelLimitsRequireGatewayError(model.id, input.purpose);
     }
     throw new Error(

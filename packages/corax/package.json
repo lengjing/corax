@@ -485,18 +485,6 @@
       "default": "./dist/src/public/channels/linear/index.js"
     },
     "./package.json": "./package.json",
-    "./setup/scaffold": {
-      "corax-source": "./dist/src/setup/scaffold/index.js",
-      "types": "./dist/src/setup/scaffold/index.d.ts",
-      "import": "./dist/src/setup/scaffold/index.js",
-      "default": "./dist/src/setup/scaffold/index.js"
-    },
-    "./setup": {
-      "corax-source": "./dist/src/setup/index.js",
-      "types": "./dist/src/setup/index.d.ts",
-      "import": "./dist/src/setup/index.js",
-      "default": "./dist/src/setup/index.js"
-    },
     "./self-modification/config": {
       "corax-source": "./src/self-modification/config.ts",
       "types": "./dist/src/self-modification/config.d.ts",

@@ -51,7 +51,10 @@ export async function handleDevelopmentModelCredentialRequest(
     return Response.json(credential, { headers });
   } catch {
     return Response.json(
-      { error: "The model connection is unavailable. Run /login to reconnect." },
+      {
+        error:
+          "The model connection is unavailable. Check the provider credentials and restart corax dev.",
+      },
       { status: 503, headers },
     );
   }

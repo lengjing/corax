@@ -33,7 +33,8 @@ import {
 import { parseJsonObject, type JsonObject } from "#shared/json.js";
 import {
   bareModelIdRequiresGatewayError,
-  isGatewayModelRoutingEnabled,
+  isBareModelIdAllowed,
+  isGatewayNetworkAllowed,
   modelLimitsRequireGatewayError,
 } from "#shared/model-helper.js";
 import {
@@ -79,13 +80,13 @@ export async function resolveRuntimeModelReference(
     return await loadSourceBackedRuntimeModelReference(reference, scope);
   }
 
-  // A bare id falls through to the AI SDK default provider, i.e. the AI
-  // Gateway. Refuse unless the operator opted in rather than failing with an
-  // opaque credential error from a service they never configured.
-  if (!isGatewayModelRoutingEnabled()) {
+  // A bare id uses the SDK default provider, or Gateway with explicit opt-in.
+  if (!isBareModelIdAllowed()) {
     throw bareModelIdRequiresGatewayError(reference.id);
   }
 
+  // Keep the SDK's custom default provider ahead of development Gateway transport.
+  if (Reflect.get(globalThis, "AI_SDK_DEFAULT_PROVIDER") != null) return reference.id;
   return localGatewayModel(reference.id) ?? reference.id;
 }
 
@@ -191,7 +192,7 @@ export async function resolveRuntimeModelSelection(input: {
   const catalog = input.catalog ?? runtimeModelCatalogForState(input.state);
   if (typeof selectedModel === "string") {
     const id = formatLanguageModelGatewayId(selectedModel);
-    if (!isGatewayModelRoutingEnabled()) throw bareModelIdRequiresGatewayError(id);
+    if (!isBareModelIdAllowed()) throw bareModelIdRequiresGatewayError(id);
     if (promptCache !== undefined) throw gatewayPromptCacheError(id);
     const metadata = await resolveSelectionMetadata({
       cacheKey: `gateway:${id}`,
@@ -293,7 +294,7 @@ async function resolveSelectionMetadata(input: {
   }
 
   // Catalog lookups are network requests to the AI Gateway; never issue them implicitly.
-  if (!isGatewayModelRoutingEnabled()) {
+  if (!isGatewayNetworkAllowed()) {
     throw modelLimitsRequireGatewayError(input.modelLabel);
   }
 

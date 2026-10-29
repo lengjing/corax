@@ -7,8 +7,7 @@ import type {
 } from "#public/sandbox/docker-sandbox.js";
 
 /**
- * Default base image for the Docker provider: corax's published sandbox
- * runtime image.
+ * Default base image for the Docker provider: the pinned upstream sandbox image.
  */
 export const DEFAULT_DOCKER_SANDBOX_IMAGE = DEFAULT_CORAX_SANDBOX_IMAGE;
 

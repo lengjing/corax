@@ -20,21 +20,22 @@ describe("corax sandbox image", () => {
     vi.resetModules();
   });
 
-  it("uses the versioned GHCR image", () => {
-    expect(resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:1.2.3");
-    expect(DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:1.2.3");
+  it("uses the pinned upstream GHCR image", () => {
+    expect(resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:0.79.1");
+    expect(DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:0.79.1");
   });
 
   it.each([
-    ["0.56.0+git.4c27b3e37fa36d84", "0.56.0"],
-    ["0.56.0+main.4c27b3e37fa36d84", "0.56.0"],
-    ["0.56.0-beta.1+git.4c27b3e37fa36d84", "0.56.0-beta.1"],
-  ])("uses the release image for artifact version %s", async (version, tag) => {
+    "0.1.0",
+    "1.2.3",
+    "0.56.0+git.4c27b3e37fa36d84",
+    "0.56.0-beta.1+git.4c27b3e37fa36d84",
+  ])("keeps the upstream image independent of Corax version %s", async (version) => {
     packageInfo.version = version;
     vi.resetModules();
     const images = await import("#execution/sandbox/bindings/corax-image.js");
-    expect(images.resolveCoraxSandboxImage()).toBe(`ghcr.io/vercel/eve:${tag}`);
-    expect(images.DEFAULT_CORAX_SANDBOX_IMAGE).toBe(`ghcr.io/vercel/eve:${tag}`);
+    expect(images.resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:0.79.1");
+    expect(images.DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:0.79.1");
   });
 
   it("uses CORAX_SANDBOX_IMAGE_TAG when set", async () => {
@@ -46,4 +47,23 @@ describe("corax sandbox image", () => {
     expect(images.resolveCoraxSandboxImage()).toBe("ghcr.io/vercel/eve:latest");
     expect(images.DEFAULT_CORAX_SANDBOX_IMAGE).toBe("ghcr.io/vercel/eve:latest");
   });
+
+  it.each(["", "   ", " custom-tag "])(
+    "resolves provider defaults and explicit image overrides with tag %j",
+    async (tag) => {
+      vi.stubEnv("CORAX_SANDBOX_IMAGE_TAG", tag);
+      vi.resetModules();
+      const { resolveDockerSandboxOptions } = await import("./docker-options.js");
+      const { resolveMicrosandboxOptions } = await import("./microsandbox-options.js");
+      const expected = `ghcr.io/vercel/eve:${tag.trim() || "0.79.1"}`;
+      expect(resolveDockerSandboxOptions().image).toBe(expected);
+      expect(resolveMicrosandboxOptions(undefined).image).toBe(expected);
+      expect(resolveDockerSandboxOptions({ image: "custom/image:fixed" }).image).toBe(
+        "custom/image:fixed",
+      );
+      expect(resolveMicrosandboxOptions({ image: "custom/image:fixed" }).image).toBe(
+        "custom/image:fixed",
+      );
+    },
+  );
 });

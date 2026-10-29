@@ -7,17 +7,35 @@ import { promisify } from "node:util";
 import test from "./support/test.mjs";
 
 const execute = promisify(execFile);
-const moduleUrl = (path) => new URL(`../packages/corax/dist/src/${path}.js`, import.meta.url).href;
+const moduleUrl = (path) => new URL(`../packages/corax/src/${path}.ts`, import.meta.url).href;
 
 test("one-time schedules and delay delivery are independent of the host timezone", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "corax-schedule-timezones-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const script = `
 import { Database } from "bun:sqlite";
+import assert from "node:assert/strict";
+import { nextSingleScheduleTime } from ${JSON.stringify(moduleUrl("shared/schedule-time"))};
 import { sqliteScheduleProvider, pumpSqliteSchedules } from ${JSON.stringify(moduleUrl("public/schedules/providers/sqlite"))};
 import { inMemoryScheduleProvider } from ${JSON.stringify(moduleUrl("public/schedules/providers/in-memory"))};
 import { resolveScheduleTiming } from ${JSON.stringify(moduleUrl("runtime/schedules/validation"))};
 const path = process.argv[1];
+for (const [at, timezone, expected] of [
+  ["2030-01-01T12:00:00.123", undefined, "2030-01-01T12:00:00.123Z"],
+  ["2030-01-01T12:00:00.1", "Asia/Shanghai", "2030-01-01T04:00:00.100Z"],
+  ["2027-03-14T02:30:00.123", "America/New_York", "2027-03-14T07:30:00.123Z"],
+  ["2027-11-07T01:30:00.123", "America/New_York", "2027-11-07T05:30:00.123Z"],
+  ["2030-01-01T12:00:00.123+08:00", "UTC", "2030-01-01T04:00:00.123Z"],
+  ["2030-01-01T12:00:00.123456Z", undefined, "2030-01-01T12:00:00.123Z"],
+]) {
+  const expression = { type: "single", at, timezone };
+  const instant = Date.parse(expected);
+  assert.equal(nextSingleScheduleTime(expression, instant - 73), instant);
+  assert.equal(nextSingleScheduleTime(expression, instant), null);
+  assert.equal(nextSingleScheduleTime(expression, instant + 1), null);
+}
+assert.throws(() => nextSingleScheduleTime({ type: "single", at: "* * * * *" }, 0), /valid date/);
+assert.throws(() => nextSingleScheduleTime({ type: "single", at: "2030-01-01T12:00:00.1234" }, 0), /millisecond precision/);
 Date.now = () => Date.parse("2027-01-01T00:00:00Z");
 const signal = new AbortController().signal;
 const context = { operationId: "create-delay", abortSignal: signal, namespace: "alice", collection: "reminders", target: { key: "agent" } };
@@ -34,6 +52,7 @@ let rows;
 try { rows = db.query("SELECT name, nextAt FROM schedules ORDER BY name").all(); }
 finally { db.close(true); }
 const memory = inMemoryScheduleProvider({ now: () => new Date(now) });
+await assert.rejects(memory.create(context, { name: "invalid", expression: { type: "single", at: "* * * * *" }, payload: {} }), /valid date/);
 const memoryRecord = await memory.create(context, { name: "delay", expression, payload: {} });
 const pastInZone = await memory.create({ ...context, operationId: "past-zoned" }, {
   name: "past", expression: { type: "single", at: "2000-01-01T12:00", timezone: "Asia/Shanghai" }, payload: {},
@@ -63,7 +82,13 @@ console.log(JSON.stringify({ state: created.state, expected, rows, memoryState: 
   for (const timezone of ["UTC", "Asia/Shanghai", "America/New_York"]) {
     const { stdout } = await execute(
       process.execPath,
-      ["-e", script, join(root, `${timezone.replaceAll("/", "-")}.sqlite`)],
+      [
+        "--no-env-file",
+        "--conditions=corax-source",
+        "-e",
+        script,
+        join(root, `${timezone.replaceAll("/", "-")}.sqlite`),
+      ],
       { env: { ...process.env, TZ: timezone }, timeout: 30_000 },
     );
     const result = JSON.parse(stdout);

@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import test from "./support/test.mjs";
 import {
   bareModelIdRequiresGatewayError,
-  isGatewayModelRoutingEnabled,
+  isBareModelIdAllowed,
+  isGatewayNetworkAllowed,
 } from "../packages/corax/dist/src/shared/model-helper.js";
 import { resolveRuntimeModelReference } from "../packages/corax/dist/src/runtime/agent/resolve-model.js";
 import { resolveGatewayModelCredential } from "../packages/corax/dist/src/internal/model-auth/gateway-credential.js";
@@ -26,18 +27,21 @@ function withoutGatewayOptIn(t) {
       else process.env[key] = saved[key];
     }
     if (defaultProvider !== undefined) Reflect.set(globalThis, "AI_SDK_DEFAULT_PROVIDER", defaultProvider);
+    else Reflect.deleteProperty(globalThis, "AI_SDK_DEFAULT_PROVIDER");
   });
 }
 
 test("AI Gateway routing is disabled unless the operator opts in", (t) => {
   withoutGatewayOptIn(t);
-  assert.equal(isGatewayModelRoutingEnabled(), false);
-  assert.equal(isGatewayModelRoutingEnabled({ AI_GATEWAY_API_KEY: "key" }), true);
-  assert.equal(isGatewayModelRoutingEnabled({ CORAX_MODEL_CONNECTION: "ai-gateway-key" }), true);
+  assert.equal(isBareModelIdAllowed(), false);
+  assert.equal(isGatewayNetworkAllowed(), false);
+  assert.equal(isGatewayNetworkAllowed({ AI_GATEWAY_API_KEY: "key" }), true);
+  assert.equal(isGatewayNetworkAllowed({ CORAX_MODEL_CONNECTION: "ai-gateway-key" }), true);
   for (const connection of ["vercel", "vercel-cli", "ai-gateway-project", "openai", "anthropic", "chatgpt", ""])
-    assert.equal(isGatewayModelRoutingEnabled({ CORAX_MODEL_CONNECTION: connection }), false);
+    assert.equal(isGatewayNetworkAllowed({ CORAX_MODEL_CONNECTION: connection }), false);
   Reflect.set(globalThis, "AI_SDK_DEFAULT_PROVIDER", { languageModel() {} });
-  assert.equal(isGatewayModelRoutingEnabled({}), true);
+  assert.equal(isBareModelIdAllowed({}), true);
+  assert.equal(isGatewayNetworkAllowed({}), false);
 });
 
 test("a bare model id is rejected at runtime instead of reaching the Vercel gateway", async (t) => {

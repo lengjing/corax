@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BOOT_DETECTIONS,
-  CLI_MISSING_SETUP_ISSUE,
   detectSetupIssues,
   formatSetupIssuesLine,
-  LOGIN_SETUP_ISSUE,
   orderedSetupIssues,
   normalizeLocalModelEndpoint,
   type BootDetectionContext,
@@ -49,16 +47,13 @@ describe("BOOT_DETECTIONS", () => {
     expect(issues).toEqual([
       {
         kind: "attention",
-        label: "connect a model",
-        command: "/login",
+        label: "AI Gateway credentials missing",
+        helper: expect.stringContaining("AI_GATEWAY_API_KEY"),
       },
     ]);
   });
 
-  it.each([
-    ["AI_GATEWAY_API_KEY", "key"],
-    ["VERCEL_OIDC_TOKEN", "token"],
-  ])(
+  it.each([["AI_GATEWAY_API_KEY", "key"]])(
     "treats a newly loaded gateway credential as configured while runtime info catches up",
     async (key, value) => {
       const info = infoWithRouting(
@@ -119,7 +114,7 @@ describe("BOOT_DETECTIONS", () => {
     },
   );
 
-  it.each(["oidc", "oauth"] as const)(
+  it.each(["api-key"] as const)(
     "stays quiet when the runtime reports a connected %s endpoint",
     async (credential) => {
       const info = infoWithRouting(
@@ -150,32 +145,23 @@ describe("formatSetupIssuesLine", () => {
   it("mirrors the Claude Code attention-line shape", () => {
     expect(
       formatSetupIssuesLine([
-        { kind: "attention", label: "AI Gateway credentials", command: "/login" },
+        { kind: "attention", label: "Configuration", command: "/info" },
       ]),
-    ).toBe("1 setup issue: AI Gateway credentials · /login");
+    ).toBe("1 setup issue: Configuration · /info");
   });
 
   it("pluralizes and joins multiple issues", () => {
     expect(
       formatSetupIssuesLine([
-        { kind: "attention", label: "AI Gateway credentials", command: "/login" },
-        { kind: "attention", label: "Channels", command: "/channels" },
+        { kind: "attention", label: "Credentials", helper: "Configure credentials; restart." },
+        { kind: "attention", label: "Configuration", command: "/info" },
       ]),
-    ).toBe("2 setup issues: AI Gateway credentials · /login, Channels · /channels");
+    ).toBe("2 setup issues: Credentials · Configure credentials; restart., Configuration · /info");
   });
 
-  it("formats the logged-out hint, which is not a boot detection", () => {
-    // Confirming login is a `vercel whoami` subprocess, so the hint lives
-    // outside the cheap-and-local BOOT_DETECTIONS and is rendered by the runner.
-    expect(BOOT_DETECTIONS.some((detection) => detection.id === "login")).toBe(false);
-    expect(formatSetupIssuesLine([LOGIN_SETUP_ISSUE])).toBe(
-      "1 setup issue: not logged in · /deploy",
-    );
-  });
-
-  it("formats the CLI-missing hint, which points at its own fix command", () => {
-    expect(formatSetupIssuesLine([CLI_MISSING_SETUP_ISSUE])).toBe(
-      "1 setup issue: Vercel CLI not found · /deploy",
+  it("formats a label without optional remediation", () => {
+    expect(formatSetupIssuesLine([{ kind: "attention", label: "Configuration" }])).toBe(
+      "1 setup issue: Configuration",
     );
   });
 });
@@ -185,34 +171,35 @@ describe("orderedSetupIssues", () => {
     const modelIssue = {
       kind: "attention" as const,
       label: "connect a model",
-      command: "/login" as const,
+      helper: "Configure the provider; restart.",
     };
-    expect(orderedSetupIssues([modelIssue], CLI_MISSING_SETUP_ISSUE)).toEqual([
-      CLI_MISSING_SETUP_ISSUE,
-      modelIssue,
-    ]);
-    expect(orderedSetupIssues([modelIssue], LOGIN_SETUP_ISSUE)).toEqual([
-      LOGIN_SETUP_ISSUE,
-      modelIssue,
-    ]);
+    const authIssue = {
+      kind: "attention" as const,
+      label: "Credentials",
+      helper: "Update the key.",
+    };
+    expect(orderedSetupIssues([modelIssue], authIssue)).toEqual([authIssue, modelIssue]);
   });
 
   it("returns the boot issues unchanged when no auth prerequisite is unmet", () => {
     const boot = [
-      { kind: "attention" as const, label: "AI Gateway credentials missing", command: "/login" },
+      {
+        kind: "attention" as const,
+        label: "AI Gateway credentials missing",
+        helper: "Update the key.",
+      },
     ];
     expect(orderedSetupIssues(boot, undefined)).toEqual(boot);
   });
 });
 
-it("preserves a validated Vercel connection and team when a shell Gateway key also exists", () => {
+it("preserves a connected endpoint when a shell Gateway key is not selected", () => {
   const info = infoWithRouting(
     { kind: "gateway", target: "openai" },
     {
       kind: "gateway",
       connected: true,
-      credential: "oauth",
-      team: "alice",
+      credential: "api-key",
     },
   );
   expect(

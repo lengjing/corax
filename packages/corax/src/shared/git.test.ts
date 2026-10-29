@@ -24,7 +24,7 @@ describe("Git helpers", () => {
 
   it("uses a clean GitHub remote and brokers credentials only at the firewall", () => {
     expect(gitHubRemoteUrl({ owner: "vercel", repo: "corax" })).toBe(
-      "https://github.com/vercel/eve.git",
+      "https://github.com/vercel/corax.git",
     );
     const authorization = `Basic ${Buffer.from("x-access-token:secret").toString("base64")}`;
     expect(gitHubGitBrokerNetworkPolicy("secret")).toEqual({

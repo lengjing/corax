@@ -21,6 +21,7 @@ export default function installSqliteSchedules(
   let failed = false;
 
   const poll = async () => {
+    let moreWork = false;
     try {
       const source = resolveNitroCompiledArtifactsSource(config);
       const manifest = await loadCompiledManifest({ compiledArtifactsSource: source });
@@ -37,7 +38,7 @@ export default function installSqliteSchedules(
         });
         const path = readSqliteSchedulePath(definition.provider);
         if (!path) throw new Error("SQLite schedule provider path is missing.");
-        await pumpSqliteSchedules({
+        const remaining = await pumpSqliteSchedules({
           path,
           application: manifest.config.name,
           collection: collection.name,
@@ -68,6 +69,7 @@ export default function installSqliteSchedules(
             });
           },
         });
+        moreWork ||= remaining;
       }
       failed = false;
     } catch {
@@ -78,7 +80,7 @@ export default function installSqliteSchedules(
       if (!abort.signal.aborted) {
         timer = setTimeout(() => {
           active = poll();
-        }, 1000);
+        }, moreWork ? 0 : 1000);
         timer.unref();
       }
     }

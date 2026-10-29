@@ -8,17 +8,23 @@ export const GATEWAY_MODEL_CONNECTIONS = ["ai-gateway-key"] as const;
  *
  * The AI SDK resolves a bare string with `globalThis.AI_SDK_DEFAULT_PROVIDER ??
  * gateway`, which means the hosted AI Gateway unless the operator installed their
- * own default provider. Corax never contacts the gateway implicitly: the
- * operator must opt in through `CORAX_MODEL_CONNECTION`, `AI_GATEWAY_API_KEY`,
- * or by setting `AI_SDK_DEFAULT_PROVIDER` themselves.
+ * own default provider. Installing a default provider permits bare IDs, but
+ * does not authorize requests to the hosted Gateway catalog.
  */
-export function isGatewayModelRoutingEnabled(
+export function isBareModelIdAllowed(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return Reflect.get(globalThis, "AI_SDK_DEFAULT_PROVIDER") != null || isGatewayNetworkAllowed(env);
+}
+
+/** Whether the operator explicitly enabled network requests to AI Gateway. */
+export function isGatewayNetworkAllowed(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   const selected = env[MODEL_CONNECTION_ENV];
   if ((GATEWAY_MODEL_CONNECTIONS as readonly string[]).includes(selected ?? "")) return true;
   if (env.AI_GATEWAY_API_KEY?.trim()) return true;
-  return Reflect.get(globalThis, "AI_SDK_DEFAULT_PROVIDER") != null;
+  return false;
 }
 
 /** Error raised when a bare model id would be routed through AI Gateway without opt-in. */

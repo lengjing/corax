@@ -9,6 +9,9 @@ import { createTestAgentInfoResult } from "#internal/testing/agent-info-fixture.
 
 import { CoraxTUIRunner, type AgentTUIRenderer } from "./runner.js";
 import { detectSetupIssues, formatSetupIssuesLine, type SetupIssue } from "./setup-issues.js";
+import { TerminalRenderer } from "./terminal-renderer.js";
+import { MockScreen, MockUserInput } from "./test/mock-terminal.js";
+import { parsePromptCommand } from "./prompt-commands.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -67,9 +70,27 @@ describe("BOOT_DETECTIONS against a real directory", () => {
       {
         kind: "attention",
         label: "AI Gateway credentials missing",
-        command: "/login",
+        helper: expect.stringContaining("AI_GATEWAY_API_KEY"),
       },
     ]);
+    const screen = new MockScreen({ columns: 240, rows: 30 });
+    const renderer = new TerminalRenderer({
+      input: new MockUserInput(),
+      output: screen,
+      captureForeignOutput: false,
+      unicode: true,
+    });
+    renderer.renderSetupWarning(formatSetupIssuesLine(issues));
+    const rendered = screen.snapshot();
+    renderer.shutdown();
+    expect(rendered).toContain("AI_GATEWAY_API_KEY");
+    expect(rendered).toContain("restart corax dev");
+    expect(rendered).not.toMatch(/\/(?:login|model)\b/);
+    expect(parsePromptCommand("/login")).toBeNull();
+    expect(parsePromptCommand("/model")).toBeNull();
+    for (const issue of issues) {
+      if (issue.command !== undefined) expect(parsePromptCommand(issue.command)).not.toBeNull();
+    }
   });
 
   it("renders boot setup issues before opening the composer when inspection is unavailable", async () => {

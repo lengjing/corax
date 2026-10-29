@@ -212,32 +212,33 @@ describe("addLocalRegistryItem", () => {
 
     expect(result.status).toBe("needs-terminal");
     expect(result.title).toBe("Slack");
-    expect(result.nextCommand).toBe("corax add channel/slack");
+    expect(result.nextCommand).toBeUndefined();
     expect(calls).toHaveLength(0);
   });
 
-  it("returns the exact installation command for a headless Linear handoff", async () => {
+  it("returns manual configuration guidance for a headless Linear handoff", async () => {
     const result = await addLocalRegistryItem("connection/linear", {
       getCapability: () => capability(),
     });
 
     expect(result).toMatchObject({
       address: "connection/linear",
-      nextCommand: "corax add connection/linear",
       status: "needs-terminal",
     });
-    expect(result.message).toContain("`corax add connection/linear`");
+    expect(result.nextCommand).toBeUndefined();
+    expect(result.message).toContain("documentation for connection/linear");
+    expect(result.message).toContain("restart corax dev");
   });
 
-  it("leaves the automatically queued setup to an interactive client", async () => {
+  it("does not promise automatic setup to an interactive client", async () => {
     const result = await addLocalRegistryItem("channel/slack", {
       getCapability: () => capability({ interactiveClient: true }),
     });
 
     expect(result.nextCommand).toBeUndefined();
-    expect(result.message).toContain("has not been installed yet");
-    expect(result.message).toContain("opens after this reply");
-    expect(result.message).toContain("Do not ask the developer to run another command");
+    expect(result.message).toContain("was not installed");
+    expect(result.message).toContain("configure it manually");
+    expect(result.message).not.toMatch(/setup panel|opens after this reply|corax add/);
   });
 
   it("installs an exact item from a configured registry without restricting its address", async () => {
@@ -419,7 +420,7 @@ describe("unsetEnvVars", () => {
 });
 
 describe("handoffMessage", () => {
-  it("names the shell command with no interactive client", () => {
+  it("provides manual configuration guidance with no interactive client", () => {
     expect(
       handoffMessage({
         address: "channel/slack",
@@ -428,12 +429,11 @@ describe("handoffMessage", () => {
         title: "Slack",
       }),
     ).toEqual({
-      message: expect.stringContaining("`corax add channel/slack`"),
-      nextCommand: "corax add channel/slack",
+      message: expect.stringContaining("configure it manually"),
     });
   });
 
-  it("directs an interactive client to the automatically opened setup panel", () => {
+  it("directs an interactive client to manual configuration without promising a panel", () => {
     expect(
       handoffMessage({
         address: "channel/slack",
@@ -442,7 +442,7 @@ describe("handoffMessage", () => {
         title: "Slack",
       }),
     ).toEqual({
-      message: expect.stringContaining("setup panel"),
+      message: expect.stringContaining("configure it manually"),
     });
   });
 });

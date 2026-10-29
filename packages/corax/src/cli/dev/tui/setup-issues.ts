@@ -1,14 +1,16 @@
 import type { AgentInfoResult } from "#client/index.js";
 import { hasEnvValue, resolveGatewayCredential } from "#internal/resolve-model-endpoint-status.js";
 
-/** One boot-time setup problem the TUI can point at a fixing command. */
+/** One boot-time setup problem and its remediation. */
 export interface SetupIssue {
   /** Diagnostics never authorize a command by themselves. */
   kind: "attention";
   /** Short category label, e.g. "AI Gateway credentials". */
   label: string;
-  /** The slash command that fixes it, e.g. "/model". */
-  command: string;
+  /** An available slash command, when remediation has one. */
+  command?: string;
+  /** Configuration instructions when no in-session command can fix it. */
+  helper?: string;
 }
 
 /** What a boot detection may inspect. */
@@ -124,7 +126,7 @@ function modelProviderAccess(
 /**
  * One diagnosis for the model-provider path. An external-provider model is
  * skipped entirely: it reaches the model with its own provider key, so gateway
- * credentials don't apply (and /model can't reconfigure it). For a gateway
+ * credentials don't apply. For a gateway
  * model it reports only the missing credential. The header and detection
  * receive the same local-credential-normalized endpoint snapshot. A hint, not
  * an error: the model call stays the source of truth.
@@ -144,7 +146,8 @@ const modelProvider: BootDetection = {
       {
         kind: "attention",
         label: "AI Gateway credentials missing",
-        command: "/login",
+        helper:
+          "Set AI_GATEWAY_API_KEY in the launch environment, or configure the model provider in agent.ts; restart corax dev.",
       },
     ];
   },
@@ -189,6 +192,8 @@ export function orderedSetupIssues(
  */
 export function formatSetupIssuesLine(issues: readonly SetupIssue[]): string {
   const noun = issues.length === 1 ? "setup issue" : "setup issues";
-  const entries = issues.map((issue) => `${issue.label} · ${issue.command}`).join(", ");
+  const entries = issues
+    .map((issue) => [issue.label, issue.command, issue.helper].filter(Boolean).join(" · "))
+    .join(", ");
   return `${issues.length} ${noun}: ${entries}`;
 }

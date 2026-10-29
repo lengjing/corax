@@ -87,7 +87,7 @@ function renderEndpoint(input: Pick<StatusLineInput, "endpoint" | "theme">): str
         return c.dim("chatgpt-sub checking…");
       case "signed-out":
       case "reauth-required":
-        return c.yellow(`${g.warning} chatgpt-sub login · /login`);
+        return c.yellow(`${g.warning} chatgpt-sub: configure provider credentials; restart corax dev`);
       case "unavailable":
         return c.yellow(`${g.warning} chatgpt-sub unavailable`);
     }

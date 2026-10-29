@@ -272,7 +272,7 @@ type TerminalRendererOptions = {
   diagnostics?: DevDiagnostics;
   /** Slash commands available in this local or remote session. */
   availablePromptCommands?: readonly PromptCommandSpec[];
-  /** Catalog entries available to inline `/model`, `/add`, and `/login` completion. */
+  /** Catalog entries for commands with argument typeahead, such as `/loglevel`. */
   argumentSuggestions?: (
     command: ArgumentTypeaheadCommand,
   ) => Promise<readonly PromptArgumentSuggestion[]>;
@@ -909,7 +909,7 @@ export class TerminalRenderer implements AgentTUIRenderer {
               apply(lineOf(`${argumentTypeaheadCompletion(argumentOpen, argumentSelected)} `));
               break;
             }
-            // `/add` and `/model` share their inline drawer whether the
+            // Commands with argument typeahead share their inline drawer whether the
             // command was typed exactly or reached through slash completion.
             if (
               argumentOpen === undefined &&

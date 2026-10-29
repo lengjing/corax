@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getDevelopmentEnvironmentFilePaths,
@@ -10,164 +10,115 @@ import {
   stageDevelopmentEnvironmentFiles,
 } from "#cli/dev/environment.js";
 
-const ENV_KEYS = [
-  "CORAX_WATCH_ENV_FILE_ONLY",
-  "CORAX_WATCH_ENV_NEW",
-  "CORAX_WATCH_ENV_ROOT_ONLY",
-  "CORAX_WATCH_ENV_SHARED",
-  "CORAX_WATCH_ENV_SHELL",
-  "AI_GATEWAY_API_KEY",
-] as const;
-const temporaryDirectories: string[] = [];
+const directories: string[] = [];
 
 afterEach(async () => {
-  for (const key of ENV_KEYS) {
-    delete process.env[key];
-  }
+  vi.unstubAllEnvs();
   await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map(async (path) => await rm(path, { force: true, recursive: true })),
+    directories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
 });
 
-describe("development environment reload transactions", () => {
-  it("preserves parent process precedence when env files reload", async () => {
-    const appRoot = await createEnvironmentApp();
-    process.env.CORAX_WATCH_ENV_SHELL = "from-parent";
-
-    await loadDevelopmentEnvironmentFiles(appRoot);
-
-    expect(process.env.CORAX_WATCH_ENV_FILE_ONLY).toBe("from-env");
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("from-local");
-    expect(process.env.CORAX_WATCH_ENV_SHELL).toBe("from-parent");
-  });
-
-  it("loads connection settings separately from explicit environment keys", async () => {
-    const appRoot = await createEnvironmentApp();
-    await writeFile(join(appRoot, ".env.local"), "AI_GATEWAY_API_KEY=from-file\n");
-    await mkdir(join(appRoot, ".corax"));
-    await writeFile(join(appRoot, ".corax", "provider.json"), '{"selected":"ai-gateway-project"}\n');
-
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    expect(process.env.AI_GATEWAY_API_KEY).toBe("from-file");
-
-    await writeFile(join(appRoot, ".corax", "provider.json"), '{"selected":"ai-gateway-key"}\n');
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    expect(process.env.AI_GATEWAY_API_KEY).toBe("from-file");
-  });
-
-  it("does not change the host fingerprint when selecting Project OIDC", async () => {
-    const appRoot = await createEnvironmentApp();
-    process.env.AI_GATEWAY_API_KEY = "from-parent";
-
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    const previous = readDevelopmentEnvironmentHostValues(appRoot);
-
-    await mkdir(join(appRoot, ".corax"));
-    await writeFile(join(appRoot, ".corax", "provider.json"), '{"selected":"ai-gateway-project"}\n');
-    await loadDevelopmentEnvironmentFiles(appRoot);
-
-    expect(process.env.AI_GATEWAY_API_KEY).toBe("from-parent");
-    expect(readDevelopmentEnvironmentHostValues(appRoot)).toEqual(previous);
-  });
-
-  it("loads, watches, fingerprints, and reloads workspace-root env", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "corax-dev-env-workspace-"));
-    temporaryDirectories.push(workspaceRoot);
-    const appRoot = join(workspaceRoot, "agents", "support");
-    await mkdir(join(appRoot, "agent"), { recursive: true });
-    await writeFile(
-      join(workspaceRoot, "package.json"),
-      JSON.stringify({ dependencies: { corax: "*" } }),
-    );
-    await writeFile(
-      join(workspaceRoot, ".env.local"),
-      "CORAX_WATCH_ENV_ROOT_ONLY=from-root\nCORAX_WATCH_ENV_SHARED=from-root\n",
-    );
-    await writeFile(join(appRoot, ".env.local"), "CORAX_WATCH_ENV_SHARED=from-child\n");
-
-    await loadDevelopmentEnvironmentFiles(appRoot);
-
-    expect(process.env.CORAX_WATCH_ENV_ROOT_ONLY).toBe("from-root");
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("from-root");
-    expect(getDevelopmentEnvironmentFilePaths(appRoot)).toEqual(environmentPaths(workspaceRoot));
-    expect(readDevelopmentEnvironmentHostValues(appRoot)).toMatchObject({
-      CORAX_WATCH_ENV_ROOT_ONLY: "from-root",
-      CORAX_WATCH_ENV_SHARED: "from-root",
+describe("development environment restart boundary", () => {
+  it("leaves startup environment values untouched rather than parsing them again", async () => {
+    const root = await createApp();
+    vi.stubEnv("CORAX_ENV_TEST", "expanded/value");
+    await writeFile(join(root, ".env"), "CORAX_ENV_TEST=${BASE}/value\n");
+    await loadDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_ENV_TEST).toBe("expanded/value");
+    expect(readDevelopmentEnvironmentHostValues(root)).toEqual({
+      CORAX_ENV_TEST: "expanded/value",
     });
-
-    await writeFile(join(workspaceRoot, ".env.local"), "CORAX_WATCH_ENV_ROOT_ONLY=updated\n");
-    stageDevelopmentEnvironmentFiles(appRoot).commit();
-    expect(process.env.CORAX_WATCH_ENV_ROOT_ONLY).toBe("updated");
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBeUndefined();
   });
 
-  it("restores the complete prior environment when a candidate is rejected", async () => {
-    const appRoot = await createEnvironmentApp();
-    const envLocalPath = join(appRoot, ".env.local");
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    await writeFile(
-      envLocalPath,
-      "CORAX_WATCH_ENV_NEW=from-candidate\nCORAX_WATCH_ENV_SHARED=from-candidate\n",
+  it.each(["same", "different"])(
+    "does not take ownership of shell values (%s)",
+    async (initial) => {
+      const root = await createApp();
+      vi.stubEnv("CORAX_ENV_TEST", "same");
+      await writeFile(join(root, ".env"), `CORAX_ENV_TEST=${initial}\n`);
+      await loadDevelopmentEnvironmentFiles(root);
+      await writeFile(join(root, ".env"), "CORAX_ENV_TEST=changed\n");
+      expect(() => stageDevelopmentEnvironmentFiles(root)).toThrow("Restart corax dev");
+    await expect(loadDevelopmentEnvironmentFiles(root)).resolves.toBeUndefined();
+      expect(process.env.CORAX_ENV_TEST).toBe("same");
+    },
+  );
+
+  it("requires restart for file creation or removal and allows reverting the edit", async () => {
+    const root = await createApp();
+    await loadDevelopmentEnvironmentFiles(root);
+    await writeFile(join(root, ".env.local"), "CORAX_ENV_TEST=new\n");
+    expect(() => stageDevelopmentEnvironmentFiles(root)).toThrow("Restart corax dev");
+    await rm(join(root, ".env.local"));
+    expect(() => stageDevelopmentEnvironmentFiles(root).commit()).not.toThrow();
+
+    const other = await createApp();
+    await writeFile(join(other, ".env"), "CORAX_ENV_TEST=original\n");
+    await loadDevelopmentEnvironmentFiles(other);
+    await rm(join(other, ".env"));
+    expect(() => stageDevelopmentEnvironmentFiles(other)).toThrow("Restart corax dev");
+  });
+
+  it("watches workspace-root environment files without changing startup precedence", async () => {
+    const root = await createApp();
+    const member = join(root, "agents", "support");
+    await mkdir(join(member, "agent"), { recursive: true });
+    vi.stubEnv("CORAX_ENV_TEST", "startup");
+    await writeFile(join(root, ".env"), "CORAX_ENV_TEST=root\n");
+    await loadDevelopmentEnvironmentFiles(member);
+    expect(getDevelopmentEnvironmentFilePaths(member)).toEqual(
+      [".env.development.local", ".env.local", ".env.development", ".env"].map((file) =>
+        join(root, file),
+      ),
     );
-
-    const reload = stageDevelopmentEnvironmentFiles(appRoot);
-    expect(process.env.CORAX_WATCH_ENV_FILE_ONLY).toBe("from-env");
-    expect(process.env.CORAX_WATCH_ENV_NEW).toBe("from-candidate");
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("from-candidate");
-
-    reload.rollback();
-
-    expect(process.env.CORAX_WATCH_ENV_FILE_ONLY).toBe("from-env");
-    expect(process.env.CORAX_WATCH_ENV_NEW).toBeUndefined();
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("from-local");
+    expect(process.env.CORAX_ENV_TEST).toBe("startup");
+    await writeFile(join(root, ".env"), "CORAX_ENV_TEST=changed\n");
+    expect(() => stageDevelopmentEnvironmentFiles(member)).toThrow("Restart corax dev");
   });
 
-  it("retains the candidate environment after commit", async () => {
-    const appRoot = await createEnvironmentApp();
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    await writeFile(join(appRoot, ".env.local"), "CORAX_WATCH_ENV_SHARED=committed\n");
-
-    const reload = stageDevelopmentEnvironmentFiles(appRoot);
-    reload.commit();
-    reload.rollback();
-
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("committed");
+  it("keeps explicit provider environment settings authoritative", async () => {
+    const root = await createApp();
+    vi.stubEnv("CORAX_MODEL_CONNECTION", "ai-gateway-key");
+    vi.stubEnv("CORAX_MODEL_KEY_SOURCE", "environment");
+    await loadDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
+    await saveSettings(root, { selected: "chatgpt", keySource: "secret" });
+    stageDevelopmentEnvironmentFiles(root).commit();
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
+    expect(process.env.CORAX_MODEL_KEY_SOURCE).toBe("environment");
   });
 
-  it("reapplies a rolled-back environment edit when a later rebuild stages again", async () => {
-    const appRoot = await createEnvironmentApp();
-    await loadDevelopmentEnvironmentFiles(appRoot);
-    await writeFile(join(appRoot, ".env.local"), "CORAX_WATCH_ENV_SHARED=after-fix\n");
-
-    stageDevelopmentEnvironmentFiles(appRoot).rollback();
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("from-local");
-
-    // The retry rebuild carries no env-file change of its own; staging from
-    // the files on disk must still pick the edit up.
-    const retry = stageDevelopmentEnvironmentFiles(appRoot);
-    retry.commit();
-
-    expect(process.env.CORAX_WATCH_ENV_SHARED).toBe("after-fix");
+  it("can roll back or commit saved provider settings independently of dotenv", async () => {
+    const root = await createApp();
+    vi.stubEnv("CORAX_MODEL_CONNECTION", undefined);
+    vi.stubEnv("CORAX_MODEL_KEY_SOURCE", undefined);
+    await saveSettings(root, { selected: "chatgpt" });
+    await loadDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("chatgpt");
+    await saveSettings(root, { selected: "ai-gateway-key", keySource: "secret" });
+    const candidate = stageDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
+    candidate.rollback();
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("chatgpt");
+    expect(process.env.CORAX_MODEL_KEY_SOURCE).toBeUndefined();
+    const accepted = stageDevelopmentEnvironmentFiles(root);
+    accepted.commit();
+    accepted.rollback();
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
+    expect(process.env.CORAX_MODEL_KEY_SOURCE).toBe("secret");
   });
 });
 
-function environmentPaths(root: string): string[] {
-  return [".env.development.local", ".env.local", ".env.development", ".env"].map((name) =>
-    join(root, name),
-  );
+async function createApp(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "corax-env-restart-"));
+  directories.push(root);
+  await mkdir(join(root, "agent"));
+  await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { corax: "*" } }));
+  return root;
 }
 
-async function createEnvironmentApp(): Promise<string> {
-  const appRoot = await mkdtemp(join(tmpdir(), "corax-dev-env-transaction-"));
-  temporaryDirectories.push(appRoot);
-  await mkdir(join(appRoot, "agent"));
-  await writeFile(join(appRoot, "package.json"), JSON.stringify({ dependencies: { corax: "*" } }));
-  await writeFile(
-    join(appRoot, ".env"),
-    "CORAX_WATCH_ENV_FILE_ONLY=from-env\nCORAX_WATCH_ENV_SHARED=from-env\nCORAX_WATCH_ENV_SHELL=from-env\n",
-  );
-  await writeFile(join(appRoot, ".env.local"), "CORAX_WATCH_ENV_SHARED=from-local\n");
-  return appRoot;
+async function saveSettings(root: string, settings: object): Promise<void> {
+  await mkdir(join(root, ".corax"), { recursive: true });
+  await writeFile(join(root, ".corax", "provider.json"), JSON.stringify(settings));
 }

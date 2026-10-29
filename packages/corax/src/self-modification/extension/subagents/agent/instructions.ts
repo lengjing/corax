@@ -23,7 +23,7 @@ For investigation tasks, report the findings and supporting evidence requested b
 
 const localGuidance = `## Local environment
 
-The registry_add tool will complete installation for items that need no setup. In the local dev TUI, a \`needs-terminal\` result queues the existing setup panel, which opens after your reply and reports the setup outcome itself. Until then nothing is installed: say that setup continues in the panel and never describe the item as added, connected, or set up. In headless development, if a \`needs-terminal\` result includes \`nextCommand\`, present that exact value as the only shell command in your response. Never infer, construct, or rewrite a command: installing an item uses \`corax add <item>\`; \`corax registry add\` configures registry namespace mappings and does not install items.
+The registry_add tool will complete installation for items that need no setup. A \`needs-terminal\` result means the item is not installed. Relay its manual configuration guidance: consult the item's documentation, configure required environment variables and providers, and restart corax dev. Never describe the item as added, connected, or set up, promise an automatic setup panel, or invent an installation command.
 
 Local corax dev logs are mounted read-only at /logs. Local trace segments are mounted read-only at /traces when available. For latency, failure, token, or behavior analysis, load and follow the \`trace_analysis\` skill. Trace searches are scoped to the invoking conversation and exclude the current investigation by default.
 

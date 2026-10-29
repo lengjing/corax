@@ -98,10 +98,8 @@ export function unsetEnvVars(
 /**
  * Builds the handoff a `needs-terminal` item carries.
  *
- * The interactive TUI consumes `status` and `address` to open the existing
- * address-specific setup flow itself, so its model-facing result deliberately
- * carries no command for the model to repeat. Headless `corax dev` has no TUI to
- * dispatch into, so the shell command is the only honest answer there.
+ * Interactive and headless clients both require manual configuration; the
+ * local CLI has no registry setup panel or item-install command.
  */
 export function handoffMessage(input: {
   readonly address: string;
@@ -109,17 +107,8 @@ export function handoffMessage(input: {
   readonly reason: string;
   readonly title: string;
 }): { readonly message: string; readonly nextCommand?: string } {
-  if (input.interactiveClient) {
-    // The panel opens only after this turn ends, so nothing has happened yet.
-    // The model must not report the item as added, connected, or opened.
-    return {
-      message: `${input.title} has not been installed yet. ${input.reason} Its setup panel opens after this reply, asks for anything setup needs, and reports whether setup succeeded; tell the developer to complete it there, and do not describe ${input.title} as added, connected, or set up. Do not ask the developer to run another command.`,
-    };
-  }
-  const nextCommand = `corax add ${input.address}`;
   return {
-    message: `${input.title} was not installed. ${input.reason} Run \`${nextCommand}\` in a terminal to finish it.`,
-    nextCommand,
+    message: `${input.title} was not installed. ${input.reason} Follow the documentation for ${input.address} to configure it manually, including any required environment variables and provider configuration, then restart corax dev. Do not describe the item as added, connected, or set up.`,
   };
 }
 

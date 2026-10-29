@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentInfoResult } from "#client/index.js";
 import type { LogRecord } from "#internal/logging.js";
@@ -31,7 +31,7 @@ import {
   type TuiSessionData,
 } from "./conversation-view.js";
 import type { AgentTUISessionOptions } from "./runner.js";
-import { PROMPT_COMMANDS, promptCommandsFor } from "./prompt-commands.js";
+import { PROMPT_COMMANDS, promptCommandsFor, type PromptCommandSpec } from "./prompt-commands.js";
 import { TerminalRenderer } from "./terminal-renderer.js";
 import { MockScreen, MockUserInput } from "./test/mock-terminal.js";
 
@@ -526,14 +526,14 @@ describe("TerminalRenderer (inline scrollback)", () => {
 
   it("renders the setup attention line with a warning glyph and a blue command", () => {
     const { screen, renderer } = makeRenderer();
-    renderer.renderSetupWarning("1 setup issue: AI Gateway credentials \u00b7 /model");
+    renderer.renderSetupWarning("1 setup issue: Configuration \u00b7 /info");
 
     // A live footer element, so assert while interactive (cleared on shutdown by
     // design \u2014 that is what lets it disappear once the issue is fixed).
     expect(screen.snapshot()).toContain(
-      "\u26a0 1 setup issue: AI Gateway credentials \u00b7 /model",
+      "\u26a0 1 setup issue: Configuration \u00b7 /info",
     );
-    expect(screen.rawOutput()).toContain("\u001b[34m/model");
+    expect(screen.rawOutput()).toContain("\u001b[34m/info");
     renderer.shutdown();
   });
 
@@ -3107,6 +3107,41 @@ describe("TerminalRenderer command echo spacing", () => {
 });
 
 describe("TerminalRenderer command typeahead", () => {
+  // Synthetic catalog grammars exercise generic argument completion, not the
+  // production command registry. These names are deliberately not registered.
+  const catalogCommands: readonly PromptCommandSpec[] = [
+    {
+      name: "model",
+      aliases: [],
+      description: "Choose a test model",
+      argumentHint: "[provider/model]",
+      takesArgument: true,
+      history: "omit",
+      typeahead: { maxArguments: 2, loadingLabel: "models" },
+      build: () => ({ type: "info" }),
+    },
+    {
+      name: "add",
+      aliases: [],
+      description: "Choose a test registry item",
+      takesArgument: true,
+      history: "omit",
+      typeahead: { maxArguments: 1, loadingLabel: "items" },
+      build: () => ({ type: "info" }),
+    },
+  ];
+
+  function useCatalogCommands(): readonly PromptCommandSpec[] {
+    // Argument grammar lookup reads the production registry directly, rather
+    // than availablePromptCommands. Inject the same fixture at that boundary.
+    vi.spyOn(PROMPT_COMMANDS, "find").mockImplementation((predicate) =>
+      catalogCommands.find(predicate),
+    );
+    return catalogCommands;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
   it("offers command suggestions while the draft is a lone slash token", async () => {
     const { screen, input, renderer } = makeRenderer();
 
@@ -3115,14 +3150,15 @@ describe("TerminalRenderer command typeahead", () => {
     const snapshot = screen.snapshot();
     expect(snapshot).toContain("/help");
     expect(snapshot).toContain("Show available commands");
-    expect(snapshot).toContain("Choose a model, speed, and reasoning");
+    expect(snapshot).toContain("Start a fresh session");
+    expect(snapshot).not.toMatch(/\/(?:model|login|add)\b/);
     const promptLine = snapshot.split("\n").find((line) => line.includes("│ /"));
     expect(promptLine?.startsWith("│ /")).toBe(true);
 
     input.enter();
-    // The highlighted default — /model leads the registry — is what a bare
+    // The highlighted default — /new leads the registry — is what a bare
     // slash submits.
-    expect(await prompt).toBe("/model");
+    expect(await prompt).toBe("/new");
     renderer.shutdown();
   });
 
@@ -3130,14 +3166,14 @@ describe("TerminalRenderer command typeahead", () => {
     const { screen, input, renderer } = makeRenderer();
 
     const prompt = readPrompt(renderer);
-    input.type("/model");
+    input.type("/loglevel");
     const snapshot = screen.snapshot();
-    expect(snapshot).toContain("│ /model");
-    expect(snapshot).toContain("[provider/model]");
-    expect(snapshot).toContain("Choose a model, speed, and reasoning");
+    expect(snapshot).toContain("│ /loglevel");
+    expect(snapshot).toContain("[none|error|warn|debug|all]");
+    expect(snapshot).toContain("Choose the minimum displayed log severity");
 
     input.enter();
-    expect(await prompt).toBe("/model");
+    expect(await prompt).toBe("/loglevel");
     renderer.shutdown();
   });
 
@@ -3159,6 +3195,7 @@ describe("TerminalRenderer command typeahead", () => {
         captureForeignOutput: false,
         unicode: true,
         argumentSuggestions: async () => suggestions.promise,
+        availablePromptCommands: useCatalogCommands(),
       });
 
       const prompt = readPrompt(renderer);
@@ -3189,6 +3226,7 @@ describe("TerminalRenderer command typeahead", () => {
         captureForeignOutput: false,
         unicode: true,
         argumentSuggestions: async () => [{ value: "openai/gpt-5", label: "GPT-5" }],
+        availablePromptCommands: useCatalogCommands(),
       });
 
       const prompt = readPrompt(renderer);
@@ -3212,6 +3250,7 @@ describe("TerminalRenderer command typeahead", () => {
       output: screen,
       captureForeignOutput: false,
       unicode: true,
+      availablePromptCommands: useCatalogCommands(),
       argumentSuggestions: async () => [
         {
           value: "openai/gpt-6-sol",
@@ -3241,7 +3280,8 @@ describe("TerminalRenderer command typeahead", () => {
       output: screen,
       captureForeignOutput: false,
       unicode: true,
-      argumentSuggestions: async (command) =>
+      availablePromptCommands: useCatalogCommands(),
+      argumentSuggestions: async (command: string) =>
         command === "model"
           ? [
               {
@@ -3270,7 +3310,8 @@ describe("TerminalRenderer command typeahead", () => {
       output: screen,
       captureForeignOutput: false,
       unicode: true,
-      argumentSuggestions: async (command) =>
+      availablePromptCommands: useCatalogCommands(),
+      argumentSuggestions: async (command: string) =>
         command === "add"
           ? [{ value: "channel/slack", label: "Slack", hint: "Slack channel" }]
           : [],
@@ -3290,12 +3331,12 @@ describe("TerminalRenderer command typeahead", () => {
     const { input, renderer } = makeRenderer();
 
     const prompt = readPrompt(renderer);
-    input.type("/mo");
+    input.type("/log");
     input.send("\t");
-    input.type("anthropic/claude-opus-4.8");
+    input.type("all");
     input.enter();
-    // Tab left "/model " in the editor; typing continued in argument position.
-    expect(await prompt).toBe("/model anthropic/claude-opus-4.8");
+    // Tab left "/loglevel " in the editor; typing continued in argument position.
+    expect(await prompt).toBe("/loglevel all");
     renderer.shutdown();
   });
 
@@ -3303,13 +3344,13 @@ describe("TerminalRenderer command typeahead", () => {
     const { screen, input, renderer } = makeRenderer();
 
     const prompt = readPrompt(renderer);
-    input.type("/ad");
+    input.type("/inf");
     input.enter();
-    expect(await prompt).toBe("/add");
+    expect(await prompt).toBe("/info");
     renderer.shutdown();
 
-    expect(screen.snapshot()).toContain("│ /add");
-    expect(screen.snapshot()).not.toContain("❯ /add");
+    expect(screen.snapshot()).toContain("│ /info");
+    expect(screen.snapshot()).not.toContain("❯ /info");
   });
 
   it("submits an alias as typed instead of canonicalizing it", async () => {
@@ -3356,14 +3397,14 @@ describe("TerminalRenderer command typeahead", () => {
 
     const open = screen.snapshot();
     expect(open).not.toContain("┃ Commands");
-    expect(open).toContain("/model");
+    expect(open).toContain("/new");
     expect(open).toContain("↑/↓ move · Enter select · Esc close");
     expect(open.match(/─{20,}/g)).toHaveLength(2);
-    expect(open).not.toMatch(/\b1\. \/model/);
+    expect(open).not.toMatch(/\b1\. \/new/);
     input.down();
     input.enter();
-    expect(await choice).toBe("/new");
-    expect(screen.snapshot()).not.toContain("Choose a model, speed, and reasoning");
+    expect(await choice).toBe("/clear");
+    expect(screen.snapshot()).not.toContain("Start a fresh session");
     renderer.shutdown();
   });
 
@@ -3375,18 +3416,19 @@ describe("TerminalRenderer command typeahead", () => {
       output: screen,
       captureForeignOutput: false,
       unicode: true,
-      argumentSuggestions: async () => [{ value: "openai/gpt-5", label: "GPT-5" }],
+      argumentSuggestions: async () => [{ value: "all", label: "All logs" }],
     });
     const help = renderer.choosePromptCommand(PROMPT_COMMANDS);
+    for (let i = 0; i < 5; i += 1) input.down();
     input.enter();
     const selection = await help;
-    expect(selection).toBe("/model ");
+    expect(selection).toBe("/loglevel ");
     const prompt = readPrompt(renderer, { initialDraft: selection });
-    await vi.waitFor(() => expect(screen.snapshot()).toContain("openai/gpt-5"));
-    expect(screen.snapshot()).toContain("│ /model");
-    expect(screen.snapshot()).not.toContain("❯ /model");
+    await vi.waitFor(() => expect(screen.snapshot()).toMatch(/\n +all\b/));
+    expect(screen.snapshot()).toContain("│ /loglevel");
+    expect(screen.snapshot()).not.toContain("❯ /loglevel");
     input.enter();
-    expect(await prompt).toBe("/model openai/gpt-5");
+    expect(await prompt).toBe("/loglevel all");
     renderer.shutdown();
   });
 
@@ -3394,10 +3436,11 @@ describe("TerminalRenderer command typeahead", () => {
     const { input, renderer, screen } = makeRenderer(80, 10);
     const choice = renderer.choosePromptCommand(PROMPT_COMMANDS);
     for (let i = 0; i < 8; i += 1) input.down();
-    expect(screen.snapshot()).toContain("/traces");
+    expect(screen.snapshot()).toContain("/exit");
+    expect(screen.snapshot()).not.toContain("Start a fresh session");
     expect(screen.snapshot()).not.toContain("┃ Commands");
     input.enter();
-    expect(await choice).toBe("/traces ");
+    expect(await choice).toBe("/exit");
     renderer.shutdown();
   });
 
@@ -3482,22 +3525,19 @@ describe("TerminalRenderer command typeahead", () => {
     input.type("/");
     input.down();
     input.enter();
-    // Down moved /model → /new; history recall would have submitted the
+    // Down moved /new → /clear; history recall would have submitted the
     // earlier prompt instead.
-    expect(await second).toBe("/new");
+    expect(await second).toBe("/clear");
     renderer.shutdown();
   });
 
-  it("leaves transient commands and setup drawers out of prompt history", async () => {
+  it("leaves registered transient commands out of prompt history", async () => {
     const { input, renderer } = makeRenderer();
 
     for (const text of [
       "an earlier prompt",
-      "/model anthropic/claude-opus-4.6 default",
       "/help",
       "/info",
-      "/add connection/linear",
-      "/login chatgpt",
       "/loglevel all",
       "/traces",
     ]) {
@@ -3514,6 +3554,24 @@ describe("TerminalRenderer command typeahead", () => {
     renderer.shutdown();
   });
 
+  it.each([
+    "/model anthropic/claude-opus-4.6 default",
+    "/add connection/linear",
+    "/login chatgpt",
+  ])("retains removed command %s as ordinary prompt history", async (text) => {
+    const { input, renderer } = makeRenderer();
+    const prompt = readPrompt(renderer);
+    input.type(text);
+    input.enter();
+    expect(await prompt).toBe(text);
+
+    const recalled = readPrompt(renderer);
+    input.up();
+    input.enter();
+    expect(await recalled).toBe(text);
+    renderer.shutdown();
+  });
+
   it("escape dismisses the suggestions until the draft changes", async () => {
     const { screen, input, renderer } = makeRenderer();
 
@@ -3527,10 +3585,10 @@ describe("TerminalRenderer command typeahead", () => {
       expect(screen.snapshot()).not.toContain("Show available commands");
     });
 
-    input.type("m");
-    expect(screen.snapshot()).toContain("Choose a model, speed, and reasoning");
+    input.type("n");
+    expect(screen.snapshot()).toContain("Start a fresh session");
     input.enter();
-    expect(await prompt).toBe("/model");
+    expect(await prompt).toBe("/new");
     renderer.shutdown();
   });
 
@@ -3563,10 +3621,11 @@ describe("TerminalRenderer command typeahead", () => {
     const prompt = readPrompt(renderer);
     input.type("/");
     const snapshot = screen.snapshot();
-    expect(snapshot).not.toContain("Authenticate with Vercel");
-    expect(snapshot).not.toContain("Choose a model, speed, and reasoning");
+    expect(snapshot).not.toContain("Open the local trace viewer");
+    expect(snapshot).not.toContain("Show application and messaging information");
+    expect(snapshot).toContain("Choose the minimum displayed log severity");
     input.enter();
-    await prompt;
+    expect(await prompt).toBe("/help");
     renderer.shutdown();
   });
 
@@ -3582,22 +3641,18 @@ describe("TerminalRenderer command typeahead", () => {
     });
 
     const prompt = readPrompt(renderer);
-    input.type("/model");
+    input.type("/info");
     input.enter();
 
-    await expect(prompt).resolves.toBe("/model");
+    await expect(prompt).resolves.toBe("/info");
     renderer.shutdown();
-    expect(screen.snapshot()).toContain("│ /model");
-    expect(screen.snapshot()).not.toContain("❯ /model");
+    expect(screen.snapshot()).toContain("│ /info");
+    expect(screen.snapshot()).not.toContain("❯ /info");
   });
 });
 
 describe("TerminalRenderer status line", () => {
-  const vercelStatus = {
-    identity: { projectName: "my-agent", teamName: "acme" },
-  };
-
-  it("renders the model and Vercel link without the local port under the prompt row", async () => {
+  it("renders the model and Gateway connection without the local port under the prompt row", async () => {
     const { screen, input, renderer } = makeRenderer();
     renderer.renderAgentHeader({
       name: "Weather Agent",
@@ -3609,7 +3664,6 @@ describe("TerminalRenderer status line", () => {
     });
 
     const prompt = readPrompt(renderer);
-    renderer.setVercelStatus(vercelStatus);
 
     expect(screen.snapshot()).toContain("⚠ ai-gateway");
 
@@ -3619,7 +3673,7 @@ describe("TerminalRenderer status line", () => {
       info: agentInfoWithModel("anthropic/claude-sonnet-5", {
         kind: "gateway",
         connected: true,
-        credential: "oidc",
+        credential: "api-key",
       }),
     });
 
@@ -3629,12 +3683,10 @@ describe("TerminalRenderer status line", () => {
     const statusRow = lines.slice(promptRow + 1).join("\n");
     expect(statusRow).not.toContain(":3000");
     expect(statusRow).toContain("claude-sonnet-5");
-    // The linked project folds into the connected gateway label.
-    expect(statusRow).toContain("· ai-gateway(oidc:my-agent)");
+    expect(statusRow).toContain("· ai-gateway(api-key)");
     expect(statusRow).not.toContain("⚠ ai-gateway");
     // No token segment before any turn reports usage (↑ 0 ↓ 0 is noise).
     expect(statusRow).not.toContain("↑ 0");
-    expect(statusRow).not.toContain("/deploy pending");
 
     // An empty Enter is inert; the reader needs content to settle.
     input.type("done");
@@ -3643,8 +3695,8 @@ describe("TerminalRenderer status line", () => {
     renderer.shutdown();
   });
 
-  it("suppresses the status line while a setup flow panel is open", () => {
-    const { screen, renderer } = makeRenderer();
+  it("suppresses the status line while a setup flow panel is open", async () => {
+    const { screen, input, renderer } = makeRenderer();
     renderer.renderNotice("anchor");
     renderer.renderAgentHeader({
       name: "Weather Agent",
@@ -3652,57 +3704,20 @@ describe("TerminalRenderer status line", () => {
       info: agentInfoWithModel("anthropic/claude-sonnet-5", {
         kind: "gateway",
         connected: true,
-        credential: "oidc",
+        credential: "api-key",
       }),
     });
-    renderer.setVercelStatus(vercelStatus);
-    expect(screen.snapshot()).toContain("· ai-gateway(oidc:my-agent)");
+    const prompt = readPrompt(renderer);
+    expect(screen.snapshot()).toContain("· ai-gateway(api-key)");
 
-    renderer.setupFlow.begin("Connect to Vercel");
-    expect(screen.snapshot()).not.toContain("· ai-gateway(oidc:my-agent)");
+    renderer.setupFlow.begin("Configure connection");
+    expect(screen.snapshot()).not.toContain("· ai-gateway(api-key)");
 
     renderer.setupFlow.end({ preserveDiagnostics: false });
-    expect(screen.snapshot()).toContain("· ai-gateway(oidc:my-agent)");
-    renderer.shutdown();
-  });
-
-  it("lays out the remote authentication panel and inset status line", async () => {
-    const { screen, input, renderer } = makeRenderer(100, 40);
-    renderer.renderNotice("anchor");
-    renderer.setRemoteConnectionStatus({
-      target: {
-        kind: "remote",
-        serverUrl: "https://vpoke.playground-vercel.tools",
-        workspaceRoot: "/tmp/weather-agent",
-      },
-      connection: {
-        state: "authenticating",
-        challenge: { kind: "corax-oidc" },
-      },
-    });
-
-    renderer.setupFlow.begin("Authenticate via Vercel OIDC");
-    const answer = renderer.setupFlow.readSelect({
-      kind: "search",
-      message: "Select your team",
-      placeholder: "type to search teams",
-      options: [
-        { value: "vercel", label: "Vercel" },
-        { value: "labs", label: "Vercel Labs" },
-      ],
-    });
-
-    const lines = screen.snapshot().split("\n");
-    const title = lines.indexOf("   Select your team");
-    expect(title).toBeGreaterThanOrEqual(0);
-    expect(lines).not.toContain("   Authenticate via Vercel OIDC");
-    const status = lines.indexOf("   ↗ vpoke.playground-vercel.tools  Authenticating via OIDC…");
-    expect(status).toBeGreaterThan(title);
-    expect(lines[status - 1]).toBe("");
-
-    input.send("\x1b");
-    await expect(answer).resolves.toBeUndefined();
-    renderer.setupFlow.end({ preserveDiagnostics: false });
+    expect(screen.snapshot()).toContain("· ai-gateway(api-key)");
+    input.type("done");
+    input.enter();
+    expect(await prompt).toBe("done");
     renderer.shutdown();
   });
 
@@ -3719,47 +3734,52 @@ describe("TerminalRenderer status line", () => {
       providerOptions: {},
       expected: "gpt-6-luna · high · ↯",
     },
-  ])("renders model metadata from the header: $expected", (selection) => {
-    const { screen, renderer } = makeRenderer(100);
+  ])("renders model metadata from the header: $expected", async (selection) => {
+    const { screen, input, renderer } = makeRenderer(100);
     renderer.renderNotice("anchor");
     renderer.renderAgentHeader({
       name: "Weather Agent",
       serverUrl: "http://localhost:3000",
       info: agentInfoWithModel(
         selection.model,
-        { kind: "gateway", connected: true, credential: "oidc" },
+        { kind: "gateway", connected: true, credential: "api-key" },
         { reasoning: selection.reasoning, providerOptions: selection.providerOptions },
       ),
     });
-    // The first header commits with no footer; a Vercel status probe is the
-    // paint that reveals the persistent status line beneath it.
-    renderer.setVercelStatus(vercelStatus);
+    // Opening the composer paints the persistent status line beneath the header.
+    const prompt = readPrompt(renderer);
 
     expect(screen.snapshot()).toContain(selection.expected);
+    input.type("done");
+    input.enter();
+    expect(await prompt).toBe("done");
     renderer.shutdown();
   });
 
-  it("hides the provider-default reasoning sentinel and non-priority tiers", () => {
-    const { screen, renderer } = makeRenderer(100);
+  it("hides the provider-default reasoning sentinel and non-priority tiers", async () => {
+    const { screen, input, renderer } = makeRenderer(100);
     renderer.renderNotice("anchor");
     renderer.renderAgentHeader({
       name: "Weather Agent",
       serverUrl: "http://localhost:3000",
       info: agentInfoWithModel(
         "xai/grok-4.5",
-        { kind: "gateway", connected: true, credential: "oidc" },
+        { kind: "gateway", connected: true, credential: "api-key" },
         {
           reasoning: "provider-default",
           providerOptions: { gateway: { serviceTier: "flex" } },
         },
       ),
     });
-    renderer.setVercelStatus(vercelStatus);
+    const prompt = readPrompt(renderer);
 
     const snapshot = screen.snapshot();
     expect(snapshot).toContain("grok-4.5");
     expect(snapshot).not.toContain("provider-default");
     expect(snapshot).not.toContain("↯");
+    input.type("done");
+    input.enter();
+    expect(await prompt).toBe("done");
     renderer.shutdown();
   });
 });

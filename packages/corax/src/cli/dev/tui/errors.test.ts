@@ -43,14 +43,17 @@ describe("failureDetails", () => {
 });
 
 describe("localFailureHint", () => {
-  it("swaps gateway-auth catalog ids for the in-session /model fix", () => {
+  it("replaces gateway-auth hints with configuration and restart guidance", () => {
     for (const id of [
       "gateway-auth-invalid-api-key",
       "gateway-auth-invalid-oidc-token",
       "gateway-auth-missing-credentials",
     ]) {
       const hint = localFailureHint(stepFailed({ semanticErrorId: id }));
-      expect(hint).toContain("/model");
+      expect(hint).toContain("AI_GATEWAY_API_KEY");
+      expect(hint).toContain("restart corax dev");
+      expect(hint).toContain("agent.ts");
+      expect(hint).not.toMatch(/\/(?:login|model)\b/);
     }
   });
 

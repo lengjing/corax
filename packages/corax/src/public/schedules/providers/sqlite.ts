@@ -42,6 +42,11 @@ function open(path: string): Database {
       );
       CREATE INDEX IF NOT EXISTS schedules_due ON schedules(application, collection, state, nextAt);
       CREATE INDEX IF NOT EXISTS occurrences_due ON schedule_occurrences(application, collection, state, retryAt);
+      CREATE TABLE IF NOT EXISTS schedule_failure_notifications (
+        executionId TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0,
+        retryAt INTEGER NOT NULL, leaseToken TEXT, leaseUntil INTEGER,
+        delivered INTEGER NOT NULL DEFAULT 0
+      );
     `);
     return db;
   } catch (error) {
@@ -152,7 +157,9 @@ export function sqliteScheduleProvider(
           operation,
           name,
         ]);
-        const previous = db.prepare<Row, SQLQueryBindings[]>("SELECT result FROM schedule_operations WHERE id = ?").get(id);
+        const previous = db
+          .prepare<Row, SQLQueryBindings[]>("SELECT result FROM schedule_operations WHERE id = ?")
+          .get(id);
         if (previous) return JSON.parse(String(previous.result)) as T;
         const result = action(db);
         db.prepare("INSERT INTO schedule_operations VALUES (?, ?)").run(id, json(result));
@@ -186,7 +193,9 @@ export function sqliteScheduleProvider(
         const now = Date.now();
         const nextAt = nextTime(input.expression, now);
         const count = db
-          .prepare<Row, SQLQueryBindings[]>("SELECT COUNT(*) AS count FROM schedules WHERE namespace = ?")
+          .prepare<Row, SQLQueryBindings[]>(
+            "SELECT COUNT(*) AS count FROM schedules WHERE namespace = ?",
+          )
           .get(context.namespace);
         if (Number(count?.count) >= 1000)
           throw new Error("This schedule namespace has reached its 1000-schedule limit.");
@@ -317,7 +326,7 @@ export interface SqliteScheduleDelivery {
 }
 
 /** Claims durable occurrences with a lease; failed callbacks retry with the same execution ID. */
-export async function pumpSqliteSchedules(input: {
+interface PumpInput {
   readonly path: string;
   readonly application: string;
   readonly collection: string;
@@ -325,8 +334,46 @@ export async function pumpSqliteSchedules(input: {
   readonly signal: AbortSignal;
   readonly deliver: (delivery: SqliteScheduleDelivery) => Promise<void>;
   readonly onFailure?: (delivery: SqliteScheduleDelivery) => Promise<void>;
-}): Promise<void> {
+}
+
+/** A bounded drain, claiming only immediately before delivery, not ahead of a batch.
+ * Returns true when due work remains so the host can yield and immediately continue.
+ */
+export async function pumpSqliteSchedules(input: PumpInput): Promise<boolean> {
+  const started = Date.now();
+  for (let count = 0; count < 16; count++) {
+    if (input.signal.aborted) return false;
+    const at = new Date(input.at.getTime() + Date.now() - started);
+    await pumpOne({ ...input, at });
+    if (input.signal.aborted) return false;
+    const db = open(input.path);
+    try {
+      const work = db
+        .prepare<Row, SQLQueryBindings[]>(`SELECT 1 AS ready WHERE
+        EXISTS (SELECT 1 FROM schedules WHERE application = ?1 AND collection = ?2 AND state = 'active' AND nextAt <= ?3)
+        OR EXISTS (SELECT 1 FROM schedule_occurrences WHERE application = ?1 AND collection = ?2
+          AND ((state = 'pending' AND retryAt <= ?3) OR (state = 'running' AND leaseUntil <= ?3)))
+        OR EXISTS (SELECT 1 FROM schedule_failure_notifications n JOIN schedule_occurrences o USING(executionId)
+          WHERE ?4 = 1 AND o.application = ?1 AND o.collection = ?2 AND n.delivered = 0 AND n.attempts < ?5
+          AND n.retryAt <= ?3 AND (n.leaseUntil IS NULL OR n.leaseUntil <= ?3))`)
+        .get(
+          input.application,
+          input.collection,
+          at.getTime(),
+          input.onFailure ? 1 : 0,
+          MAX_DELIVERIES,
+        );
+      if (!work) return false;
+    } finally {
+      db.close(true);
+    }
+  }
+  return true;
+}
+
+async function pumpOne(input: PumpInput): Promise<void> {
   input.signal.throwIfAborted();
+  const started = Date.now();
   const now = input.at.getTime();
   const token = randomUUID();
   const db = open(input.path);
@@ -349,7 +396,10 @@ export async function pumpSqliteSchedules(input: {
         "UPDATE schedule_occurrences SET state = 'failed' WHERE application = ? AND collection = ? AND state = 'running' AND leaseUntil <= ? AND attempts >= ?",
       ).run(input.application, input.collection, now, MAX_DELIVERIES);
       return db
-        .prepare<Row, SQLQueryBindings[]>(`UPDATE schedule_occurrences SET state = 'running', leaseUntil = ?, leaseToken = ?, attempts = attempts + 1
+        .prepare<
+          Row,
+          SQLQueryBindings[]
+        >(`UPDATE schedule_occurrences SET state = 'running', leaseUntil = ?, leaseToken = ?, attempts = attempts + 1
         WHERE executionId IN (SELECT executionId FROM schedule_occurrences WHERE application = ? AND collection = ?
           AND (state = 'pending' OR (state = 'running' AND leaseUntil <= ?)) AND retryAt <= ? AND attempts < ?
           ORDER BY scheduledAt LIMIT 1) RETURNING *`)
@@ -419,6 +469,91 @@ export async function pumpSqliteSchedules(input: {
     } finally {
       finish.close(true);
     }
-    if (!success && Number(job.attempts) >= MAX_DELIVERIES) await input.onFailure?.(delivery);
+  }
+  if (!input.signal.aborted) {
+    await notifyFailure({ ...input, at: new Date(now + Date.now() - started) });
+  }
+}
+
+// Independent durable retry budget: a callback may be repeated after a crash,
+// so consumers should deduplicate by executionId. Exhausted rows remain inspectable.
+async function notifyFailure(input: PumpInput): Promise<void> {
+  if (!input.onFailure) return;
+  const notificationStarted = Date.now();
+  const db = open(input.path);
+  const token = randomUUID();
+  const now = input.at.getTime();
+  let job: Row | null;
+  try {
+    job = transaction(db, () => {
+      db.prepare(`INSERT OR IGNORE INTO schedule_failure_notifications (executionId, retryAt)
+        SELECT executionId, ? FROM schedule_occurrences WHERE application = ? AND collection = ? AND state = 'failed'`).run(
+        now,
+        input.application,
+        input.collection,
+      );
+      const claimed = db
+        .prepare<Row, SQLQueryBindings[]>(`UPDATE schedule_failure_notifications
+        SET attempts = attempts + 1, leaseToken = ?, leaseUntil = ?
+        WHERE executionId = (SELECT n.executionId FROM schedule_failure_notifications n
+          JOIN schedule_occurrences o USING(executionId) WHERE o.application = ? AND o.collection = ?
+          AND n.delivered = 0 AND n.attempts < ? AND n.retryAt <= ?
+          AND (n.leaseUntil IS NULL OR n.leaseUntil <= ?) ORDER BY n.retryAt LIMIT 1) RETURNING *`)
+        .get(token, now + LEASE_MS, input.application, input.collection, MAX_DELIVERIES, now, now);
+      if (!claimed) return null;
+      const occurrence = db
+        .prepare<Row, SQLQueryBindings[]>(
+          "SELECT * FROM schedule_occurrences WHERE executionId = ?",
+        )
+        .get(claimed.executionId!);
+      return { ...occurrence, notificationAttempts: claimed.attempts! };
+    });
+  } finally {
+    db.close(true);
+  }
+  if (!job) return;
+  let delivered = false;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      input.onFailure({
+        collection: input.collection,
+        payload: JSON.parse(String(job.payload)),
+        occurrence: {
+          name: String(job.name),
+          scheduleId: String(job.scheduleId),
+          executionId: String(job.executionId),
+          scheduledAt: new Date(Number(job.scheduledAt)).toISOString(),
+        },
+      }),
+      new Promise<never>((_, reject) => {
+        deadline = setTimeout(
+          () => reject(new Error("Schedule failure notification timed out.")),
+          120_000,
+        );
+        deadline.unref();
+      }),
+    ]);
+    delivered = true;
+  } catch {
+    // Retry independently of delivery, including across process restarts.
+  } finally {
+    clearTimeout(deadline);
+  }
+  const finish = open(input.path);
+  try {
+    finish
+      .prepare(`UPDATE schedule_failure_notifications SET delivered = ?, retryAt = ?, leaseToken = NULL, leaseUntil = NULL
+      WHERE executionId = ? AND leaseToken = ?`)
+      .run(
+        delivered ? 1 : 0,
+        now +
+          (Date.now() - notificationStarted) +
+          Math.min(60_000, 1000 * 2 ** Number(job.notificationAttempts)),
+        job.executionId!,
+        token,
+      );
+  } finally {
+    finish.close(true);
   }
 }
