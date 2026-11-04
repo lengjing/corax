@@ -92,7 +92,7 @@ CLI 和 git、npm 一样从当前目录向上查找 agent 项目。`dev` 启动�
 | `CORAX_USERNAME` | `admin` | 示例 HTTP Basic 用户名 |
 | `CORAX_PASSWORD` | 空 | 示例生产会话 API 密码 |
 
-模型请传入 AI SDK provider 实例并指定 `modelContextWindowTokens`。裸字符串模型 ID 会被 AI SDK 路由到 Vercel AI Gateway，Corax 默认拒绝并提示修改；如确需 Gateway，设置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 与 `AI_GATEWAY_API_KEY` 显式开启。详见 [运行说明](docs/runtime.md)。
+模型请传入 AI SDK provider 实例并指定 `modelContextWindowTokens`。裸字符串模型 ID 会被 AI SDK 路由到 Vercel AI Gateway，Corax 默认拒绝并提示修改；如确需 Gateway，设置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 与 `AI_GATEWAY_API_KEY` 显式开启。
 
 ## 目录结构
 
@@ -131,4 +131,4 @@ Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 
 默认本地持久化使用 `bun:sqlite`。动态调度保留稳定 executionId、租约与重试，提供至少一次投递。示例使用本地 Workflow World 和 JustBash，不要求托管平台账号。JustBash 是虚拟文件系统沙箱，不等同于本机原生 shell。
 
-发布包包含通用 CLI、核心 SDK 和运行依赖，不包含固定 agent 或本机密钥。用户项目仍需安装自己声明的依赖。详见 [部署说明](docs/deployment.md)、[运行说明](docs/runtime.md) 和 [架构说明](docs/architecture.md)。
+发布包包含通用 CLI、核心 SDK 和运行依赖，不包含固定 agent 或本机密钥。用户项目仍需安装自己声明的依赖。
