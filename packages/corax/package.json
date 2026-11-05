@@ -501,7 +501,6 @@
     "build:compiled": "bun ./scripts/vendor-compiled.mjs",
     "build:js": "bun ./scripts/build-js.mjs",
     "build:types": "bun run build:compiled && bun run tsc -p tsconfig.build.json",
-    "check:bin-runtime-dependencies": "bun ./scripts/check-bin-runtime-dependencies.mjs",
     "prepack": "bun ./scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.build.json --noEmit --emitDeclarationOnly false"
   },

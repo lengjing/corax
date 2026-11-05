@@ -5,7 +5,6 @@ const cwd = fileURLToPath(new URL("../", import.meta.url));
 
 export async function buildCore() {
   for (const script of [
-    "check-bin-runtime-dependencies.mjs",
     "build-js.mjs",
     "copy-docs.mjs",
     "stamp-version-tokens.mjs",

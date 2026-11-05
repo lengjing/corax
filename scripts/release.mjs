@@ -84,7 +84,7 @@ async function stageRelease(stage) {
     "--filename", join(stage, "packages/corax.tgz"),
   ], target);
 
-  await cp(join(root, "docs/deployment.md"), join(stage, "README.md"));
+  await cp(join(root, "README.md"), join(stage, "README.md"));
   // The `corax` command comes from the SDK's own bin; this manifest only pins the install.
   await writeFile(join(stage, "package.json"), JSON.stringify({
     name: "corax-cli",
