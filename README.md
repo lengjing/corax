@@ -129,6 +129,10 @@ Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
 
 每个项目的 `.corax/` 保存工作流、会话状态，以及默认的 SQLite memory 和动态调度数据库（可通过各自的 `path` 选项改到别处）；`.output/` 保存生产产物。配置与数据写入目标项目，不写入 CLI 安装目录。
 
+宿主应用可设置 `CORAX_PROJECT_ROOT` 为 Agent 项目绝对路径，并设置 `CORAX_DATA_DIR` 为该项目的数据目录（绝对路径或相对项目路径）。工作流、开发运行快照、日志、trace、sandbox cache、默认 memory/schedules 数据库统一使用该目录；编译器的隔离副本仍使用自己的内部 artifact 目录。自定义数据目录不会触发 authored-source 热重编译。
+
+认证后的 `GET /corax/v1/session?limit=50&offset=0` 返回原生 Workflow 目录中的根会话元数据 `{sessions, hasMore}`，包含 Corax 会话 ID、标题及时间，不需要应用另建会话映射数据库。
+
 默认本地持久化使用 `bun:sqlite`。动态调度保留稳定 executionId、租约与重试，提供至少一次投递。示例使用本地 Workflow World 和 JustBash，不要求托管平台账号。JustBash 是虚拟文件系统沙箱，不等同于本机原生 shell。
 
 发布包包含通用 CLI、核心 SDK 和运行依赖，不包含固定 agent 或本机密钥。用户项目仍需安装自己声明的依赖。

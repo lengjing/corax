@@ -26,7 +26,7 @@ export class DevelopmentServerState {
 
   constructor(project: { readonly appRoot: string }) {
     this.appRoot = project.appRoot;
-    this.#stateDir = join(this.appRoot, ".corax");
+    this.#stateDir = resolveCoraxDataDirectory(this.appRoot);
     this.#statePath = join(this.#stateDir, STATE_FILE_NAME);
   }
 
@@ -67,3 +67,4 @@ export class DevelopmentServerState {
 function isErrnoException(error: unknown, code: string): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === code;
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

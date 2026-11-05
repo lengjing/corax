@@ -66,7 +66,7 @@ export interface DevelopmentRuntimeArtifactsActivation {
  * snapshot for new sessions.
  */
 export function resolveDevelopmentRuntimeArtifactsPointerPath(appRoot: string): string {
-  return join(appRoot, ".corax", DEV_RUNTIME_ARTIFACTS_DIRECTORY, "current.json");
+  return join(resolveCoraxDataDirectory(appRoot), DEV_RUNTIME_ARTIFACTS_DIRECTORY, "current.json");
 }
 
 function isDevelopmentRuntimeArtifactsSnapshotRoot(appRoot: string, snapshotRoot: string): boolean {
@@ -685,3 +685,4 @@ function isPathInsideOrEqual(path: string, directory: string): boolean {
     resolvedPath === resolvedDirectory || resolvedPath.startsWith(`${resolvedDirectory}${sep}`)
   );
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

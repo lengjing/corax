@@ -8,7 +8,7 @@ export interface DevelopmentGenerationMetadata {
 const GENERATION_METADATA = "generation.json";
 
 export function resolveDevelopmentRuntimeArtifactsSnapshotsDirectory(appRoot: string): string {
-  return join(appRoot, ".corax", "dev-runtime", "snapshots");
+  return join(resolveCoraxDataDirectory(appRoot), "dev-runtime", "snapshots");
 }
 
 export async function listDevelopmentGenerationIds(appRoot: string): Promise<string[]> {
@@ -76,3 +76,4 @@ export async function readDevelopmentGenerationMetadata(
     metadata: { runtimeAppRoot: metadata.runtimeAppRoot },
   };
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

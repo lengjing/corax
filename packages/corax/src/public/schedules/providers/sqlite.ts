@@ -13,7 +13,6 @@ import type {
 import type { ScheduleProviderContext } from "#public/schedules/provider-types.js";
 
 const PATH = Symbol.for("corax.sqlite-schedules.path");
-const DEFAULT_SCHEDULES_PATH = ".corax/schedules.sqlite";
 const LEASE_MS = 5 * 60_000;
 const MAX_DELIVERIES = 10;
 type Row = Record<string, string | number | bigint | Uint8Array | null>;
@@ -138,7 +137,7 @@ export function sqliteScheduleProvider(
   /** `path` defaults to `.corax/schedules.sqlite` under the working directory. */
   options: { readonly path?: string } = {},
 ): ScheduleProvider {
-  const path = resolve(options.path ?? DEFAULT_SCHEDULES_PATH);
+  const path = options.path ? resolve(options.path) : resolve(resolveCoraxDataDirectory(process.env.CORAX_PROJECT_ROOT || process.cwd()), "schedules.sqlite");
   const once = <T>(
     context: ScheduleProviderContext,
     operation: string,
@@ -557,3 +556,4 @@ async function notifyFailure(input: PumpInput): Promise<void> {
     finish.close(true);
   }
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

@@ -10,7 +10,7 @@ export async function recordCleanupIntent(
   appRoot: string,
   input: { readonly ownerPid: number; readonly runId: string },
 ): Promise<() => Promise<void>> {
-  const directory = join(appRoot, ".corax");
+  const directory = resolveCoraxDataDirectory(appRoot);
   const path = join(directory, `${PREFIX}${input.runId}${SUFFIX}`);
   await mkdir(directory, { recursive: true });
   await writeFile(path, `${JSON.stringify(input)}\n`, "utf8");
@@ -18,7 +18,7 @@ export async function recordCleanupIntent(
 }
 
 export async function reconcileCleanupIntents(appRoot: string): Promise<void> {
-  const directory = join(appRoot, ".corax");
+  const directory = resolveCoraxDataDirectory(appRoot);
   let names: string[];
   try {
     names = await readdir(directory);
@@ -60,3 +60,4 @@ function isProcessAlive(pid: number): boolean {
     return error instanceof Error && "code" in error && error.code === "EPERM";
   }
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

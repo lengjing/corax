@@ -19,8 +19,15 @@ interface RuntimeCompilerArtifactPaths {
  */
 export function resolveRuntimeCompilerArtifactPaths(appRoot: string): RuntimeCompilerArtifactPaths {
   const normalizedAppRoot = normalizeFilesystemPath(appRoot);
-  const discoveryDirectoryPath = `${normalizedAppRoot}/.corax/discovery`;
-  const compileDirectoryPath = `${normalizedAppRoot}/.corax/compile`;
+  const environment = typeof process === "undefined" ? undefined : process.env;
+  const projectRoot = environment?.CORAX_PROJECT_ROOT ?? (typeof process !== "undefined" && typeof process.cwd === "function" ? process.cwd() : "");
+  const configured = environment?.CORAX_DATA_DIR?.trim();
+  // Runtime helpers also run in bundled contexts; keep this free of Node module imports.
+  const dataRoot = configured && normalizeFilesystemPath(projectRoot) === normalizedAppRoot
+    ? normalizeFilesystemPath(/^(?:[A-Za-z]:[\\/]|[\\/])/.test(configured) ? configured : `${normalizedAppRoot}/${configured}`)
+    : `${normalizedAppRoot}/.corax`;
+  const discoveryDirectoryPath = `${dataRoot}/discovery`;
+  const compileDirectoryPath = `${dataRoot}/compile`;
 
   return {
     appRoot: normalizedAppRoot,

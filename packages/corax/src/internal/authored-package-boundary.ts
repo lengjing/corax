@@ -52,6 +52,7 @@ export function createGenerationPackageBoundaryPlugin(input: {
       importer: string | undefined,
       options: { kind: string },
     ) {
+      if (source.startsWith("bun:")) return { external: true, id: source };
       if (!isPackageImport(source)) {
         return undefined;
       }
@@ -107,6 +108,7 @@ export function createRuntimeLoaderPackageBoundaryPlugin(input: {
       importer: string | undefined,
       options: { kind: string },
     ) {
+      if (source.startsWith("bun:")) return { external: true, id: source };
       if (!isPackageImport(source)) {
         return undefined;
       }
@@ -213,6 +215,7 @@ export function createDistributionPackageBoundaryPlugin(input: {
       importer: string | undefined,
       options: { kind: string },
     ) {
+      if (source.startsWith("bun:")) return { external: true, id: source };
       if (!isPackageImport(source)) {
         return undefined;
       }

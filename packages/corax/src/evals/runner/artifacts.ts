@@ -10,7 +10,7 @@ import type { CoraxEvalResult, CoraxEvalRunSummary } from "#evals/types.js";
  */
 export function resolveArtifactDirectory(appRoot: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  return join(appRoot, ".corax", "evals", timestamp);
+  return join(resolveCoraxDataDirectory(appRoot), "evals", timestamp);
 }
 
 /**
@@ -126,3 +126,4 @@ function sanitizeArtifactPath(id: string): string {
     .map((segment) => segment.replace(/[^a-zA-Z0-9_-]/g, "_"))
     .join("/");
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

@@ -160,7 +160,7 @@ export async function createDevelopmentSourceSnapshotPlan(input: {
 export async function resolveDevelopmentSourceSnapshotWatchPaths(
   appRoot: string,
 ): Promise<string[]> {
-  const snapshotRoot = join(resolve(appRoot), ".corax", "dev-runtime", "__watch-plan__");
+  const snapshotRoot = join(resolveCoraxDataDirectory(resolve(appRoot)), "dev-runtime", "__watch-plan__");
   const plan = await createDevelopmentSourceSnapshotPlan({
     appRoot,
     snapshotRoot,
@@ -535,3 +535,4 @@ function toSnapshotPath(input: {
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

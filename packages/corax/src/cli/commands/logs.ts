@@ -32,7 +32,7 @@ export interface DevDiagnosticLogEntry {
  * log directory yields an empty list.
  */
 export async function listDevDiagnosticLogs(appRoot: string): Promise<DevDiagnosticLogEntry[]> {
-  const directory = join(appRoot, ...LOG_DIRECTORY_SEGMENTS);
+  const directory = join(resolveCoraxDataDirectory(appRoot), "logs");
   let names: string[];
   try {
     names = await readdir(directory);
@@ -277,3 +277,4 @@ function formatSize(bytes: number): string {
   if (kib < 1024) return `${kib.toFixed(1)} KiB`;
   return `${(kib / 1024).toFixed(1)} MiB`;
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

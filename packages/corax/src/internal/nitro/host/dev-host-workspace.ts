@@ -14,7 +14,7 @@ export interface DevelopmentHostWorkspace {
 export async function createDevelopmentHostWorkspace(
   appRoot: string,
 ): Promise<DevelopmentHostWorkspace> {
-  const rootDir = join(appRoot, ".corax", "dev-hosts", randomUUID());
+  const rootDir = join(resolveCoraxDataDirectory(appRoot), "dev-hosts", randomUUID());
   const workspace: DevelopmentHostWorkspace = {
     artifactsDir: join(rootDir, "artifacts"),
     compilerArtifactsDir: join(rootDir, "compiler"),
@@ -33,3 +33,4 @@ export async function removeDevelopmentHostWorkspace(
 ): Promise<void> {
   await rm(workspace.rootDir, { force: true, recursive: true });
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

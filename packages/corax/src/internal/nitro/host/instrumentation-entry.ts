@@ -1,4 +1,6 @@
 import type { Nitro } from "nitro/types";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 import { stringifyEsmImportSpecifier } from "#internal/application/import-specifier.js";
 
@@ -20,7 +22,17 @@ export function configureInstrumentationEntry(nitro: Nitro, instrumentationPath:
     config.plugins = [
       {
         name: "corax:instrumentation-entry",
-        resolveId: (id: string) => (id === INSTRUMENTATION_ENTRY ? id : null),
+        resolveId: (id: string) => {
+          if (id === INSTRUMENTATION_ENTRY) return id;
+          // The preload and Nitro plugin must share one module identity, including when
+          // the generated directory is outside rootDir and Nitro otherwise externalizes only one.
+          if (nitro.options.dev && (id.startsWith("file:") || /^[A-Za-z]:[\\/]|^\//.test(id))) {
+            const path = id.startsWith("file:") ? fileURLToPath(id) : id;
+            if (resolve(path) === resolve(instrumentationPath))
+              return { id: pathToFileURL(instrumentationPath).href, external: true };
+          }
+          return null;
+        },
         async load(this: EntryPluginContext, id: string) {
           if (id !== INSTRUMENTATION_ENTRY) return null;
           const entry = await this.resolve(nitro.options.entry);

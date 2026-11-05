@@ -89,7 +89,7 @@ function pruneStaleWorkflowCacheSiblings(workflowCacheRoot: string): void {
  * Resolves the cache directory used for durable local sandbox snapshots.
  */
 export function resolveSandboxCacheDirectory(appRoot: string): string {
-  return join(appRoot, ".corax", "sandbox-cache");
+  return join(resolveCoraxDataDirectory(appRoot), "sandbox-cache");
 }
 
 /**
@@ -111,3 +111,4 @@ export function getApplicationInfo(appRoot: string): ApplicationInfo {
     workflowSourceDir: resolvePackageSourceDirectoryPath("src/execution"),
   };
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

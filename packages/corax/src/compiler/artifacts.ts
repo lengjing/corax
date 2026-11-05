@@ -124,7 +124,7 @@ interface WriteCompilerArtifactsResult {
 
 /** Resolves stable compiler-owned artifact paths for one application root. */
 export function resolveCompilerArtifactPaths(appRoot: string): CompilerArtifactPaths {
-  return resolveCompilerArtifactPathsAt(appRoot, join(resolve(appRoot), ".corax"));
+  return resolveCompilerArtifactPathsAt(appRoot, resolveCoraxDataDirectory(resolve(appRoot)));
 }
 
 function resolveCompilerArtifactPathsAt(
@@ -293,3 +293,4 @@ function serializeArtifactJson(value: unknown): string {
 function toArtifactRelativePath(appRoot: string, targetPath: string): string {
   return normalizeLogicalPath(relative(resolve(appRoot), targetPath));
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

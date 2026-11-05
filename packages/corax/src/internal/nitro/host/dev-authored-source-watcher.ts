@@ -75,7 +75,7 @@ export async function startAuthoredSourceWatcher(input: {
     },
     followSymlinks: false,
     ignoreInitial: true,
-    ignored: (path) => shouldIgnoreWatcherPath(path, currentHost.workspaceExtensions),
+    ignored: (path) => isCoraxDataPath(path) || shouldIgnoreWatcherPath(path, currentHost.workspaceExtensions),
   });
   const watcherReady = waitForWatcherReady(watcher);
 
@@ -348,3 +348,4 @@ function isPathInsideOrEqual(path: string, directory: string): boolean {
     resolvedPath === resolvedDirectory || resolvedPath.startsWith(`${resolvedDirectory}${sep}`)
   );
 }
+import { isCoraxDataPath } from "#shared/data-directory.js";

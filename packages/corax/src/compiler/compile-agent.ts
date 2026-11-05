@@ -1,4 +1,3 @@
-import { join } from "node:path";
 
 import type { DiscoverDiagnostic } from "#discover/diagnostics.js";
 import { discoverAgent } from "#discover/discover-agent.js";
@@ -78,7 +77,7 @@ export class CompileAgentError extends Error {
  */
 export async function compileAgent(input: CompileAgentInput = {}): Promise<CompileAgentResult> {
   const discovered = await discoverAgentForCompilation(input);
-  const artifactsRoot = join(discovered.project.appRoot, ".corax");
+  const artifactsRoot = resolveCoraxDataDirectory(discovered.project.appRoot);
   const result = await writeAgentCompilation(discovered, {
     publishedRoot: artifactsRoot,
     writeRoot: artifactsRoot,
@@ -205,3 +204,4 @@ function formatDiagnosticSources(diagnostic: CompilerDiagnostic): string {
 function formatDiagnosticSeverity(severity: DiscoverDiagnostic["severity"]): string {
   return severity === "error" ? "Error" : "Warning";
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

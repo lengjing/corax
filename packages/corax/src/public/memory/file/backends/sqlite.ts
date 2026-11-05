@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";
 import { Database } from "bun:sqlite";
 import {
   MemoryDocumentConflictError,
@@ -12,11 +13,10 @@ export interface SqliteMemoryOptions {
   readonly path?: string;
 }
 
-const DEFAULT_MEMORY_PATH = ".corax/memory.sqlite";
 
 /** Process-independent, optimistic document writes backed by a local SQLite database. */
 export function sqliteMemory(options: SqliteMemoryOptions = {}): MemoryDocumentBackend {
-  const path = resolve(options.path ?? DEFAULT_MEMORY_PATH);
+  const path = options.path ? resolve(options.path) : resolve(resolveCoraxDataDirectory(process.env.CORAX_PROJECT_ROOT || process.cwd()), "memory.sqlite");
   const open = () => {
     mkdirSync(dirname(path), { recursive: true });
     const db = new Database(path);

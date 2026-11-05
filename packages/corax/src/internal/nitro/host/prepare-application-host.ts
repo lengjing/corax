@@ -58,7 +58,7 @@ export async function prepareDevelopmentApplicationHost(
   try {
     const compileResult = await compileAgentInWorkspace({
       artifactLocations: {
-        publishedRoot: join(appRoot, ".corax"),
+        publishedRoot: resolveCoraxDataDirectory(appRoot),
         writeRoot: workspace.compilerArtifactsDir,
       },
       developmentExtensions: options.developmentExtensions,
@@ -168,3 +168,4 @@ function createPreparedApplicationHost(input: {
 function resolveProductionWorkflowWorldTarget(): BuiltInWorkflowWorldTarget {
   return "local";
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

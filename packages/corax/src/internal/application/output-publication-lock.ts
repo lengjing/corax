@@ -30,7 +30,7 @@ interface RecoveryLease {
 }
 
 export function resolveOutputPublicationLockPath(appRoot: string): string {
-  return join(resolve(appRoot), ".corax", "locks", "output-publication.lock");
+  return join(resolveCoraxDataDirectory(resolve(appRoot)), "locks", "output-publication.lock");
 }
 
 /**
@@ -411,3 +411,4 @@ function isProcessAlive(pid: number): boolean {
     return !isErrnoCode(error, "ESRCH");
   }
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

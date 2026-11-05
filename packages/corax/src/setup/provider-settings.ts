@@ -11,7 +11,7 @@ import { AI_GATEWAY_API_KEY_ENV_VAR, findEnvFileWithKey } from "#setup/ai-gatewa
 export type ProviderSelection = ModelConnectionSelection;
 
 export function providerSettingsPath(appRoot: string): string {
-  return join(appRoot, ".corax", "provider.json");
+  return join(resolveCoraxDataDirectory(appRoot), "provider.json");
 }
 
 export async function resolveAvailableProviders(
@@ -87,7 +87,7 @@ export async function writeProviderSelection(
   selected: ProviderSelection,
   keySource?: "environment" | "secret",
 ): Promise<void> {
-  await mkdir(join(appRoot, ".corax"), { recursive: true });
+  await mkdir(resolveCoraxDataDirectory(appRoot), { recursive: true });
   await atomicWriteFile(
     providerSettingsPath(appRoot),
     `${JSON.stringify({ selected, keySource }, null, 2)}\n`,
@@ -105,3 +105,4 @@ function isProviderSelection(value: unknown): value is ProviderSelection {
 export function readProviderKeySourceSync(appRoot: string): "environment" | "secret" | undefined {
   return readProviderSettingsSync(appRoot)?.keySource;
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

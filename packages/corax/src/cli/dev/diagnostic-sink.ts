@@ -49,7 +49,7 @@ export async function createDevDiagnosticSink(
   appRoot: string,
   options: CreateDevDiagnosticSinkOptions = {},
 ): Promise<DevDiagnosticSink> {
-  const directory = join(appRoot, ".corax", "logs");
+  const directory = join(resolveCoraxDataDirectory(appRoot), "logs");
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
 
@@ -102,3 +102,4 @@ function createOpenSink(
 function formatDiagnosticEntry(entry: DevDiagnosticEntry, at: Date): string {
   return `${JSON.stringify({ at: at.toISOString(), ...entry })}\n`;
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

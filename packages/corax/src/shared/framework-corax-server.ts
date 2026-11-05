@@ -13,7 +13,6 @@ export const DEFAULT_CORAX_SERVER_TIMEOUT_MS = 180_000;
 const DEV_SERVER_REGISTRY_POLL_MS = 100;
 const DEV_SERVER_READINESS_TIMEOUT_MS = 1_000;
 const DEV_SERVER_STALE_LOCK_MS = 30_000;
-const CORAX_CACHE_DIRECTORY_NAME = ".corax";
 const ANSI_ESCAPE = String.fromCharCode(27);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE}\\[[0-?]*[ -/]*[@-~]`, "g");
 const SERVER_URL_CANDIDATE_PATTERN = /https?:\/\/[^\s"'<>]+/g;
@@ -56,7 +55,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveCoraxCacheDirectory(appRoot: string): string {
-  return join(appRoot, CORAX_CACHE_DIRECTORY_NAME);
+  return resolveCoraxDataDirectory(appRoot);
 }
 
 function resolveCoraxDevServerRegistryPath(appRoot: string, host: CoraxFrameworkHost): string {
@@ -524,3 +523,4 @@ export async function resolveSharedCoraxDevServer(input: {
     await releaseLock();
   }
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

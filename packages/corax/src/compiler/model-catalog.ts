@@ -88,7 +88,7 @@ export interface CompiledRuntimeModelCatalogLoader {
  * compilation.
  */
 export function resolveCompiledRuntimeModelCatalogCachePath(appRoot: string): string {
-  return join(appRoot, ".corax", "cache", "model-catalog.json");
+  return join(resolveCoraxDataDirectory(appRoot), "cache", "model-catalog.json");
 }
 
 /**
@@ -246,7 +246,7 @@ async function fetchAndPersistModelCatalog(
 
   try {
     const cachePath = resolveCompiledRuntimeModelCatalogCachePath(appRoot);
-    await mkdir(join(appRoot, ".corax", "cache"), { recursive: true });
+    await mkdir(join(resolveCoraxDataDirectory(appRoot), "cache"), { recursive: true });
     await writeFile(cachePath, `${JSON.stringify(cacheArtifact, null, 2)}\n`, "utf8");
   } catch {
     // Cache persistence is best-effort; the fetched data is still usable.
@@ -282,3 +282,4 @@ function isCacheFresh(cache: CompiledRuntimeModelCatalogCache): boolean {
   }
   return Date.now() - fetchedAt <= COMPILED_RUNTIME_MODEL_CATALOG_CACHE_TTL_MS;
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

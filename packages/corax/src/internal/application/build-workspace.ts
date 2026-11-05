@@ -40,7 +40,7 @@ export async function createApplicationBuildWorkspace(
 ): Promise<ApplicationBuildWorkspace> {
   const resolvedAppRoot = resolve(appRoot);
   const buildId = `${Date.now().toString(36)}-${randomUUID()}`;
-  const rootDir = join(resolvedAppRoot, ".corax", "builds", buildId);
+  const rootDir = join(resolveCoraxDataDirectory(resolvedAppRoot), "builds", buildId);
   const compilerRootDir = join(rootDir, "compiler");
   const workspace: ApplicationBuildWorkspace = {
     appRoot: resolvedAppRoot,
@@ -75,3 +75,4 @@ export async function removeApplicationBuildWorkspace(
 ): Promise<void> {
   await rm(workspace.rootDir, { force: true, recursive: true, maxRetries: 5, retryDelay: 100 });
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

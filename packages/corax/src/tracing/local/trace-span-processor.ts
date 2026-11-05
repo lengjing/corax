@@ -19,7 +19,7 @@ const LOCAL_TRACE_SCHEMA_DIRECTORY = "v1";
 const LOCAL_TRACE_SEGMENTS_DIRECTORY = "segments";
 
 function resolveLocalTraceStoreDirectory(appRoot: string): string {
-  return join(appRoot, ".corax", "traces");
+  return join(resolveCoraxDataDirectory(appRoot), "traces");
 }
 
 /** Resolves the directory holding one trace per subdirectory. */
@@ -104,3 +104,4 @@ function isReadableSpan(value: unknown): value is ReadableSpanLike {
 function isHexId(value: string, length: number): boolean {
   return value.length === length && /^[0-9a-f]+$/u.test(value);
 }
+import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

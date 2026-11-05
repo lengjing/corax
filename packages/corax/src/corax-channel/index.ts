@@ -123,6 +123,11 @@ export function coraxChannel(input: CoraxChannelInput): CoraxChannel {
     routes: [
       GET(CORAX_HEALTH_ROUTE_PATH, async () => healthResponse()),
       HEAD(CORAX_HEALTH_ROUTE_PATH, async () => healthResponse()),
+      GET(CORAX_SESSION_ROUTE_PATH, async (req) => {
+        const authResult = await routeAuth(req, input.auth);
+        if (authResult instanceof Response) return authResult;
+        return listSessions(req);
+      }),
 
       GET(CORAX_INFO_ROUTE_PATH, async (req, args) => {
         const authResult = await routeAuth(req, input.auth);
@@ -740,3 +745,4 @@ export function coraxChannel(input: CoraxChannelInput): CoraxChannel {
     uploadPolicy: input.uploadPolicy,
   });
 }
+import { listSessions } from "#corax-channel/list-sessions.js";
