@@ -1,5 +1,5 @@
-import { getLocalDevCapability, type LocalDevCapability } from "corax/local-dev";
-import { defineTool } from "corax/tools";
+import { getLocalDevCapability, type LocalDevCapability } from "@coraxjs/core/local-dev";
+import { defineTool } from "@coraxjs/core/tools";
 
 import type { ResolvedSelfModificationConfig } from "../../../../config.js";
 import { withSelfModificationWorkspaceLock } from "../../../../workspace-lock.js";

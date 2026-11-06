@@ -1,4 +1,4 @@
-import { defineDynamic, defineInstructions } from "corax/instructions";
+import { defineDynamic, defineInstructions } from "@coraxjs/core/instructions";
 
 import { isDeployedRuntime } from "../../../mode.js";
 import {

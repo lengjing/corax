@@ -3,6 +3,7 @@ import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
 
 import { normalizeEsmImportSpecifier } from "#internal/application/import-specifier.js";
+import { canonicalCoraxImport, isCoraxPackageImport } from "#internal/package-name.js";
 import {
   resolvePackageDependencyPath,
   resolvePackageRoot,
@@ -413,15 +414,15 @@ export function isPathImport(source: string): boolean {
 }
 
 const SELF_MODIFICATION_MOUNT_SPECIFIERS = new Set([
-  "corax/self-modification",
-  "corax/self-modification/local",
-  "corax/self-modification/remote",
+  "@coraxjs/core/self-modification",
+  "@coraxjs/core/self-modification/local",
+  "@coraxjs/core/self-modification/remote",
 ]);
 
 function isFrameworkRuntimeImport(source: string, importer: string | undefined): boolean {
   // Packaged extension mounts are authored code: each mount and its child must share a scoped handle.
-  if (SELF_MODIFICATION_MOUNT_SPECIFIERS.has(source)) return false;
-  if (source === "corax" || source.startsWith("corax/")) {
+  if (SELF_MODIFICATION_MOUNT_SPECIFIERS.has(canonicalCoraxImport(source))) return false;
+  if (isCoraxPackageImport(source)) {
     return true;
   }
 
@@ -444,7 +445,7 @@ function isFrameworkRuntimeImport(source: string, importer: string | undefined):
  * corax's own modules by path and share the process-wide Workflow runtime.
  */
 function resolveFrameworkRuntimeImport(source: string): string {
-  if (source === "corax" || source.startsWith("corax/")) {
+  if (isCoraxPackageImport(source)) {
     return source;
   }
   return normalizeEsmImportSpecifier(resolveWorkflowModulePath(source));
@@ -457,8 +458,8 @@ function resolveFrameworkRuntimeImport(source: string): string {
  * scope. Generation bundles remain portable and keep these imports bare.
  */
 function resolveRuntimeLoaderFrameworkImport(source: string): string {
-  if (source === "corax" || source.startsWith("corax/")) {
-    return normalizeEsmImportSpecifier(resolvePackageDependencyPath(source));
+  if (isCoraxPackageImport(source)) {
+    return normalizeEsmImportSpecifier(resolvePackageDependencyPath(canonicalCoraxImport(source)));
   }
   return resolveFrameworkRuntimeImport(source);
 }

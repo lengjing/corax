@@ -8,8 +8,10 @@ Corax 是基于 **Node.js + TypeScript** 的自托管 AI Agent 框架，同时�
 
 运行需要 **Node.js 24+**。
 
+npm 包名为 **`@coraxjs/core`**，安装后 CLI 命令仍为 **`corax`**，SDK 子路径以 `@coraxjs/core/` 开头。
+
 ```sh
-npm install corax @ai-sdk/openai
+npm install @coraxjs/core @ai-sdk/openai
 ```
 
 一个最小项目：
@@ -25,7 +27,7 @@ my-agent/
 ```ts
 // agent.ts
 import { createOpenAI } from "@ai-sdk/openai";
-import { defineAgent } from "corax";
+import { defineAgent } from "@coraxjs/core";
 
 const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -61,7 +63,7 @@ CLI 从当前目录向上定位项目。开发默认监听 `127.0.0.1:2000`，�
 npx corax build
 npx corax start
 # 在另一个交互式终端连接，不需要本地 Agent 项目：
-npx corax remote connect --url http://localhost:3000
+npx --package=@coraxjs/core corax remote connect --url http://localhost:3000
 ```
 
 认证由项目的渠道模块配置。客户端可传入重复的 `--header "Authorization: Bearer <token>"`，或通过 `http://用户名:密码@localhost:3000` 提供 Basic Auth（特殊字符需 URL 编码）。非本地地址使用 HTTPS。

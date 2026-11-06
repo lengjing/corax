@@ -1,4 +1,4 @@
-import { defineTool, type ToolContext } from "corax/tools";
+import { defineTool, type ToolContext } from "@coraxjs/core/tools";
 
 /** Registry categories an integration search can be narrowed to. */
 const CATEGORIES = ["channel", "connection", "extension", "instrumentation", "memory"] as const;

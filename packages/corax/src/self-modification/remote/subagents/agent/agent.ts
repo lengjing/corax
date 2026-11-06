@@ -4,7 +4,7 @@ import {
   defineDynamic,
   type DynamicSentinel,
   type DynamicSubagentDefinition,
-} from "corax";
+} from "@coraxjs/core";
 
 import { DEFAULT_AGENT_MODEL_ID, DEFAULT_AGENT_REASONING } from "#shared/default-agent-model.js";
 

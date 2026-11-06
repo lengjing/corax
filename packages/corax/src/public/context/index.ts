@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { defineState } from "corax/context";
+ * import { defineState } from "@coraxjs/core/context";
  * ```
  */
 

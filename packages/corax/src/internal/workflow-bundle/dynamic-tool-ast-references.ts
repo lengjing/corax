@@ -1,3 +1,5 @@
+import { isCoraxPackageImport } from "#internal/package-name.js";
+
 /** Rolldown AST subset consumed by the dynamic tool and remote agent transforms. */
 export type DynamicToolAstNode = {
   argument?: DynamicToolAstNode | null;
@@ -184,7 +186,7 @@ export function findCoraxImportAliases(ast: AstNode, names: readonly string[]): 
   walkNode(ast, (node) => {
     if (node.type !== "ImportDeclaration") return true;
     const source = node.source?.value;
-    if (typeof source !== "string" || (source !== "corax" && !source.startsWith("corax/"))) {
+    if (typeof source !== "string" || !isCoraxPackageImport(source)) {
       return false;
     }
     for (const specifier of node.specifiers ?? []) {

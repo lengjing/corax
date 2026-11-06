@@ -1,4 +1,4 @@
-import type { SandboxSession } from "corax/sandbox";
+import type { SandboxSession } from "@coraxjs/core/sandbox";
 
 import { gitHubGitBrokerNetworkPolicy } from "#shared/git.js";
 import type { SandboxNetworkPolicy } from "#shared/sandbox-network-policy.js";

@@ -1,4 +1,4 @@
-import { defineEval } from "corax/evals";
+import { defineEval } from "@coraxjs/core/evals";
 
 // Run with `corax eval` from this directory; `--list` shows discovered evals.
 export default defineEval({

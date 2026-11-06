@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
+import { CORAX_PRODUCT_NAME } from "#internal/package-name.js";
 import { MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES } from "#execution/sandbox/truncate-output.js";
 import { convertHtmlToMarkdown, extractTextFromHtml } from "#execution/web-fetch/html.js";
 import { requestPublicUrl } from "#execution/web-fetch/request.js";
@@ -226,7 +226,7 @@ describe("executeWebFetchTool", () => {
     expect(retryCall).toBeDefined();
     const retryHeaders = retryCall![1].headers;
 
-    expect(retryHeaders["User-Agent"]).toBe(CORAX_PACKAGE_NAME);
+    expect(retryHeaders["User-Agent"]).toBe(CORAX_PRODUCT_NAME);
   });
 
   it("sends format-aware Accept headers", async () => {

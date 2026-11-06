@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { SandboxSession } from "corax/sandbox";
+import type { SandboxSession } from "@coraxjs/core/sandbox";
 
 import { shellQuote } from "#shared/shell-quote.js";
 
@@ -209,7 +209,7 @@ async function selfModificationMountPaths(input: {
   const extensionsRoot = `${appRoot}agent/extensions`;
   const matches = await gitOutput(
     input.sandbox,
-    `git -C ${quote(input.repositoryPath)} grep -l -z -F -- "corax/self-modification" ${quote(input.tree)} -- ${quote(extensionsRoot)}`,
+    `git -C ${quote(input.repositoryPath)} grep -l -z -F -e "@coraxjs/core/self-modification" -e "corax/self-modification" ${quote(input.tree)} -- ${quote(extensionsRoot)}`,
     false,
   ).catch((error: unknown) => {
     if (error instanceof Error && error.message.includes("failed with exit 1:")) return "";

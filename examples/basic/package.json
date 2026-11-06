@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.91",
-    "corax": "*",
+    "@coraxjs/core": "*",
     "just-bash": "3.1.0",
     "zod": "4.5.4"
   }

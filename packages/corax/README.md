@@ -7,13 +7,13 @@ tools, memory, channels, schedules, sandboxes and subagents.
 ## Install
 
 ```sh
-npm install corax @ai-sdk/openai
+npm install @coraxjs/core @ai-sdk/openai
 ```
 
 ```ts
 // agent.ts
 import { createOpenAI } from "@ai-sdk/openai";
-import { defineAgent } from "corax";
+import { defineAgent } from "@coraxjs/core";
 
 const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export default defineAgent({
@@ -30,12 +30,14 @@ npx corax dev
 npx corax build
 npx corax start
 # Connect from another interactive terminal:
-npx corax remote connect --url http://localhost:3000
+npx --package=@coraxjs/core corax remote connect --url http://localhost:3000
 ```
 
 The package includes JavaScript, TypeScript declarations and the `corax` command.
-The SDK is imported through `corax` and its public subpaths such as `corax/client`,
-`corax/tools`, `corax/memory/file` and `corax/channels/corax`.
+The npm package is `@coraxjs/core`; the executable remains `corax`.
+Import the SDK through `@coraxjs/core` and its public subpaths such as
+`@coraxjs/core/client`, `@coraxjs/core/tools`, `@coraxjs/core/memory/file`
+and `@coraxjs/core/channels/corax`.
 
 Project modules configure authentication. Remote clients can pass explicit
 `--header "Authorization: Bearer TOKEN"` headers or URL Basic credentials.

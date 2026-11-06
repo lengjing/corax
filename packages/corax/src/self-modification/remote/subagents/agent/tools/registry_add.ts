@@ -1,4 +1,4 @@
-import { defineDynamic, defineTool, type ToolContext } from "corax/tools";
+import { defineDynamic, defineTool, type ToolContext } from "@coraxjs/core/tools";
 
 import { classifyCatalogEntry } from "../../../../extension/classify-registry-item.js";
 import {

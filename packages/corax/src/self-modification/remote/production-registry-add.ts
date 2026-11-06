@@ -1,4 +1,4 @@
-import type { SandboxSession } from "corax/sandbox";
+import type { SandboxSession } from "@coraxjs/core/sandbox";
 
 import { shellQuote } from "#shared/shell-quote.js";
 

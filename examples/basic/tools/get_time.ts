@@ -1,4 +1,4 @@
-import { defineTool } from "corax/tools";
+import { defineTool } from "@coraxjs/core/tools";
 import { z } from "zod";
 
 import { formatCurrentTime } from "../lib/time.js";

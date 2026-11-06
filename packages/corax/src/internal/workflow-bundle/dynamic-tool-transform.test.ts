@@ -112,9 +112,9 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("transformDynamicToolExecute — evaluation", () => {
-  it("stamps independent durable descriptors for every callback phase", async () => {
+  it.each(["@coraxjs/core/tools", "corax/tools"])("stamps independent durable descriptors for every callback phase (%s)", async (module) => {
     const source = `
-import { defineDynamic, defineTool } from "corax/tools";
+import { defineDynamic, defineTool } from "${module}";
 
 export default defineDynamic({
   events: {

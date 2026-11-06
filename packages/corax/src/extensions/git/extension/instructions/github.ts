@@ -1,4 +1,4 @@
-import { defineDynamic, defineInstructions } from "corax/instructions";
+import { defineDynamic, defineInstructions } from "@coraxjs/core/instructions";
 
 import extension from "../extension.ts";
 import { githubInstructions } from "../lib/github-guidance.ts";

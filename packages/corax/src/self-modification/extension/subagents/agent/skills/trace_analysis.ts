@@ -1,4 +1,4 @@
-import { defineSkill } from "corax/skills";
+import { defineSkill } from "@coraxjs/core/skills";
 
 import type { ResolvedSelfModificationConfig } from "../../../../config.js";
 import { defineLocalOnlyDynamic, resolveLocalOnly } from "../../../local-only.js";

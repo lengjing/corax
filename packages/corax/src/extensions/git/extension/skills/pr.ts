@@ -1,4 +1,4 @@
-import { defineDynamic, defineSkill } from "corax/skills";
+import { defineDynamic, defineSkill } from "@coraxjs/core/skills";
 
 import extension from "../extension.ts";
 import { prSkillDescription, prSkillMarkdown } from "../lib/github-guidance.ts";

@@ -81,7 +81,7 @@ function isChildTreeAlive(child: ReturnType<SpawnLike>): boolean {
  * never a `PATH` lookup. A `PATH` hit could be any version, or not corax at all.
  */
 export async function resolveCoraxExecutable(appRoot: string): Promise<string> {
-  const packageJsonPath = findPackageJSON("corax", pathToFileURL(resolve(appRoot, "package.json")));
+  const packageJsonPath = findPackageJSON("@coraxjs/core", pathToFileURL(resolve(appRoot, "package.json")));
   if (packageJsonPath === undefined) {
     throw new Error(
       `The "corax" package is not installed under ${appRoot}, so registry items cannot be installed from here.`,

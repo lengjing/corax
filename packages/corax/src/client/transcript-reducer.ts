@@ -35,7 +35,7 @@ export interface TranscriptReducerOptions {
  *
  * @example
  * ```ts
- * import { transcriptReducer } from "corax/client";
+ * import { transcriptReducer } from "@coraxjs/core/client";
  * import { sessions } from "corax/server";
  *
  * const reducer = transcriptReducer({ maxMessages: 40 });

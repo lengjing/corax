@@ -66,7 +66,7 @@ export type ScheduleDefinition = GenericScheduleDefinition<ScheduleHandlerArgs>;
  *
  * @example Start a session on Slack:
  * ```ts
- * import { defineSchedule } from "corax/schedules";
+ * import { defineSchedule } from "@coraxjs/core/schedules";
  * import slack from "../channels/slack.js";
  *
  * export default defineSchedule({

@@ -1,4 +1,4 @@
-import { defineHook } from "corax/hooks";
+import { defineHook } from "@coraxjs/core/hooks";
 
 // Hooks observe the durable event stream after each event is recorded. They
 // cannot change model context; use `defineDynamic` in a slot for that.

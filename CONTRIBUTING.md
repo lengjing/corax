@@ -50,4 +50,4 @@ docs: document npm installation
 
 ## 发布
 
-唯一公开 npm 包是 `corax`。内部包和示例保持 private。构建及打包不要并行操作同一个 `dist/`；发布时使用已通过安装测试的 tarball，详见 [发布指南](docs/releasing.md)。
+唯一公开 npm 包是 `@coraxjs/core`，CLI 命令仍为 `corax`。内部包和示例保持 private。构建及打包不要并行操作同一个 `dist/`；发布时使用已通过安装测试的 tarball，详见 [发布指南](docs/releasing.md)。

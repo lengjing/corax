@@ -1,4 +1,4 @@
-import { defineExtension } from "corax/extension";
+import { defineExtension } from "@coraxjs/core/extension";
 import { z } from "zod";
 
 import type { GitHubConfig, GitHubTokenSource } from "./lib/github-shell.ts";

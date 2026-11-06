@@ -37,7 +37,7 @@ function importerPath(importer: string): string {
 
 function shimSource(mountId: string): string {
   return [
-    `import { defineMountedState } from "corax/internal/mount-state";`,
+    `import { defineMountedState } from "@coraxjs/core/internal/mount-state";`,
     `export function defineState(name, initial) {`,
     `  return defineMountedState(${JSON.stringify(mountId)}, name, initial);`,
     `}`,
@@ -57,7 +57,7 @@ function scopeHooks(
   return {
     name,
     resolveId(source: string, importer: string | undefined) {
-      if (source !== "corax/context" || importer === undefined || importer.startsWith("\0")) {
+      if ((source !== "@coraxjs/core/context" && source !== "corax/context") || importer === undefined || importer.startsWith("\0")) {
         return undefined;
       }
       const mountId = mountFor(importer);

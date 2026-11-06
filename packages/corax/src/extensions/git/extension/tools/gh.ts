@@ -1,4 +1,4 @@
-import { defineDynamic } from "corax/tools";
+import { defineDynamic } from "@coraxjs/core/tools";
 
 import extension from "../extension.ts";
 import { defineGhTool } from "../lib/gh-tool.ts";

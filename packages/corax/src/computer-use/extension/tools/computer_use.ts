@@ -1,6 +1,6 @@
-import type { SandboxSession } from "corax/sandbox";
-import { defineTool } from "corax/tools";
-import { never } from "corax/tools/approval";
+import type { SandboxSession } from "@coraxjs/core/sandbox";
+import { defineTool } from "@coraxjs/core/tools";
+import { never } from "@coraxjs/core/tools/approval";
 import { z } from "zod";
 
 import {

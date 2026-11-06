@@ -1,5 +1,5 @@
-import { defineSandbox } from "corax/sandbox";
-import { JustBashSandbox } from "corax/sandbox/just-bash";
+import { defineSandbox } from "@coraxjs/core/sandbox";
+import { JustBashSandbox } from "@coraxjs/core/sandbox/just-bash";
 
 export const environment = JustBashSandbox.environment();
 export default defineSandbox(() => environment.open());

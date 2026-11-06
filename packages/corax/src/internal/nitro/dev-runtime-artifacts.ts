@@ -5,6 +5,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 
 import type { CompileAgentResult } from "#compiler/compile-agent.js";
 import type { CompiledAgentManifest } from "#compiler/manifest.js";
+import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
 import { readMaterializedAuthoredModuleIndex } from "#internal/materialized-authored-modules.js";
 import { copyDevelopmentSourceSnapshot } from "#internal/nitro/dev-runtime-source-snapshot-copy.js";
 import { resolveExtensionExternalDependencyPaths } from "#internal/nitro/host/extension-external-dependency-plugin.js";
@@ -151,7 +152,7 @@ export async function stageDevelopmentRuntimeArtifactsSnapshot(
 }
 
 async function mountFrameworkPackage(runtimeAppRoot: string): Promise<void> {
-  const mountPath = join(runtimeAppRoot, "node_modules", "corax");
+  const mountPath = join(runtimeAppRoot, "node_modules", ...CORAX_PACKAGE_NAME.split("/"));
   await mkdir(dirname(mountPath), { recursive: true });
   await rm(mountPath, { force: true, recursive: true });
   await symlink(resolvePackageRoot(), mountPath, "junction");

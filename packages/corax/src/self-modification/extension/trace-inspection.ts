@@ -1,4 +1,4 @@
-import type { ToolContext } from "corax/tools";
+import type { ToolContext } from "@coraxjs/core/tools";
 
 import { parseLocalTraceSegment, type LocalTraceSpan } from "#tracing/local/trace-reader.js";
 

@@ -1,4 +1,4 @@
-import { defineTool } from "corax/tools";
+import { defineTool } from "@coraxjs/core/tools";
 
 import { context, trace } from "#compiled/@opentelemetry/api/index.js";
 import { queryLocalTraceSummaries, type LocalTraceSortBy } from "#tracing/local/trace-query.js";

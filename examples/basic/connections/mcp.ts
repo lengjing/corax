@@ -1,4 +1,4 @@
-import { defineDynamic, defineMcpClientConnection } from "corax/connections";
+import { defineDynamic, defineMcpClientConnection } from "@coraxjs/core/connections";
 
 // A connection resolved per session: present only when the deployment
 // configures an MCP server, so the example runs without one.

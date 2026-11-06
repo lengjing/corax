@@ -1,10 +1,11 @@
 import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import { CORAX_PRODUCT_NAME } from "#internal/package-name.js";
 import { asFetch } from "#shared/fetch.js";
 
-/** Product token for the installed package, such as `package-name/1.2.3`. */
+/** Stable HTTP product token; npm scopes are not valid User-Agent product names. */
 export function buildPackageUserAgent(): string {
-  const { name, version } = resolveInstalledPackageInfo();
-  return `${name}/${version}`;
+  const { version } = resolveInstalledPackageInfo();
+  return `${CORAX_PRODUCT_NAME}/${version}`;
 }
 
 /**

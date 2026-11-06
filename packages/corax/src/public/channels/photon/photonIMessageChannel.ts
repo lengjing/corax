@@ -70,7 +70,7 @@ export interface PhotonIMessageChannel extends ChatSdkChannel {}
  *
  * @example
  * ```ts
- * import { photonIMessageChannel } from "corax/channels/photon";
+ * import { photonIMessageChannel } from "@coraxjs/core/channels/photon";
  *
  * export default photonIMessageChannel({
  *   credentials: connectPhotonCredentials("photon/my-agent"),

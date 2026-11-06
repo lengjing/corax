@@ -1,4 +1,4 @@
-import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
+import { CORAX_PRODUCT_NAME } from "#internal/package-name.js";
 import { truncateHead } from "#execution/sandbox/truncate-output.js";
 import { convertHtmlToMarkdown, extractTextFromHtml } from "#execution/web-fetch/html.js";
 import { requestPublicUrl } from "#execution/web-fetch/request.js";
@@ -85,7 +85,7 @@ export async function executeWebFetchTool(
   const response =
     initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge"
       ? await requestPublicUrl(url, {
-          headers: { ...headers, "User-Agent": CORAX_PACKAGE_NAME },
+          headers: { ...headers, "User-Agent": CORAX_PRODUCT_NAME },
           maxResponseSize: MAX_RESPONSE_SIZE,
           signal,
         })

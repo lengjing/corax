@@ -37,7 +37,8 @@ test("Node starts the supervised channels development child with its console pre
   for (const name of ["agent.ts", "package.json", "channels"])
     await cp(new URL(name, example), join(project, name), { recursive: true });
   await mkdir(join(project, "node_modules/@ai-sdk"), { recursive: true });
-  for (const name of ["corax", "@ai-sdk/openai"])
+  await mkdir(join(project, "node_modules/@coraxjs"), { recursive: true });
+  for (const name of ["@coraxjs/core", "@ai-sdk/openai"])
     await symlink(dirname(exampleRequire.resolve(`${name}/package.json`)), join(project, "node_modules", name),
       process.platform === "win32" ? "junction" : "dir");
   const { stdout } = await execute(process.execPath, [
@@ -52,7 +53,7 @@ test("the CLI resolves the agent project from the working directory", async (t) 
   const target = join(root, "target");
   await mkdir(target);
   await writeFile(join(target, "agent.ts"), "export default {};\n");
-  await writeFile(join(target, "package.json"), JSON.stringify({ name: "external", dependencies: { corax: "0.1.0" } }));
+  await writeFile(join(target, "package.json"), JSON.stringify({ name: "external", dependencies: { "@coraxjs/core": "0.1.0" } }));
   const { stdout } = await execute(process.execPath,
     [cli, "dev", "--help"],
     { cwd: target, timeout: 30_000 });

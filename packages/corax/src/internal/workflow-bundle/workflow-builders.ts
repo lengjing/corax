@@ -2,7 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { STABLE_WORKFLOW_NAMES } from "#execution/stable-workflow-names.js";
-import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
+import { CORAX_PACKAGE_NAME, CORAX_WORKFLOW_NAMESPACE } from "#internal/package-name.js";
 import { AGENT_TOOL_SERVE_WORKFLOW_NAME } from "#runtime/subagents/workflow-reference.js";
 import { prepareAuthoredWorkflowDirectives } from "#internal/workflow-bundle/authored-workflow-directives.js";
 import {
@@ -230,17 +230,20 @@ function resolveModuleSpecifier(
   const inWorkspace = !inNodeModules && isWorkspacePackage(filePath, projectRoot);
   const pkg = findPackageJson(filePath);
 
+  // npm scope is packaging identity, not the durable workflow namespace.
+  const identity = pkg?.name === CORAX_PACKAGE_NAME ? CORAX_WORKFLOW_NAMESPACE : pkg?.name;
+
   if (packageBuild && pkg !== null) {
     return {
-      moduleSpecifier: `${pkg.name}@${pkg.version}`,
-      stableModuleSpecifier: pkg.name,
+      moduleSpecifier: `${identity}@${pkg.version}`,
+      stableModuleSpecifier: identity,
     };
   }
 
   if (!inNodeModules && !inWorkspace) {
     return {
       moduleSpecifier: undefined,
-      stableModuleSpecifier: pkg?.name === CORAX_PACKAGE_NAME ? CORAX_PACKAGE_NAME : undefined,
+      stableModuleSpecifier: pkg?.name === CORAX_PACKAGE_NAME ? CORAX_WORKFLOW_NAMESPACE : undefined,
     };
   }
 
@@ -253,7 +256,7 @@ function resolveModuleSpecifier(
   // ids; the stable variant drops the `@<pkg.version>` suffix so
   // {@link STABLE_WORKFLOW_NAMES} functions emit cross-deployment
   // routable ids.
-  const base = subpath ? `${pkg.name}${subpath}` : pkg.name;
+  const base = subpath ? `${identity}${subpath}` : identity;
 
   return {
     moduleSpecifier: `${base}@${pkg.version}`,

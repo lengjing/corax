@@ -1,4 +1,5 @@
 import { WORKFLOW_REGISTRY_GLOBAL } from "#execution/workflow-registry.js";
+import { isCoraxPackageImport } from "#internal/package-name.js";
 import {
   readWorkflowDirective,
   mayContainWorkflowDirective,
@@ -139,7 +140,7 @@ export async function transformWorkflowDirectives(input: {
   // The driver bundle resolves corax aliases itself; app-bundled step registrations need the export.
   const workflowStepImport = "#execution/tools/workflow/step.js";
   const stepExecutionImport = input.authored
-    ? "corax/internal/workflow-step-execution"
+    ? "@coraxjs/core/internal/workflow-step-execution"
     : "#execution/tools/workflow/step-execution.js";
 
   for (const fn of functions) {
@@ -447,7 +448,7 @@ function removeCoraxDefinerDefaultExport(
   for (const node of ast.body ?? []) {
     if (node.type !== "ImportDeclaration" || node.importKind === "type") continue;
     const source = node.source?.value;
-    if (typeof source !== "string" || !/^corax(?:\/|$)/.test(source)) continue;
+    if (typeof source !== "string" || !isCoraxPackageImport(source)) continue;
     for (const specifier of node.specifiers ?? []) {
       if (specifier.importKind === "type") continue;
       const name = specifier.local?.name;

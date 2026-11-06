@@ -1,4 +1,4 @@
-import { defineOpenAPIConnection } from "corax/connections";
+import { defineOpenAPIConnection } from "@coraxjs/core/connections";
 
 // Every operation in the spec becomes a tool the model can call.
 export default defineOpenAPIConnection({

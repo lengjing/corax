@@ -25,6 +25,7 @@ import {
   readParentLineage,
 } from "#execution/corax-workflow-attributes.js";
 import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import { CORAX_WORKFLOW_NAMESPACE } from "#internal/package-name.js";
 import { createLogger, logError } from "#internal/logging.js";
 import {
   getHookByToken,
@@ -91,7 +92,7 @@ import {
 } from "#execution/stable-workflow-names.js";
 const CORAX_PACKAGE_INFO = resolveInstalledPackageInfo();
 
-const STABLE_ID_BASE = CORAX_PACKAGE_INFO.name;
+const STABLE_ID_BASE = CORAX_WORKFLOW_NAMESPACE;
 
 const log = createLogger("execution.workflow-runtime");
 

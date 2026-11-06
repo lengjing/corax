@@ -1,4 +1,4 @@
-import { defineTool } from "corax/tools";
+import { defineTool } from "@coraxjs/core/tools";
 
 import { AI_GATEWAY_MODELS_URL } from "#internal/gateway.js";
 import { DEFAULT_AGENT_MODEL_ID } from "#shared/default-agent-model.js";

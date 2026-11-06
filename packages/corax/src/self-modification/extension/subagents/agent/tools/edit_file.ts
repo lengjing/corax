@@ -1,4 +1,4 @@
-import { defineTool } from "corax/tools";
+import { defineTool } from "@coraxjs/core/tools";
 
 const replacementSchema = {
   type: "object",

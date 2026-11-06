@@ -264,7 +264,7 @@ export interface ChatSdkChannelBridge<TAdapters extends ChatSdkAdapters = ChatSd
  * ```ts
  * import { createSlackAdapter } from "@chat-adapter/slack";
  * import { createMemoryState } from "@chat-adapter/state-memory";
- * import { chatSdkChannel } from "corax/channels/chat-sdk";
+ * import { chatSdkChannel } from "@coraxjs/core/channels/chat-sdk";
  *
  * export const { bot, channel, send } = chatSdkChannel({
  *   userName: "acme",

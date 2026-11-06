@@ -4,7 +4,7 @@
  *
  * @example
  * ```ts
- * import { defineExtension } from "corax/extension";
+ * import { defineExtension } from "@coraxjs/core/extension";
  * ```
  */
 

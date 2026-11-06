@@ -1,5 +1,5 @@
 import { posix } from "node:path";
-import type { SandboxSession } from "corax/sandbox";
+import type { SandboxSession } from "@coraxjs/core/sandbox";
 
 import { validateRepositoryRoot } from "./repository-root.ts";
 import { shellQuote } from "./shell.ts";

@@ -1,4 +1,4 @@
-import { defineTool } from "corax/tools";
+import { defineTool } from "@coraxjs/core/tools";
 
 import { analyzeLocalTrace } from "#tracing/local/trace-analysis.js";
 

@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.91",
-    "corax": "*",
+    "@coraxjs/core": "*",
     "zod": "4.5.4"
   }
 }

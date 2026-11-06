@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readStampedPackageVersion } from "#internal/application/stamped-package-version.js";
-import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
+import { canonicalCoraxImport, CORAX_PACKAGE_NAME } from "#internal/package-name.js";
 
 let cachedPackageInfo: InstalledPackageInfo | undefined;
 let cachedPackageLocation: PackageLocation | undefined;
@@ -291,6 +291,7 @@ export function resolvePackageSourceDirectoryPath(relativeSourcePath: string): s
 }
 
 export function resolvePackageDependencyPath(specifier: string): string {
+  specifier = canonicalCoraxImport(specifier);
   try {
     return packageRequire.resolve(specifier);
   } catch (error) {

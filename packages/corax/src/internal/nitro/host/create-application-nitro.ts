@@ -68,6 +68,8 @@ const WORKFLOW_ALIAS_SPECIFIERS = [
 const INSTRUMENTATION_ALIAS_PATHS = {
   "corax/instrumentation": "src/public/instrumentation/index.ts",
   "corax/instrumentation/otel": "src/public/instrumentation/otel.ts",
+  "@coraxjs/core/instrumentation": "src/public/instrumentation/index.ts",
+  "@coraxjs/core/instrumentation/otel": "src/public/instrumentation/otel.ts",
 } as const;
 const WORKFLOW_TRANSFORM_PATCHED = Symbol("corax.workflow-transform-patched");
 const WORKFLOW_CACHE_PATH_FRAGMENT = "/.corax/workflow-cache/";

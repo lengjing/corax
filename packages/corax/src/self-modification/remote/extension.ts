@@ -1,4 +1,4 @@
-import { defineExtension } from "corax/extension";
+import { defineExtension } from "@coraxjs/core/extension";
 
 import type { StandardSchemaV1 } from "#compiled/@standard-schema/spec/index.js";
 import type { DeployedSelfModificationConfig } from "./config.js";

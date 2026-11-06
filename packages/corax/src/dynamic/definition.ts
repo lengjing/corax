@@ -140,7 +140,7 @@ export type DynamicSentinel<TResult = unknown> = {
  * `session.started` and `turn.started` only.
  *
  * ```ts
- * import { defineDynamic, defineTool } from "corax/tools";
+ * import { defineDynamic, defineTool } from "@coraxjs/core/tools";
  * import { z } from "zod";
  *
  * export default defineDynamic({

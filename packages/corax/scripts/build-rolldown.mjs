@@ -180,7 +180,7 @@ function isExternalPackageSpecifier(source) {
   // Public self-imports must remain bare in the published package. Resolving
   // them during a clean build would target output that does not exist yet;
   // resolving them during an incremental build could consume stale output.
-  if (source === "corax" || source.startsWith("corax/")) {
+  if (source === "@coraxjs/core" || source.startsWith("@coraxjs/core/")) {
     return true;
   }
 

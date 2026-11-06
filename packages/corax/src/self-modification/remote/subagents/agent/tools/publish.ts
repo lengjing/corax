@@ -1,4 +1,4 @@
-import { defineDynamic, defineTool, type ToolContext } from "corax/tools";
+import { defineDynamic, defineTool, type ToolContext } from "@coraxjs/core/tools";
 
 import { createGitHubCredentialProvider } from "../../../../credentials.js";
 import { readPreparedSelfModificationWorkspace } from "../../../../git-workspace.js";

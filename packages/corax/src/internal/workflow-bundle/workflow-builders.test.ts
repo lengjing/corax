@@ -134,7 +134,7 @@ describe("applyWorkflowTransform", () => {
     expect(transformed.code).toContain('return "done";');
     const packageInfo = resolveInstalledPackageInfo();
     expect(transformed.code).toContain(
-      `executeSleepTool.workflowId = "workflow//${packageInfo.name}@${packageInfo.version}//executeSleepTool";`,
+      `executeSleepTool.workflowId = "workflow//corax@${packageInfo.version}//executeSleepTool";`,
     );
     expect(transformed.code).not.toContain("__private_workflows.set");
   });
@@ -374,7 +374,7 @@ describe("applyWorkflowTransform for authored application modules", () => {
   const toolPath = "/app/agent/tools/deploy.ts";
   const toolSource = [
     'import { readFile } from "node:fs/promises";',
-    'import { defineWorkflowTool, type WorkflowToolContext } from "corax/tools";',
+    'import { defineWorkflowTool, type WorkflowToolContext } from "@coraxjs/core/tools";',
     'import { sleep } from "workflow";',
     'import { z } from "zod";',
     "",
@@ -472,7 +472,7 @@ describe("applyWorkflowTransform for authored application modules", () => {
 
     // Step registrations are bundled by the app, which resolves corax's package export.
     expect(transformed.code).toContain(
-      'import { withWorkflowStepAuthorization } from "corax/internal/workflow-step-execution";',
+      'import { withWorkflowStepAuthorization } from "@coraxjs/core/internal/workflow-step-execution";',
     );
     expect(transformed.code).toContain(
       'registerStepFunction("step//./agent/tools/deploy//planDeploy:corax-authorization", withWorkflowStepAuthorization(planDeploy));',

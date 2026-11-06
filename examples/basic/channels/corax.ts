@@ -1,5 +1,5 @@
-import { httpBasic, localDev } from "corax/channels/auth";
-import { coraxChannel } from "corax/channels/corax";
+import { httpBasic, localDev } from "@coraxjs/core/channels/auth";
+import { coraxChannel } from "@coraxjs/core/channels/corax";
 
 const password = process.env.CORAX_PASSWORD;
 

@@ -1,6 +1,7 @@
 import { dirname, join, resolve } from "node:path";
 
 import { createDiskProjectSource, type ProjectSource } from "#discover/project-source.js";
+import { CORAX_PACKAGE_NAME } from "#internal/package-name.js";
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -19,7 +20,8 @@ async function packageDeclaresCorax(
 
   if (!isJsonObject(packageJson)) return false;
   const dependencies = packageJson.dependencies;
-  return isJsonObject(dependencies) && typeof dependencies.corax === "string";
+  return isJsonObject(dependencies)
+    && (typeof dependencies[CORAX_PACKAGE_NAME] === "string" || typeof dependencies.corax === "string");
 }
 
 /** Find the nearest package boundary and return it only when it owns a corax project. */

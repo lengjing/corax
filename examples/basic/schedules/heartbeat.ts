@@ -1,4 +1,4 @@
-import { defineSchedule } from "corax/schedules";
+import { defineSchedule } from "@coraxjs/core/schedules";
 
 // The `run` form receives `{ to, waitUntil, appAuth }`: `to(channel, target)`
 // can message another channel on the agent's behalf, `waitUntil` keeps the

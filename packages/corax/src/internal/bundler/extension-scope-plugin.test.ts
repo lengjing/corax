@@ -104,7 +104,7 @@ describe("shim baking (shared)", () => {
     const shim = createFixedMountScopePlugin("extensions/crm").load(
       "\0corax-ext-scope:context:extensions%2Fcrm",
     );
-    expect(shim?.code).toContain(`import { defineMountedState } from "corax/internal/mount-state"`);
+    expect(shim?.code).toContain(`import { defineMountedState } from "@coraxjs/core/internal/mount-state"`);
     expect(shim?.code).toContain(`defineMountedState("extensions/crm", name, initial)`);
   });
 

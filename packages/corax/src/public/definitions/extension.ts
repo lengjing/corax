@@ -84,7 +84,7 @@ function validateConfig(
  *
  * ```ts
  * // extension/extension.ts
- * import { defineExtension } from "corax/extension";
+ * import { defineExtension } from "@coraxjs/core/extension";
  * import { z } from "zod";
  * export default defineExtension({ config: z.object({ apiKey: z.string() }) });
  *

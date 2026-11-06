@@ -82,22 +82,21 @@ afterEach(() => {
 });
 
 describe("workflowEntryReference", () => {
-  it("uses the installed corax package identity for the runtime workflow id", () => {
-    const packageInfo = resolveInstalledPackageInfo();
+  it("keeps runtime workflow ids stable across npm package renames", () => {
 
     // The runtime references intentionally omit the `@<pkg.version>` stamp
     // so an explicitly targeted deployment finds the same workflow even when
     // corax itself has been upgraded.
-    expect(workflowEntryReference.workflowId).toBe(`workflow//${packageInfo.name}//workflowEntry`);
+    expect(workflowEntryReference.workflowId).toBe("workflow//corax//workflowEntry");
     expect(workflowEntryReference.workflowId).not.toContain("/src/execution/");
     expect(workflowEntryReference.workflowId).not.toContain("@");
     expect(sessionTimeoutWorkflowReference.workflowId).toBe(
-      `workflow//${packageInfo.name}//sessionTimeoutWorkflow`,
+      "workflow//corax//sessionTimeoutWorkflow",
     );
     expect(sessionTimeoutWorkflowReference.workflowId).not.toContain("/src/execution/");
     expect(sessionTimeoutWorkflowReference.workflowId).not.toContain("@");
     expect(workflowToolRunWorkflowReference.workflowId).toBe(
-      `workflow//${packageInfo.name}//workflowToolRunWorkflow`,
+      "workflow//corax//workflowToolRunWorkflow",
     );
     expect(workflowToolRunWorkflowReference.workflowId).not.toContain("@");
   });

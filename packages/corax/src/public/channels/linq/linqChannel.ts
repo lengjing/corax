@@ -85,7 +85,7 @@ export interface LinqChannel extends Channel<
  *
  * @example
  * ```ts
- * import { linqChannel } from "corax/channels/linq";
+ * import { linqChannel } from "@coraxjs/core/channels/linq";
  *
  * export default linqChannel({
  *   credentials: connectLinqCredentials("linq/my-agent"),

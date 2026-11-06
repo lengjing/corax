@@ -100,7 +100,7 @@ const coraxNuxtModule: NuxtModule<CoraxNuxtModuleOptions> = defineNuxtModule<Cor
 
     // Auto-import the Vue composable so app code can call `useCoraxAgent()`
     // without an explicit import, matching Nuxt's composable conventions.
-    addImports({ name: "useCoraxAgent", from: "corax/vue" });
+    addImports({ name: "useCoraxAgent", from: "@coraxjs/core/vue" });
 
     // Booting the shared corax dev server can take a while, so defer it out of
     // module setup. `modules:done` still runs before Nitro is configured, so

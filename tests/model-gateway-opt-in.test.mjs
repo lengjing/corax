@@ -86,17 +86,17 @@ test("compiling a project with a bare model id fails with guidance instead of co
   withoutGatewayOptIn(t);
   const root = await mkdtemp(join(tmpdir(), "corax-bare-model-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3 }));
-  await writeFile(join(root, "package.json"), JSON.stringify({ name: "bare", type: "module", dependencies: { corax: "0.1.0" } }));
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "bare", type: "module", dependencies: { "@coraxjs/core": "0.1.0" } }));
   await writeFile(
     join(root, "agent.ts"),
-    `import { defineAgent } from 'corax';
+    `import { defineAgent } from '@coraxjs/core';
 export default defineAgent({ model: 'openai/gpt-4.1-mini', modelContextWindowTokens: 128000 });
 `,
   );
-  await mkdir(join(root, "node_modules"));
+  await mkdir(join(root, "node_modules/@coraxjs"), { recursive: true });
   await symlink(
-    fileURLToPath(new URL("../examples/minimal/node_modules/corax", import.meta.url)),
-    join(root, "node_modules", "corax"),
+    fileURLToPath(new URL("../packages/corax", import.meta.url)),
+    join(root, "node_modules/@coraxjs/core"),
     process.platform === "win32" ? "junction" : "dir",
   );
   let fetched = 0;

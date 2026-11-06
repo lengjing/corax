@@ -22,7 +22,7 @@
     "typecheck:packages": "npm run typecheck --workspace packages/corax --workspace packages/corax-catalog --workspace packages/tracing",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json"
   },
-  "dependencies": { "corax": "*" },
+  "dependencies": { "@coraxjs/core": "*" },
   "devDependencies": {
     "@types/node": "24.13.3",
     "oxfmt": "0.66.0",

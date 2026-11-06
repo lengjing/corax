@@ -47,19 +47,19 @@ export function modelLimitsRequireGatewayError(modelLabel: string, purpose?: str
 }
 export const MODEL_HELPERS = {
   chatgpt: {
-    module: "corax/models/openai",
+    module: "@coraxjs/core/models/openai",
     prefix: "chatgpt/",
     defaultModel: "gpt-6-luna-fast",
     provider: "codex",
   },
   openai: {
-    module: "corax/models/openai",
+    module: "@coraxjs/core/models/openai",
     prefix: "openai-api/",
     defaultModel: "gpt-6-luna-fast",
     provider: "openai",
   },
   anthropic: {
-    module: "corax/models/anthropic",
+    module: "@coraxjs/core/models/anthropic",
     prefix: "anthropic-api/",
     defaultModel: "claude-sonnet-5",
     provider: "anthropic",

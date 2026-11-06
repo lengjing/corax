@@ -69,7 +69,7 @@ export type SlackCompletedReply =
  *
  * @example
  * ```ts
- * import { postCompletedSlackReply } from "corax/channels/slack";
+ * import { postCompletedSlackReply } from "@coraxjs/core/channels/slack";
  *
  * await postCompletedSlackReply(channel, {
  *   blocks: [{ type: "markdown", text: reply }, sourcesBlock],

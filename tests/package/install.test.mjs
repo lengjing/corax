@@ -19,13 +19,13 @@ test("npm tarball preserves SDK types and builds/serves an external project", { 
   await mkdir(join(project, "channels"));
   await writeFile(join(project, "package.json"), JSON.stringify({
     name: "external-package-test", private: true, type: "module",
-    dependencies: { corax: `file:${archive.replaceAll("\\", "/")}`, "@ai-sdk/openai": "4.0.91" },
+    dependencies: { "@coraxjs/core": `file:${archive.replaceAll("\\", "/")}`, "@ai-sdk/openai": "4.0.91" },
     devDependencies: { typescript: "7.0.2", "@types/node": "24.13.3" },
   }));
   await runNpm(["install", "--no-audit", "--no-fund"], project);
-  const packageRoot = join(project, "node_modules/corax");
+  const packageRoot = join(project, "node_modules/@coraxjs/core");
   const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
-  assert.equal(manifest.name, "corax");
+  assert.equal(manifest.name, "@coraxjs/core");
   assert.equal(manifest.private, false);
   assert.equal(manifest.bin.corax, "./bin/corax.js");
   assert.equal(manifest.engines.node, ">=24.0.0");
@@ -50,14 +50,14 @@ test("npm tarball preserves SDK types and builds/serves an external project", { 
   // Source conditions must also resolve to shipped JS, never checkout-only TS.
   await execute(process.execPath, ["--conditions=corax-source", cli, "--help"], { cwd: project, timeout: 20_000 });
   await writeFile(join(project, "agent.ts"), `
-import { defineAgent } from 'corax';
+import { defineAgent } from '@coraxjs/core';
 import { createOpenAI } from '@ai-sdk/openai';
 const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: 'http://127.0.0.1:1/v1' });
 export default defineAgent({ model: provider.chat('smoke-model'), modelContextWindowTokens: 128000, experimental: { workflow: { world: 'local' } } });
 `);
   await writeFile(join(project, "channels/corax.ts"), `
-import { httpBasic } from 'corax/channels/auth';
-import { coraxChannel } from 'corax/channels/corax';
+import { httpBasic } from '@coraxjs/core/channels/auth';
+import { coraxChannel } from '@coraxjs/core/channels/corax';
 export default coraxChannel({ auth: [httpBasic({ username: 'smoke-user', password: process.env.CORAX_PASSWORD! })] });
 `);
   await writeFile(join(project, ".env"), "OPENAI_API_KEY=smoke-key\nCORAX_PASSWORD=smoke-password\n");

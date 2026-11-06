@@ -11,7 +11,7 @@ const scaffoldedSourcePaths = new Set(
 function isSelfModification(source: AgentInfoSource): boolean {
   return (
     source.owner.kind === "extension" &&
-    source.owner.packageName === "corax" &&
+    (source.owner.packageName === "@coraxjs/core" || source.owner.packageName === "corax") &&
     source.owner.namespace === "self-modification"
   );
 }

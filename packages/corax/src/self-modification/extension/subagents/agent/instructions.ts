@@ -1,4 +1,4 @@
-import { defineDynamic, defineInstructions } from "corax/instructions";
+import { defineDynamic, defineInstructions } from "@coraxjs/core/instructions";
 
 import { resolveSelfModificationConfig } from "../../../config.js";
 import { isLocalSelfModificationEnabled } from "../../../mode.js";

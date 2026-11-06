@@ -382,7 +382,7 @@ function applyTransform(source: string, callbacks: readonly CallbackInfo[]): { c
     ...(callbacks.some(
       (callback) => callback.phase === "inputSchema" || callback.phase === "outputSchema",
     )
-      ? ['import { defineDurableSchema as __coraxDefineDurableSchema } from "corax/tools";']
+      ? ['import { defineDurableSchema as __coraxDefineDurableSchema } from "@coraxjs/core/tools";']
       : []),
     `var __coraxDurableCallbackSym = Symbol.for("corax:durable-dynamic-callback");`,
     `function __coraxStampDynamicCallback(callback, impl, closure) {`,

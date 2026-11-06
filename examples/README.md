@@ -29,6 +29,6 @@ npm run eval --workspace examples/evals -- --list
 
 框架默认提供 corax 会话渠道，未显式声明 `channels/` 的示例也能在开发模式通过终端/API 交互。`channels`、`evals` 和 `basic` 展示显式渠道配置：`evals` 使用本地开发认证，`channels` 和 `basic` 还展示生产 HTTP Basic 认证。按用户隔离的 memory 依赖渠道提供认证主体；缺少 principal 时该 memory slot 被禁用。记忆通过上下文自动召回，save/remove 工具用于写入和删除，不是读取接口。完整组合可直接运行 `basic`。
 
-组合模块后同步声明它们需要的依赖，例如 JustBash 沙箱需要 `just-bash`，`zod` 工具参数需要 `zod`。复制到仓库外时，将 `corax` 依赖改为可用的发布版本或本地 tarball 路径，启动脚本中的仓库路径改为 `corax dev` / `corax build` / `corax start`，再执行 `npm install`。
+组合模块后同步声明它们需要的依赖，例如 JustBash 沙箱需要 `just-bash`，`zod` 工具参数需要 `zod`。复制到仓库外时，将 `@coraxjs/core` 依赖改为可用的发布版本或本地 tarball 路径，启动脚本中的仓库路径改为 `corax dev` / `corax build` / `corax start`，再执行 `npm install`。
 
 `connections` 和 `basic` 的 Petstore 连接会在加载工具时访问公开的 OpenAPI 规范；MCP 连接仅在填写 `MCP_SERVER_URL` 时启用。`schedules` 和 `basic` 启动后会注册 cron 任务，其中晨间摘要会调用模型。评测的 `--list` 只列出用例；实际运行评测需要模型凭证与可用的渠道。

@@ -3,16 +3,17 @@
 ## 发布内容
 
 `packages/corax/package.json` 的版本是公开 SDK 与 CLI 的唯一发布版本。
+公开 npm 包名为 `@coraxjs/core`，CLI 命令仍叫 `corax`。本地 tarball 路径保持 `artifacts/corax.tgz`，发布身份由包内 manifest 决定。
 `npm run pack` 先构建，再将可分发文件组装成 `artifacts/corax.tgz`：
 
 - 包含 `bin/`、`dist/`、`.d.ts`、README、LICENSE 和 NOTICE。
 - 将 `corax-source` 等条件中的源码路径改为已构建路径。
 - 不包含源码、开发依赖、生命周期脚本、用户项目、凭据或预安装的 `node_modules`。
-- 源码 workspace 仍为 private，避免绕过组装步骤误发布；临时包 manifest 为可公开发布的 `corax`。
+- 源码 workspace 仍为 private，避免绕过组装步骤误发布；临时包 manifest 为可公开发布的 `@coraxjs/core`。
 
 ## 首次发布
 
-需要拥有 npm 上 `corax` 包名的发布权限。首次创建包时，在可信本机登录 npm 并执行：
+需要拥有 npm 组织 `coraxjs` 下 `@coraxjs/core` 的发布权限，并满足 npm 的发布认证要求（2FA 或具有 Bypass 2FA 权限的 granular token）。首次创建包时，在可信本机登录 npm 并执行：
 
 ```sh
 npm install
@@ -27,7 +28,7 @@ npm publish ./artifacts/corax.tgz --access public
 
 ## GitHub Actions Trusted Publishing
 
-首次发布后，在 npm 的 `corax` 包设置中添加 Trusted Publisher：
+首次发布后，在 npm 的 `@coraxjs/core` 包设置中添加 Trusted Publisher：
 
 - Provider：GitHub Actions
 - Owner / Repository：`lengjing` / `corax`

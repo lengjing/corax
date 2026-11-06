@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { defineAgent } from "corax";
+import { defineAgent } from "@coraxjs/core";
 
 const provider = createOpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,

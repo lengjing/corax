@@ -1,5 +1,5 @@
 {
-  "name": "corax",
+  "name": "@coraxjs/core",
   "version": "0.1.0",
   "private": true,
   "description": "Corax's self-hosted agent runtime, based on the eve framework.",

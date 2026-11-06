@@ -94,8 +94,8 @@ export async function deriveExtensionCapabilityRequirements(input: {
   }
   if (usesState) required.add("state");
   // Runtime imports can use these capabilities outside manifest-declared tools.
-  if (input.runtimeImports.includes("corax/ai")) required.add("tool");
-  if (input.runtimeImports.includes("corax/models")) required.add("dynamicTool");
+  if (input.runtimeImports.includes("@coraxjs/core/ai") || input.runtimeImports.includes("corax/ai")) required.add("tool");
+  if (input.runtimeImports.includes("@coraxjs/core/models") || input.runtimeImports.includes("corax/models")) required.add("dynamicTool");
 
   return Object.fromEntries(
     (Object.keys(EXTENSION_CAPABILITY_VERSIONS) as ExtensionCapability[])

@@ -29,7 +29,8 @@ try {
   await runNpm(["pack", "--ignore-scripts", "--quiet", "--pack-destination", stage], stage);
   const tarball = join(artifacts, "corax.tgz");
   await rm(tarball, { force: true });
-  await rename(join(stage, `corax-${manifest.version}.tgz`), tarball);
+  const packedName = manifest.name.replace(/^@/, "").replaceAll("/", "-");
+  await rename(join(stage, `${packedName}-${manifest.version}.tgz`), tarball);
   console.log(`[corax] npm package: ${tarball} (${manifest.version})`);
 } finally {
   await rm(stage, { recursive: true, force: true, maxRetries: 5 });
