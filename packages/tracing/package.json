@@ -30,7 +30,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test:unit": "vitest run --exclude **/*.integration.test.ts --maxWorkers=2",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --maxWorkers=2",
     "test:integration": "vitest run integration.test.ts --maxWorkers=2",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly",

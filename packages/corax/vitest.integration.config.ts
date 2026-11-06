@@ -7,6 +7,12 @@ export default defineConfig({
   ...base,
   test: {
     ...base.test,
+    // Integration tests opt in explicitly when needed; never inherit the unit
+    // suite's Gateway fixture or a developer's Gateway credentials.
+    env: {
+      AI_GATEWAY_API_KEY: "",
+      CORAX_MODEL_CONNECTION: "",
+    },
     setupFiles: [],
     exclude: ["**/node_modules/**"],
     include: [

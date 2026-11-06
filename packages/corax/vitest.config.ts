@@ -18,6 +18,12 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // String-model fixtures exercise Gateway normalization without using a
+    // developer's credentials. The unit guard still rejects real network I/O.
+    env: {
+      AI_GATEWAY_API_KEY: "",
+      CORAX_MODEL_CONNECTION: "ai-gateway-key",
+    },
     exclude: ["**/node_modules/**", "src/**/*.integration.test.ts", "src/**/*.scenario.test.ts"],
     include: ["src/**/*.test.ts"],
     setupFiles: ["./src/internal/testing/unit-guard.ts"],
