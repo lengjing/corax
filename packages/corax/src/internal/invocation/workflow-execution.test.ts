@@ -626,22 +626,6 @@ describe("WorkflowAgentInvocationExecution", () => {
     );
   });
 
-  it("includes the Vercel deployment reference only on Vercel", async () => {
-    vi.stubEnv("VERCEL", "1");
-    vi.stubEnv("VERCEL_DEPLOYMENT_ID", "dpl_123");
-    runsGet.mockResolvedValue(run({ status: "failed" }));
-
-    await expect(
-      execution().read({ auth, invocationId: "wrun_invocation" }),
-    ).resolves.toMatchObject({
-      error: {
-        data: { runId: "wrun_invocation", vercelDeploymentId: "dpl_123" },
-        message: "Invocation failed.",
-      },
-      status: "failed",
-    });
-  });
-
   it("keeps terminal failures generic when no failure event was persisted", async () => {
     runsGet.mockResolvedValue(run({ status: "failed" }));
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { join } from "node:path";
 
 import { writeAiGatewayApiKey } from "./ai-gateway-api-key.js";
 
@@ -11,11 +12,11 @@ describe("writeAiGatewayApiKey", () => {
     ).resolves.toEqual({
       envKey: "AI_GATEWAY_API_KEY",
       envFile: ".env.local",
-      envPath: "/app/my-agent/.env.local",
+      envPath: join("/app/my-agent", ".env.local"),
     });
 
     expect(appendEnv).toHaveBeenCalledExactlyOnceWith(
-      "/app/my-agent/.env.local",
+      join("/app/my-agent", ".env.local"),
       { AI_GATEWAY_API_KEY: "sk-test" },
       { force: true },
     );

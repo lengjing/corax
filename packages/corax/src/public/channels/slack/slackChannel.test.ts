@@ -508,23 +508,6 @@ describe("slackChannel()", () => {
     expect(channel).toMatchObject({ turnPolicy: "queue" });
   });
 
-  it("preserves Connect credential metadata for compilation", () => {
-    const vercelConnect = {
-      connector: "slack/my-agent",
-      requirement: {
-        reference: "connector:slack/my-agent",
-        service: "slack",
-        subjectTypes: ["app" as const],
-        method: "slack",
-      },
-    };
-    const credentials = { botToken: "xoxb-test", vercelConnect };
-
-    expect(getChannelBuildMetadata(slackChannel({ credentials }), "slack")).toMatchObject({
-      externalCredentials: vercelConnect,
-    });
-  });
-
   it("keeps build metadata when spread with replaced routes", () => {
     const channel = slackChannel({ botName: "Support Bot" });
     const wrapped = { ...channel, routes: [...channel.routes] };

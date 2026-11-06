@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resolve } from "node:path";
 
 import { createAuthoredPackageTsConfigPathsPlugin } from "#internal/authored-package-tsconfig-paths.js";
 
@@ -56,11 +57,11 @@ describe("authored package tsconfig paths resolver", () => {
   });
 
   it("reuses stat probes within one plugin and refreshes them for the next", async () => {
-    const packageRoot = "/workspace/issue-848/package";
-    const importer = `${packageRoot}/src/entry.ts`;
-    const typescriptTarget = `${packageRoot}/src/value.ts`;
-    const tsxTarget = `${packageRoot}/src/value.tsx`;
-    const files = new Set([`${packageRoot}/package.json`, typescriptTarget]);
+    const packageRoot = resolve("/workspace/issue-848/package");
+    const importer = resolve(packageRoot, "src/entry.ts");
+    const typescriptTarget = resolve(packageRoot, "src/value.ts");
+    const tsxTarget = resolve(packageRoot, "src/value.tsx");
+    const files = new Set([resolve(packageRoot, "package.json"), typescriptTarget]);
     fsMocks.readFile.mockResolvedValue(
       JSON.stringify({
         compilerOptions: {

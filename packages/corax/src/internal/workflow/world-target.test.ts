@@ -5,7 +5,7 @@ import { resolveWorkflowWorldImport } from "#internal/workflow/world-target.js";
 describe("resolveWorkflowWorldImport", () => {
   it("maps the built-in world shorthands to their packages", () => {
     expect(resolveWorkflowWorldImport("local")).toBe("@workflow/world-local");
-    expect(resolveWorkflowWorldImport("vercel")).toBe("@workflow/world-vercel");
+    expect(() => resolveWorkflowWorldImport("vercel")).toThrow("Hosted workflow worlds are not supported");
   });
 
   it("passes custom world specifiers through unchanged", () => {

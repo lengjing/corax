@@ -29,16 +29,16 @@ function run(input: Partial<RunInput>): RunInput {
 describe("resolveInstrumentationEnvironment", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("resolves development, preview, and production", () => {
+  it("uses Corax development mode rather than hosted deployment markers", () => {
     vi.stubEnv("CORAX_DEV", "1");
     expect(resolveInstrumentationEnvironment()).toBe("development");
 
     vi.stubEnv("CORAX_DEV", "0");
     vi.stubEnv("VERCEL_ENV", "development");
-    expect(resolveInstrumentationEnvironment()).toBe("development");
+    expect(resolveInstrumentationEnvironment()).toBe("production");
 
     vi.stubEnv("VERCEL_ENV", "preview");
-    expect(resolveInstrumentationEnvironment()).toBe("preview");
+    expect(resolveInstrumentationEnvironment()).toBe("production");
 
     vi.stubEnv("VERCEL_ENV", "production");
     expect(resolveInstrumentationEnvironment()).toBe("production");

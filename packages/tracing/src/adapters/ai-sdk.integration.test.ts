@@ -180,8 +180,6 @@ describe("AI SDK HarnessAgent consumer", () => {
             Object.keys(span.attributes).every((key) => !key.startsWith("corax.")),
           ),
         ).toBe(true);
-        // Agent Runs finds a run's spans on Vercel by its session ID.
-        expect(spans.every((span) => span.attributes["vercel.session_id"] === method)).toBe(true);
       } finally {
         await session.destroy();
         await tracing.shutdown();

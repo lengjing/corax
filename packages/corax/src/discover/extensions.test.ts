@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 
 import {
   locateExtensionMount,
@@ -46,8 +47,8 @@ describe("locateExtensionMountPackage", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.location).toMatchObject({
       packageName: "corax",
-      packageRoot,
-      sourceRoot: `${packageRoot}/dist/src/self-modification/extension`,
+      packageRoot: resolve(packageRoot),
+      sourceRoot: resolve(packageRoot, "dist/src/self-modification/extension"),
       specifier: "corax/self-modification",
     });
   });
@@ -80,8 +81,8 @@ describe("locateExtensionMountPackage", () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.location).toMatchObject({
-      packageRoot,
-      sourceRoot: `${packageRoot}/dist/src/extensions/code/extension`,
+      packageRoot: resolve(packageRoot),
+      sourceRoot: resolve(packageRoot, "dist/src/extensions/code/extension"),
     });
   });
 
@@ -109,10 +110,10 @@ describe("locateExtensionMountPackage", () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.location).toMatchObject({
-      authoredSourceRoot: `${packageRoot}/extension`,
-      distRoot: `${packageRoot}/dist/extension`,
+      authoredSourceRoot: resolve(packageRoot, "extension"),
+      distRoot: resolve(packageRoot, "dist/extension"),
       packageName: "@acme/crm",
-      packageRoot,
+      packageRoot: resolve(packageRoot),
       specifier: "@acme/crm",
     });
   });

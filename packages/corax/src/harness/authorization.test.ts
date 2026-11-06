@@ -30,7 +30,7 @@ describe("authorization callback URLs", () => {
     ctx.set(SessionIdKey, "session-1");
 
     expect(contextStorage.run(ctx, () => getHookUrl("linear", "attempt-1"))).toBe(
-      "https://agent.example.com/corax/v1/connections/linear/callback/attempt-1/corax%3Ainbox%3Av1%3Aeve%3Asession%3Asession-1%3Ainbox",
+      "https://agent.example.com/corax/v1/connections/linear/callback/attempt-1/corax%3Ainbox%3Av1%3Acorax%3Asession%3Asession-1%3Ainbox",
     );
   });
 
@@ -43,7 +43,7 @@ describe("authorization callback URLs", () => {
     ctx.set(SessionIdKey, "session-1");
 
     expect(contextStorage.run(ctx, () => getHookUrl("linear", "attempt-1"))).toBe(
-      "https://agent.example.com/corax/v1/connections/linear/callback/attempt-1/corax%3Ainbox%3Av1%3Aeve%3Asession%3Asession-1%3Ainbox",
+      "https://agent-abc123.vercel.app/corax/v1/connections/linear/callback/attempt-1/corax%3Ainbox%3Av1%3Acorax%3Asession%3Asession-1%3Ainbox",
     );
   });
 });

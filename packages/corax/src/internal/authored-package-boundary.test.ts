@@ -109,7 +109,7 @@ describe("createRuntimeLoaderPackageBoundaryPlugin", () => {
       ),
     ).resolves.toEqual({
       external: true,
-      id: resolvePackageDependencyPath("corax/tools"),
+      id: normalizeEsmImportSpecifier(resolvePackageDependencyPath("corax/tools")),
     });
   });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resolve } from "node:path";
 
 import { RESOLVE_EXTENSIONS } from "#internal/authored-package-boundary.js";
 import { createAuthoredRelativeExtensionResolverPlugin } from "#internal/authored-relative-extension-resolver.js";
@@ -51,7 +52,7 @@ describe("authored relative extension resolver", () => {
   });
 
   it("discards probe results with the plugin instance", () => {
-    const files = new Set(["/workspace/src/value.ts"]);
+    const files = new Set([resolve("/workspace/src/value.ts")]);
     fsMocks.statSync.mockImplementation((path) => {
       if (files.has(String(path))) {
         return { isFile: () => true };
@@ -62,20 +63,20 @@ describe("authored relative extension resolver", () => {
 
     const firstHook = getResolveIdHook();
     expect(firstHook.handler("./value", "/workspace/src/entry.ts")).toEqual({
-      id: "/workspace/src/value.ts",
+      id: resolve("/workspace/src/value.ts"),
     });
 
-    files.delete("/workspace/src/value.ts");
-    files.add("/workspace/src/value.tsx");
+    files.delete(resolve("/workspace/src/value.ts"));
+    files.add(resolve("/workspace/src/value.tsx"));
 
     expect(firstHook.handler("./value", "/workspace/src/entry.ts")).toEqual({
-      id: "/workspace/src/value.ts",
+      id: resolve("/workspace/src/value.ts"),
     });
     const probesBeforeNextPlugin = fsMocks.statSync.mock.calls.length;
 
     const nextHook = getResolveIdHook();
     expect(nextHook.handler("./value", "/workspace/src/entry.ts")).toEqual({
-      id: "/workspace/src/value.tsx",
+      id: resolve("/workspace/src/value.tsx"),
     });
     expect(fsMocks.statSync.mock.calls.length).toBeGreaterThan(probesBeforeNextPlugin);
   });

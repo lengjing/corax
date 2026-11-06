@@ -34,13 +34,13 @@ describe("resolveModelEndpointStatus", () => {
     ).toEqual({ kind: "gateway", connected: true, credential: "api-key" });
   });
 
-  it("reports gateway connected via oidc when only the token is present", () => {
+  it("does not treat a hosted OIDC token as a self-hosted gateway credential", () => {
     expect(
       resolveModelEndpointStatus(
         { kind: "gateway", target: "openai" },
         { apiKey: false, oidc: true },
       ),
-    ).toEqual({ kind: "gateway", connected: true, credential: "oidc" });
+    ).toEqual({ kind: "gateway", connected: false });
   });
 
   it("reports gateway not connected when neither credential is present", () => {
@@ -70,12 +70,9 @@ describe("resolveGatewayCredential", () => {
     });
   });
 
-  it("falls to oidc only when no key exists anywhere", () => {
-    expect(resolveGatewayCredential({ oidcFile: ".env.local" })).toEqual({
-      credential: "oidc",
-      file: ".env.local",
-    });
-    expect(resolveGatewayCredential({ oidcAvailable: true })).toEqual({ credential: "oidc" });
+  it("does not fall back to hosted OIDC credentials", () => {
+    expect(resolveGatewayCredential({ oidcFile: ".env.local" })).toBeUndefined();
+    expect(resolveGatewayCredential({ oidcAvailable: true })).toBeUndefined();
   });
 
   it("resolves nothing when no credential is observable", () => {

@@ -48,14 +48,14 @@ describe("shouldInstallSandboxShutdown", () => {
     expect(shouldInstallSandboxShutdown({ CORAX_DEVELOPMENT_SANDBOX_RUN_ID: "dev-run" })).toBe(false);
   });
 
-  it("skips Vercel serverless instances", () => {
-    expect(shouldInstallSandboxShutdown({ VERCEL: "1" })).toBe(false);
+  it("does not delegate shutdown to a hosted platform", () => {
+    expect(shouldInstallSandboxShutdown({ VERCEL: "1" })).toBe(true);
   });
 });
 
 describe("installSandboxShutdownHandlers", () => {
   it("registers no handlers when shutdown ownership is elsewhere", () => {
-    const fakeProcess = createFakeProcess({ VERCEL: "1" });
+    const fakeProcess = createFakeProcess({ CORAX_DEVELOPMENT_SANDBOX_RUN_ID: "dev-run" });
 
     installSandboxShutdownHandlers({ log: () => {}, process: fakeProcess });
 

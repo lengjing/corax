@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { normalize } from "node:path";
 
 const files = vi.hoisted(() => new Map<string, string>());
 vi.mock("node:fs/promises", () => ({
@@ -16,7 +17,7 @@ it.each([
   ["invalid-schema", { runtimeAppRoot: 42 }, "ineligible"],
 ] as const)("reads %s generation metadata", async (generationId, metadata, kind) => {
   files.set(
-    `/app/.corax/dev-runtime/snapshots/${generationId}/generation.json`,
+    normalize(`/app/.corax/dev-runtime/snapshots/${generationId}/generation.json`),
     JSON.stringify(metadata),
   );
   const { readDevelopmentGenerationAvailability } =
@@ -32,7 +33,7 @@ it("distinguishes a missing snapshot from malformed metadata", async () => {
   await expect(readDevelopmentGenerationAvailability("/app", "missing")).resolves.toMatchObject({
     kind: "missing",
   });
-  files.set("/app/.corax/dev-runtime/snapshots/bad/generation.json", "{");
+  files.set(normalize("/app/.corax/dev-runtime/snapshots/bad/generation.json"), "{");
   await expect(readDevelopmentGenerationAvailability("/app", "bad")).resolves.toMatchObject({
     kind: "ineligible",
   });

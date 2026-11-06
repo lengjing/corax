@@ -94,7 +94,7 @@ describe("eval artifacts", () => {
 });
 
 function writtenJson(path: string): Record<string, unknown> {
-  const call = fsMocks.writeFile.mock.calls.find(([writtenPath]) => writtenPath === path);
+  const call = fsMocks.writeFile.mock.calls.find(([writtenPath]) => String(writtenPath).replaceAll("\\", "/") === path);
   expect(call, `expected ${path} to be written`).toBeDefined();
   return JSON.parse(call?.[1] as string) as Record<string, unknown>;
 }

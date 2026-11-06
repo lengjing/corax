@@ -1,4 +1,5 @@
 import type { Nitro } from "nitro/types";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PreparedApplicationHost } from "./types.js";
@@ -269,7 +270,7 @@ describe("Nitro route configuration", () => {
     const workflowHandler = nitro.options.handlers.find(
       (handler) => handler.route === "/.well-known/workflow/v1/flow",
     );
-    const expectedHandlerPath = `${buildDir}/workflow/workflows-handler.mjs`;
+    const expectedHandlerPath = join(buildDir, "workflow/workflows-handler.mjs");
 
     expect(workflowHandler?.handler).toBe(expectedHandlerPath);
     expect(fsMocks.writeFile).toHaveBeenCalledWith(
@@ -277,8 +278,8 @@ describe("Nitro route configuration", () => {
       expect.stringContaining('import { POST } from "./workflows.mjs";'),
     );
     expect(workflowBuilderMocks.build).toHaveBeenCalledWith({
-      nitroStepOutfile: `${buildDir}/workflow/steps.mjs`,
-      nitroWorkflowOutfile: `${buildDir}/workflow/workflows.mjs`,
+      nitroStepOutfile: join(buildDir, "workflow/steps.mjs"),
+      nitroWorkflowOutfile: join(buildDir, "workflow/workflows.mjs"),
     });
     expect(nitro.options.virtual["#corax-workflow/workflows"]).toBeUndefined();
   });

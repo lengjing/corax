@@ -96,14 +96,6 @@ describe("summarizeKnownError (catalog table)", () => {
       id: "gateway-auth-invalid-api-key",
     },
     {
-      title: "gateway invalid oidc token",
-      error: named(
-        "GatewayAuthenticationError",
-        "AI Gateway authentication failed: Invalid OIDC token.",
-      ),
-      id: "gateway-auth-invalid-oidc-token",
-    },
-    {
       title: "gateway auth without a recognizable variant",
       error: named(
         "GatewayAuthenticationError",

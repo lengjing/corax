@@ -25,15 +25,14 @@ describe("memory namespaces and scopes", () => {
     expect(first).toBe(second);
     expect(first).not.toContain(input.appRoot);
     expect(JSON.parse(first)).toMatchObject([
-      "corax-memory-default-namespace-v1",
-      "local",
+      "corax-memory-namespace-v1",
       expect.any(String),
       "__root__",
       "profile",
     ]);
   });
 
-  it("separates production and preview namespaces by stable deployment coordinates", () => {
+  it("ignores hosted deployment coordinates for the same local project", () => {
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_123");
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("VERCEL_GIT_COMMIT_REF", "feature/memory");
@@ -46,42 +45,16 @@ describe("memory namespaces and scopes", () => {
       slot: "profile",
     });
 
-    expect(JSON.parse(preview)).toEqual([
-      "corax-memory-default-namespace-v1",
-      "vercel",
-      "prj_123",
-      "preview",
-      "feature/memory",
-      "__root__",
-      "profile",
-    ]);
-    expect(preview).not.toBe(production);
+    expect(preview).toBe(production);
   });
 
-  it("separates workspace agents mounted within the same Vercel project", () => {
-    vi.stubEnv("VERCEL_PROJECT_ID", "prj_123");
-    vi.stubEnv("VERCEL_ENV", "production");
-    vi.stubEnv("CORAX_INTERNAL_AGENT_WORKSPACE_MEMBER", "1");
-    vi.stubEnv("CORAX_PUBLIC_ROUTE_PREFIX", "/support/");
-    const support = defaultNamespace({ appRoot: "/app", node: "__root__", slot: "profile" });
-
-    vi.stubEnv("CORAX_PUBLIC_ROUTE_PREFIX", "/research");
-    const research = defaultNamespace({ appRoot: "/app", node: "__root__", slot: "profile" });
-
-    expect(JSON.parse(support)).toEqual([
-      "corax-memory-default-namespace-v1",
-      "vercel",
-      "prj_123",
-      "production",
-      null,
-      "/support",
-      "__root__",
-      "profile",
-    ]);
+  it("separates different local workspace projects", () => {
+    const support = defaultNamespace({ appRoot: "/app/support", node: "__root__", slot: "profile" });
+    const research = defaultNamespace({ appRoot: "/app/research", node: "__root__", slot: "profile" });
     expect(support).not.toBe(research);
   });
 
-  it("preserves standalone Vercel namespaces when a public route prefix is configured", () => {
+  it("keeps a project's namespace stable when its public route prefix changes", () => {
     vi.stubEnv("VERCEL_PROJECT_ID", "prj_123");
     vi.stubEnv("VERCEL_ENV", "production");
     const input = { appRoot: "/app", node: "__root__", slot: "profile" };

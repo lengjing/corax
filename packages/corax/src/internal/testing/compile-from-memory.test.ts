@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 
 import { compileFromMemory } from "#internal/testing/compile-from-memory.js";
 import {
@@ -97,8 +98,8 @@ describe("compileFromMemory", () => {
     });
 
     expect(manifest).toMatchObject({
-      agentRoot: "/app/agent",
-      appRoot: "/app",
+      agentRoot: resolve("/app/agent"),
+      appRoot: resolve("/app"),
       config: { name: "custom-agent" },
     });
     expect(

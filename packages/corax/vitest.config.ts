@@ -18,8 +18,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    exclude: ["**/node_modules/**"],
+    exclude: ["**/node_modules/**", "src/**/*.integration.test.ts", "src/**/*.scenario.test.ts"],
     include: ["src/**/*.test.ts"],
+    setupFiles: ["./src/internal/testing/unit-guard.ts"],
+    maxWorkers: 4,
     testTimeout: 30_000,
   },
 });

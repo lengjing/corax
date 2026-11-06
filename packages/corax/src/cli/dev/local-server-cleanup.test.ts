@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { join } from "node:path";
 
 import { reconcileCleanupIntents, recordCleanupIntent } from "#cli/dev/local-server-cleanup.js";
 
@@ -30,7 +31,7 @@ describe("local server cleanup intents", () => {
   it("records and removes the current run intent", async () => {
     const remove = await recordCleanupIntent("/tmp/app", { ownerPid: 123, runId: "run-1" });
     expect(mocks.writeFile).toHaveBeenCalledWith(
-      "/tmp/app/.corax/dev-cleanup-intent.run-1.json",
+      join("/tmp/app", ".corax/dev-cleanup-intent.run-1.json"),
       '{"ownerPid":123,"runId":"run-1"}\n',
       "utf8",
     );

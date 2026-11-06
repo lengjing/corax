@@ -4534,7 +4534,7 @@ describe("createToolLoopHarness", () => {
   it.each([
     {
       message: "AI Gateway requires a valid credit card on file to service requests.",
-      hint: "Add a valid credit card or credits",
+      hint: "Add a valid payment method or credits",
     },
     {
       message: "Model call failed: Free tier users do not have access to this model.",
@@ -9540,7 +9540,6 @@ describe("createToolLoopHarness", () => {
         const agentCall = vi.mocked(ToolLoopAgent).mock.calls[0]?.[0];
         expect(agentCall?.headers).toEqual({
           "x-title": "Weather Agent",
-          "http-referer": "https://my-agent.vercel.app",
           "user-agent": expect.stringMatching(/^corax\/.+/),
         });
       } finally {
@@ -9607,7 +9606,6 @@ describe("createToolLoopHarness", () => {
         const agentCall = vi.mocked(ToolLoopAgent).mock.calls[0]?.[0];
         expect(agentCall?.headers).toEqual({
           "x-title": "My Agent",
-          "http-referer": "https://preview-123.vercel.app",
           "user-agent": expect.stringMatching(/^corax\/.+/),
         });
       } finally {
@@ -9738,7 +9736,6 @@ describe("createToolLoopHarness", () => {
         expect(agentCall?.headers).toBeUndefined();
         expect(summaryCall()?.headers).toEqual({
           "x-title": "Weather Agent",
-          "http-referer": "https://my-agent.vercel.app",
           "user-agent": expect.stringMatching(/^corax\/.+/),
         });
       } finally {

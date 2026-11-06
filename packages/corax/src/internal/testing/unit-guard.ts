@@ -121,7 +121,7 @@ process.chdir = ((..._args: unknown[]): void => {
  * such as `test/setup/mock-ai-gateway.ts` may install their own wrapper that
  * intercepts specific URLs before falling through to this guard.
  */
-globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
   const url = resolveFetchUrl(input);
 
   throw new Error(

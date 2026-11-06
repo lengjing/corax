@@ -48,17 +48,17 @@ describe("normalizeScheduleCollectionDefinition", () => {
     );
   });
 
-  it("defaults to Vercel and preserves an explicit provider override", () => {
+    it("defaults to SQLite and preserves an explicit provider override", () => {
     vi.stubEnv("CORAX_DEV", "");
     try {
       const { provider, ...options } = valid;
       const implicit = defineDynamicSchedules({ ...options });
       expect(normalizeScheduleCollectionDefinition(implicit, "Invalid.").provider.kind).toBe(
-        "vercel",
+        "sqlite",
       );
       expect(defineDynamicSchedules({ ...options, provider }).provider).toBe(provider);
       vi.stubEnv("CORAX_DEV", "1");
-      expect(defineDynamicSchedules({ ...options }).provider.kind).toBe("in-memory");
+      expect(defineDynamicSchedules({ ...options }).provider.kind).toBe("sqlite");
     } finally {
       vi.unstubAllEnvs();
     }

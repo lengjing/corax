@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
+// These tests exercise source graph normalization, not online model discovery.
+vi.mock("#compiler/model-catalog.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("#compiler/model-catalog.js")>()),
+  createCompiledRuntimeModelCatalogLoader: () => ({
+    getModelLimits: async () => ({ contextWindowTokens: 128_000, maxOutputTokens: 16_000 }),
+    getByProviderModelId: async () => ({ slug: "test/model", limits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 } }),
+  }),
+}));
+
 import {
   createAgentSourceManifest,
   createLocalSubagentSourceRef,

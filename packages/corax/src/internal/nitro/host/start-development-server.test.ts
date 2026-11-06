@@ -109,7 +109,7 @@ const mocks = vi.hoisted(() => {
     removeDevelopmentHostWorkspace: vi.fn(async () => undefined),
     readFile: vi.fn(async (path: string) => {
       if (
-        path.endsWith("/.corax/dev-server-state.v1.json") &&
+        path.replaceAll("\\", "/").endsWith("/.corax/dev-server-state.v1.json") &&
         fsControl.stateReadError !== undefined
       ) {
         throw fsControl.stateReadError;
@@ -141,7 +141,7 @@ const mocks = vi.hoisted(() => {
     startAuthoredSourceWatcher: vi.fn(async () => authoredSourceWatcher),
     writeFile: vi.fn(async (path: string, value: string) => {
       if (
-        path.endsWith("/.corax/dev-server-state.v1.json") &&
+        path.replaceAll("\\", "/").endsWith("/.corax/dev-server-state.v1.json") &&
         fsControl.stateWriteError !== undefined
       ) {
         throw fsControl.stateWriteError;
@@ -664,7 +664,7 @@ describe("createDevelopmentServer", () => {
     await expect(startDevelopmentServer("/tmp/corax-test")).rejects.toThrow(
       [
         "A dev server is already running for this corax agent.",
-        "To connect to the existing instance, run: pnpm exec corax remote connect --url http://localhost:2000/",
+        "To connect to the existing instance, run: corax remote connect --url http://localhost:2000/",
       ].join("\n"),
     );
     expect(mocks.createDevelopmentApplicationNitro).not.toHaveBeenCalled();

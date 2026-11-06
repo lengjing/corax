@@ -623,7 +623,7 @@ describe("compactMessages: tool-result cap heuristic", () => {
     // JSON.stringify of this output places 📥's high surrogate at index 1886,
     // the last unit of the 1887-unit cut the annotation leaves of the
     // 2000-unit TRANSCRIPT_PAYLOAD_LIMIT.
-    const content = `${"x".repeat(1851)}📥${"y".repeat(500)}`;
+    const content = `${"x".repeat(1849)}📥${"y".repeat(500)}`;
     const call: ModelMessage = {
       content: [{ input: {}, toolCallId: "call-0", toolName: "grep", type: "tool-call" }],
       role: "assistant",
@@ -654,7 +654,7 @@ describe("compactMessages: tool-result cap heuristic", () => {
     expect(value).toBe(value.toWellFormed());
     expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(value)).toBe(false);
     expect(value).not.toContain("📥");
-    expect(value).toContain("x".repeat(1851));
+    expect(value).toContain("x".repeat(1849));
   });
 
   it.each([

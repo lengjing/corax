@@ -23,7 +23,7 @@ describe("deployed self-modification configuration", () => {
       }),
     ).toMatchObject({
       directory: ".",
-      repository: { owner: "vercel", repo: "corax" },
+      repository: { owner: "vercel", repo: "eve" },
       targetBranch: "main",
     });
   });

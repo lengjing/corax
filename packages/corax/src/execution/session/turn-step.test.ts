@@ -260,7 +260,7 @@ vi.mock("#compiled/@workflow/core/runtime.js", () => ({
   },
   getRun: (...args: unknown[]) => getRunMock(...args),
   // Vercel-shaped: owners run on their own deployment, so ingress resumes by token.
-  getWorld: async () => ({ capabilities: { deploymentAffinity: true } }),
+  getWorld: async () => ({ capabilities: { deploymentAffinity: true }, getDeploymentId: async () => "dpl_current" }),
   resumeHook: (...args: unknown[]) => resumeHookMock(...args),
   start: (...args: unknown[]) => startMock(...args),
 }));
@@ -3211,7 +3211,7 @@ describe("turnStep", () => {
     expect(handler).toHaveBeenCalledOnce();
     expect(lifecycleOrder).toEqual(["refresh", "clear", "execute"]);
     expect(result.serializedContext[SessionDynamicToolRuntimeRevisionKey.name]).toBe(
-      "deployment:dpl_new",
+      "bundled",
     );
     expect(result.serializedContext[SessionDynamicToolMetadataKey.name]).toEqual([
       expect.objectContaining({

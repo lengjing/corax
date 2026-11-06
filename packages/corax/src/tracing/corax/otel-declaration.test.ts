@@ -2,7 +2,6 @@ import type { SpanExporter, SpanProcessor } from "#compiled/@vercel/otel/index.j
 import { describe, expect, it } from "vitest";
 
 import {
-  agentRunsIntegration,
   collectOtelPipeline,
   isOtelDeclaration,
   managedOtelIntegration,
@@ -62,9 +61,6 @@ describe("otelIntegration", () => {
       /no longer support `recordInputs` or `recordOutputs`/u,
     );
     expect(() => managedOtelIntegration({ recordOutputs: false } as never)).toThrow(
-      /use an `exportPolicy` span decision/iu,
-    );
-    expect(() => agentRunsIntegration({ recordInputs: false } as never)).toThrow(
       /use an `exportPolicy` span decision/iu,
     );
   });

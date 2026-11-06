@@ -16,13 +16,13 @@ const connectConfig: DeployedSelfModificationConfig = {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("deployed self-modification sandbox", () => {
-  it("selects Vercel Sandbox on Vercel", () => {
+  it("keeps the self-hosted sandbox even with hosted environment markers", () => {
     expect(
       selectDeployedSelfModificationEnvironment({
         isDeployedOnVercel: () => true,
         isMicrosandboxSupported: () => true,
       }).provider,
-    ).toBe("vercel");
+    ).toBe("microsandbox");
   });
 
   it("selects microsandbox on a supported self-hosted system", () => {
@@ -40,7 +40,7 @@ describe("deployed self-modification sandbox", () => {
         isDeployedOnVercel: () => false,
         isMicrosandboxSupported: () => false,
       }),
-    ).toThrow("No supported provider is available");
+    ).toThrow("Configure microsandbox on a supported self-hosted system");
   });
 
   it("does not probe deployed providers during corax dev", () => {

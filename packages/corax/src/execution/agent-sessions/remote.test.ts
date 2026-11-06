@@ -600,7 +600,7 @@ describe("startRemoteAgentSession", () => {
     });
   });
 
-  it("adds the Vercel automation bypass secret to callback URLs", async () => {
+  it("does not leak hosted automation bypass secrets into callback URLs", async () => {
     vi.stubEnv("VERCEL_AUTOMATION_BYPASS_SECRET", "remote callback secret");
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -625,7 +625,7 @@ describe("startRemoteAgentSession", () => {
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual(
       expect.objectContaining({
         callback: expect.objectContaining({
-          url: "https://caller.example.com/corax/v1/callback/corax%3Aparent-token?x-vercel-protection-bypass=remote+callback+secret",
+          url: "https://caller.example.com/corax/v1/callback/corax%3Aparent-token",
         }),
       }),
     );

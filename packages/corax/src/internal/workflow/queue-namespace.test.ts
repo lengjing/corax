@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   deriveCoraxWorkflowQueueNamespace,
   deriveCoraxWorkflowQueuePrefix,
-  deriveCoraxWorkflowQueueTopic,
   installCoraxWorkflowQueueNamespace,
   WORKFLOW_QUEUE_NAMESPACE_ENV,
 } from "#internal/workflow/queue-namespace.js";
@@ -17,12 +16,9 @@ describe("workflow queue namespace", () => {
     expect(deriveCoraxWorkflowQueueNamespace("weather-agent")).toMatch(/^[a-z][a-z0-9]*$/);
   });
 
-  it("derives the workflow queue prefix and topic from the same namespace", () => {
+  it("derives the workflow queue prefix from the namespace", () => {
     expect(deriveCoraxWorkflowQueuePrefix("weather-agent")).toBe(
       "__corax776561746865722d6167656e74_wkf_workflow_",
-    );
-    expect(deriveCoraxWorkflowQueueTopic("weather-agent")).toBe(
-      "__corax776561746865722d6167656e74_wkf_workflow_*",
     );
   });
 

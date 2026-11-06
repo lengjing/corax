@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { compileFromMemory } from "#internal/testing/compile-from-memory.js";
@@ -41,7 +41,7 @@ describe("serializeCompiledManifestForFingerprint", () => {
       runtimeAppRoot,
     });
 
-    expect(serialized).toContain("/somewhere/else/agent");
+    expect(JSON.parse(serialized).agentRoot).toBe(resolve("/somewhere/else/agent"));
   });
 
   it("canonicalizes object key order", () => {
