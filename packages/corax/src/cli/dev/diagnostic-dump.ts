@@ -11,7 +11,7 @@ import { LOCAL_WORKFLOW_WORLD_DATA_DIRECTORY_RELATIVE_PATH } from "#internal/wor
  */
 export interface DevEnvironmentInfo {
   readonly coraxVersion: string;
-  readonly bunVersion: string;
+  readonly nodeVersion: string;
   readonly platform: string;
   /** Local durable session store measurements; absent when the directory does not exist yet. */
   readonly sessionsDirectory?: {
@@ -143,7 +143,7 @@ async function collectDevEnvironmentInfo(appRoot: string): Promise<DevEnvironmen
     -readonly [Key in keyof DevEnvironmentInfo]: DevEnvironmentInfo[Key];
   } = {
     coraxVersion: resolveInstalledPackageInfo().version,
-    bunVersion: Bun.version,
+    nodeVersion: process.versions.node,
     platform: `${process.platform} ${process.arch}`,
   };
   if (sessionsDirectory !== undefined) info.sessionsDirectory = sessionsDirectory;

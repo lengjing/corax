@@ -116,7 +116,9 @@ describe("createDevelopmentServer", () => {
     try {
       const started = server.start();
       await vi.waitFor(() => expect(mocks.fork).toHaveBeenCalled());
-      expect(mocks.fork.mock.calls.at(-1)?.[2].execArgv).toContain("--preload");
+      expect(mocks.fork.mock.calls.at(-1)?.[2].execArgv).toContain("--import");
+      expect(mocks.fork.mock.calls.at(-1)?.[2].windowsHide).toBe(true);
+      expect(mocks.fork.mock.calls.at(-1)?.[2].detached).toBe(process.platform !== "win32");
       child.stderr.write(
         `${CONSOLE_RECORD_PREFIX}${JSON.stringify({ level: "warn", text: "contention\n  step abc" })}\n`,
       );
@@ -160,7 +162,7 @@ describe("createDevelopmentServer", () => {
     }
   });
 
-  it("terminates surviving descendants after the server child exits", async () => {
+  it.skipIf(process.platform === "win32")("terminates surviving POSIX descendants after the server child exits", async () => {
     vi.useFakeTimers();
     child.pid = 4321;
     let groupAlive = true;

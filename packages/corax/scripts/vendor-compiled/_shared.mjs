@@ -557,22 +557,17 @@ async function findPackageJson(packageName, packageRoot, packageJsonName = packa
   try {
     currentPath = dirname(require.resolve(packageName, { paths: [packageRoot] }));
   } catch {
-    const packageJsonPath = join(
-      packageRoot,
-      "node_modules",
-      ...packageName.split("/"),
-      "package.json",
-    );
-
-    if (await pathExists(packageJsonPath)) {
-      const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-      if (packageJson.name === packageJsonName) {
-        return {
-          packageJson,
-          packageJsonPath,
-          packageRoot: dirname(packageJsonPath),
-        };
+    // ESM-only packages may not expose a require condition. npm hoists these
+    // to a parent workspace, so search each ancestor's node_modules as well.
+    for (let root = packageRoot; ; root = dirname(root)) {
+      const packageJsonPath = join(root, "node_modules", ...packageName.split("/"), "package.json");
+      if (await pathExists(packageJsonPath)) {
+        const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+        if (packageJson.name === packageJsonName) {
+          return { packageJson, packageJsonPath, packageRoot: dirname(packageJsonPath) };
+        }
       }
+      if (dirname(root) === root) break;
     }
     throw new Error(`Could not resolve "${packageName}".`);
   }
@@ -663,7 +658,7 @@ function getModulePlatform(module) {
 }
 
 function getDefaultResolve() {
-  return { mainFields: ["module", "main"], conditionNames: ["bun"] };
+  return { mainFields: ["module", "main"], conditionNames: [] };
 }
 
 async function bundleStandaloneModule({

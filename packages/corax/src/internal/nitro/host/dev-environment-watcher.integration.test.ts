@@ -19,7 +19,7 @@ afterEach(async () => {
   );
 });
 
-describe("development environment restart boundary", () => {
+describe("development environment transactional reload", () => {
   it("leaves startup environment values untouched rather than parsing them again", async () => {
     const root = await createApp();
     vi.stubEnv("CORAX_ENV_TEST", "expanded/value");
@@ -39,17 +39,21 @@ describe("development environment restart boundary", () => {
       await writeFile(join(root, ".env"), `CORAX_ENV_TEST=${initial}\n`);
       await loadDevelopmentEnvironmentFiles(root);
       await writeFile(join(root, ".env"), "CORAX_ENV_TEST=changed\n");
-      expect(() => stageDevelopmentEnvironmentFiles(root)).toThrow("Restart corax dev");
+      stageDevelopmentEnvironmentFiles(root).commit();
     await expect(loadDevelopmentEnvironmentFiles(root)).resolves.toBeUndefined();
       expect(process.env.CORAX_ENV_TEST).toBe("same");
     },
   );
 
-  it("requires restart for file creation or removal and allows reverting the edit", async () => {
+  it("tracks file creation, removal and rollback without taking shell ownership", async () => {
     const root = await createApp();
+    vi.stubEnv("CORAX_ENV_TEST", undefined);
     await loadDevelopmentEnvironmentFiles(root);
     await writeFile(join(root, ".env.local"), "CORAX_ENV_TEST=new\n");
-    expect(() => stageDevelopmentEnvironmentFiles(root)).toThrow("Restart corax dev");
+    const created = stageDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_ENV_TEST).toBe("new");
+    created.rollback();
+    expect(process.env.CORAX_ENV_TEST).toBeUndefined();
     await rm(join(root, ".env.local"));
     expect(() => stageDevelopmentEnvironmentFiles(root).commit()).not.toThrow();
 
@@ -57,7 +61,12 @@ describe("development environment restart boundary", () => {
     await writeFile(join(other, ".env"), "CORAX_ENV_TEST=original\n");
     await loadDevelopmentEnvironmentFiles(other);
     await rm(join(other, ".env"));
-    expect(() => stageDevelopmentEnvironmentFiles(other)).toThrow("Restart corax dev");
+    const removed = stageDevelopmentEnvironmentFiles(other);
+    expect(process.env.CORAX_ENV_TEST).toBeUndefined();
+    removed.rollback();
+    expect(process.env.CORAX_ENV_TEST).toBe("original");
+    stageDevelopmentEnvironmentFiles(other).commit();
+    expect(process.env.CORAX_ENV_TEST).toBeUndefined();
   });
 
   it("watches workspace-root environment files without changing startup precedence", async () => {
@@ -74,7 +83,8 @@ describe("development environment restart boundary", () => {
     );
     expect(process.env.CORAX_ENV_TEST).toBe("startup");
     await writeFile(join(root, ".env"), "CORAX_ENV_TEST=changed\n");
-    expect(() => stageDevelopmentEnvironmentFiles(member)).toThrow("Restart corax dev");
+    stageDevelopmentEnvironmentFiles(member).commit();
+    expect(process.env.CORAX_ENV_TEST).toBe("startup");
   });
 
   it("keeps explicit provider environment settings authoritative", async () => {
@@ -85,6 +95,35 @@ describe("development environment restart boundary", () => {
     expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
     await saveSettings(root, { selected: "chatgpt", keySource: "secret" });
     stageDevelopmentEnvironmentFiles(root).commit();
+    expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
+    expect(process.env.CORAX_MODEL_KEY_SOURCE).toBe("environment");
+  });
+
+  it("loads files by precedence and restores lower-priority values when overrides are removed", async () => {
+    const root = await createApp();
+    vi.stubEnv("CORAX_ENV_TEST", undefined);
+    for (const [file, value] of [[".env", "base"], [".env.development", "development"], [".env.local", "local"], [".env.development.local", "highest"]]) {
+      await writeFile(join(root, file!), `CORAX_ENV_TEST=${value}\n`);
+    }
+    await loadDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_ENV_TEST).toBe("highest");
+    await rm(join(root, ".env.development.local"));
+    stageDevelopmentEnvironmentFiles(root).commit();
+    expect(process.env.CORAX_ENV_TEST).toBe("local");
+    await writeFile(join(root, ".env.local"), "CORAX_ENV_TEST=updated\n");
+    const candidate = stageDevelopmentEnvironmentFiles(root);
+    expect(process.env.CORAX_ENV_TEST).toBe("updated");
+    candidate.rollback();
+    expect(process.env.CORAX_ENV_TEST).toBe("local");
+  });
+
+  it("gives explicit dotenv provider choices precedence over saved settings", async () => {
+    const root = await createApp();
+    vi.stubEnv("CORAX_MODEL_CONNECTION", undefined);
+    vi.stubEnv("CORAX_MODEL_KEY_SOURCE", undefined);
+    await writeFile(join(root, ".env"), "CORAX_MODEL_CONNECTION=ai-gateway-key\nCORAX_MODEL_KEY_SOURCE=environment\n");
+    await saveSettings(root, { selected: "chatgpt", keySource: "secret" });
+    await loadDevelopmentEnvironmentFiles(root);
     expect(process.env.CORAX_MODEL_CONNECTION).toBe("ai-gateway-key");
     expect(process.env.CORAX_MODEL_KEY_SOURCE).toBe("environment");
   });

@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ../../packages/corax/bin/corax.js dev",
-    "build": "bun ../../packages/corax/bin/corax.js build",
-    "start": "bun ../../packages/corax/bin/corax.js start",
-    "eval": "bun ../../packages/corax/bin/corax.js eval"
+    "dev": "node ../../packages/corax/bin/corax.js dev",
+    "build": "node ../../packages/corax/bin/corax.js build",
+    "start": "node ../../packages/corax/bin/corax.js start",
+    "eval": "node ../../packages/corax/bin/corax.js eval"
   },
   "dependencies": {
-    "@ai-sdk/openai": "catalog:",
-    "corax": "workspace:*"
+    "@ai-sdk/openai": "4.0.91",
+    "corax": "*"
   }
 }

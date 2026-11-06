@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { Database, type SQLQueryBindings } from "bun:sqlite";
+import { DatabaseSync as Database } from "node:sqlite";
 import { Cron } from "#compiled/croner/index.js";
 import { nextSingleScheduleTime } from "#shared/schedule-time.js";
 import type {
@@ -49,7 +49,7 @@ function open(path: string): Database {
     `);
     return db;
   } catch (error) {
-    db.close(true);
+    db.close();
     throw error;
   }
 }
@@ -101,7 +101,7 @@ function record(row: Row): ScheduleRecord {
 
 function requireSchedule(db: Database, context: ScheduleProviderContext, name: string): Row {
   const row = db
-    .prepare<Row, SQLQueryBindings[]>("SELECT * FROM schedules WHERE namespace = ? AND name = ?")
+    .prepare("SELECT * FROM schedules WHERE namespace = ? AND name = ?")
     .get(context.namespace, name);
   if (!row || row.application !== context.target.key || row.collection !== context.collection) {
     throw new Error(`Schedule ${JSON.stringify(name)} does not exist.`);
@@ -132,7 +132,7 @@ function enqueue(
   );
 }
 
-/** Durable schedule management and occurrence queue for a self-hosted Bun service. */
+/** Durable schedule management and occurrence queue for a self-hosted Node.js service. */
 export function sqliteScheduleProvider(
   /** `path` defaults to `.corax/schedules.sqlite` under the working directory. */
   options: { readonly path?: string } = {},
@@ -157,7 +157,7 @@ export function sqliteScheduleProvider(
           name,
         ]);
         const previous = db
-          .prepare<Row, SQLQueryBindings[]>("SELECT result FROM schedule_operations WHERE id = ?")
+          .prepare("SELECT result FROM schedule_operations WHERE id = ?")
           .get(id);
         if (previous) return JSON.parse(String(previous.result)) as T;
         const result = action(db);
@@ -165,7 +165,7 @@ export function sqliteScheduleProvider(
         return result;
       });
     } finally {
-      db.close(true);
+      db.close();
     }
   };
   const changeState = (context: ScheduleProviderContext, name: string, enabled: boolean) =>
@@ -192,7 +192,7 @@ export function sqliteScheduleProvider(
         const now = Date.now();
         const nextAt = nextTime(input.expression, now);
         const count = db
-          .prepare<Row, SQLQueryBindings[]>(
+          .prepare(
             "SELECT COUNT(*) AS count FROM schedules WHERE namespace = ?",
           )
           .get(context.namespace);
@@ -219,13 +219,13 @@ export function sqliteScheduleProvider(
       const db = open(path);
       try {
         const row = db
-          .prepare<Row, SQLQueryBindings[]>(
+          .prepare(
             "SELECT * FROM schedules WHERE namespace = ? AND name = ? AND application = ? AND collection = ?",
           )
           .get(context.namespace, name, context.target.key, context.collection);
         return row ? record(row) : null;
       } finally {
-        db.close(true);
+        db.close();
       }
     },
     async list(context, query) {
@@ -244,7 +244,7 @@ export function sqliteScheduleProvider(
       const db = open(path);
       try {
         const rows = db
-          .prepare<Row, SQLQueryBindings[]>(
+          .prepare(
             "SELECT * FROM schedules WHERE namespace = ? AND application = ? AND collection = ? ORDER BY name LIMIT ? OFFSET ?",
           )
           .all(context.namespace, context.target.key, context.collection, limit + 1, offset);
@@ -253,7 +253,7 @@ export function sqliteScheduleProvider(
           cursor: rows.length > limit ? String(offset + limit) : null,
         };
       } finally {
-        db.close(true);
+        db.close();
       }
     },
     async update(context, name, patch) {
@@ -294,7 +294,7 @@ export function sqliteScheduleProvider(
     async delete(context, name) {
       return once(context, "delete", name, (db) => {
         const row = db
-          .prepare<Row, SQLQueryBindings[]>(
+          .prepare(
             "SELECT * FROM schedules WHERE namespace = ? AND name = ? AND application = ? AND collection = ?",
           )
           .get(context.namespace, name, context.target.key, context.collection);
@@ -348,23 +348,23 @@ export async function pumpSqliteSchedules(input: PumpInput): Promise<boolean> {
     const db = open(input.path);
     try {
       const work = db
-        .prepare<Row, SQLQueryBindings[]>(`SELECT 1 AS ready WHERE
+        .prepare(`SELECT 1 AS ready WHERE
         EXISTS (SELECT 1 FROM schedules WHERE application = ?1 AND collection = ?2 AND state = 'active' AND nextAt <= ?3)
         OR EXISTS (SELECT 1 FROM schedule_occurrences WHERE application = ?1 AND collection = ?2
           AND ((state = 'pending' AND retryAt <= ?3) OR (state = 'running' AND leaseUntil <= ?3)))
         OR EXISTS (SELECT 1 FROM schedule_failure_notifications n JOIN schedule_occurrences o USING(executionId)
           WHERE ?4 = 1 AND o.application = ?1 AND o.collection = ?2 AND n.delivered = 0 AND n.attempts < ?5
           AND n.retryAt <= ?3 AND (n.leaseUntil IS NULL OR n.leaseUntil <= ?3))`)
-        .get(
-          input.application,
-          input.collection,
-          at.getTime(),
-          input.onFailure ? 1 : 0,
-          MAX_DELIVERIES,
-        );
+        .get({
+          "?1": input.application,
+          "?2": input.collection,
+          "?3": at.getTime(),
+          "?4": input.onFailure ? 1 : 0,
+          "?5": MAX_DELIVERIES,
+        });
       if (!work) return false;
     } finally {
-      db.close(true);
+      db.close();
     }
   }
   return true;
@@ -380,7 +380,7 @@ async function pumpOne(input: PumpInput): Promise<void> {
   try {
     jobs = transaction(db, () => {
       const due = db
-        .prepare<Row, SQLQueryBindings[]>(
+        .prepare(
           "SELECT * FROM schedules WHERE application = ? AND collection = ? AND state = 'active' AND nextAt <= ? ORDER BY nextAt LIMIT 16",
         )
         .all(input.application, input.collection, now);
@@ -395,17 +395,14 @@ async function pumpOne(input: PumpInput): Promise<void> {
         "UPDATE schedule_occurrences SET state = 'failed' WHERE application = ? AND collection = ? AND state = 'running' AND leaseUntil <= ? AND attempts >= ?",
       ).run(input.application, input.collection, now, MAX_DELIVERIES);
       return db
-        .prepare<
-          Row,
-          SQLQueryBindings[]
-        >(`UPDATE schedule_occurrences SET state = 'running', leaseUntil = ?, leaseToken = ?, attempts = attempts + 1
+        .prepare(`UPDATE schedule_occurrences SET state = 'running', leaseUntil = ?, leaseToken = ?, attempts = attempts + 1
         WHERE executionId IN (SELECT executionId FROM schedule_occurrences WHERE application = ? AND collection = ?
           AND (state = 'pending' OR (state = 'running' AND leaseUntil <= ?)) AND retryAt <= ? AND attempts < ?
           ORDER BY scheduledAt LIMIT 1) RETURNING *`)
         .all(now + LEASE_MS, token, input.application, input.collection, now, now, MAX_DELIVERIES);
     });
   } finally {
-    db.close(true);
+    db.close();
   }
 
   for (const job of jobs) {
@@ -414,7 +411,7 @@ async function pumpOne(input: PumpInput): Promise<void> {
     const check = open(input.path);
     try {
       const schedule = check
-        .prepare<Row, SQLQueryBindings[]>("SELECT state FROM schedules WHERE scheduleId = ?")
+        .prepare("SELECT state FROM schedules WHERE scheduleId = ?")
         .get(job.scheduleId!);
       if (!schedule || (schedule.state === "inactive" && Number(job.manual) !== 1)) {
         check
@@ -425,7 +422,7 @@ async function pumpOne(input: PumpInput): Promise<void> {
         continue;
       }
     } finally {
-      check.close(true);
+      check.close();
     }
     const delivery: SqliteScheduleDelivery = {
       collection: input.collection,
@@ -466,7 +463,7 @@ async function pumpOne(input: PumpInput): Promise<void> {
           token,
         );
     } finally {
-      finish.close(true);
+      finish.close();
     }
   }
   if (!input.signal.aborted) {
@@ -492,7 +489,7 @@ async function notifyFailure(input: PumpInput): Promise<void> {
         input.collection,
       );
       const claimed = db
-        .prepare<Row, SQLQueryBindings[]>(`UPDATE schedule_failure_notifications
+        .prepare(`UPDATE schedule_failure_notifications
         SET attempts = attempts + 1, leaseToken = ?, leaseUntil = ?
         WHERE executionId = (SELECT n.executionId FROM schedule_failure_notifications n
           JOIN schedule_occurrences o USING(executionId) WHERE o.application = ? AND o.collection = ?
@@ -501,14 +498,14 @@ async function notifyFailure(input: PumpInput): Promise<void> {
         .get(token, now + LEASE_MS, input.application, input.collection, MAX_DELIVERIES, now, now);
       if (!claimed) return null;
       const occurrence = db
-        .prepare<Row, SQLQueryBindings[]>(
+        .prepare(
           "SELECT * FROM schedule_occurrences WHERE executionId = ?",
         )
         .get(claimed.executionId!);
       return { ...occurrence, notificationAttempts: claimed.attempts! };
     });
   } finally {
-    db.close(true);
+    db.close();
   }
   if (!job) return;
   let delivered = false;
@@ -553,7 +550,7 @@ async function notifyFailure(input: PumpInput): Promise<void> {
         token,
       );
   } finally {
-    finish.close(true);
+    finish.close();
   }
 }
 import { resolveCoraxDataDirectory } from "#shared/data-directory.js";

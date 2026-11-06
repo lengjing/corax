@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "./support/test.mjs";
+import test from "node:test";
 
 import { ensureBuiltCli } from "../packages/corax/bin/corax.js";
 

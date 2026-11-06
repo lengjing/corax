@@ -19,7 +19,7 @@ describe("just-bash provider without the optional dependency installed", () => {
         appRoot,
         sandboxName: "session-missing-dependency",
       }),
-    ).rejects.toThrow(/Restore it with `bun install`/);
+    ).rejects.toThrow(/Restore it with `npm install`/);
   });
 
   it("fails without installing when autoInstall is disabled, even in corax dev", async () => {
@@ -35,7 +35,7 @@ describe("just-bash provider without the optional dependency installed", () => {
           appRoot,
           sandboxName: "session-no-autoinstall",
         }),
-      ).rejects.toThrow(/Restore it with `bun install`/);
+      ).rejects.toThrow(/Restore it with `npm install`/);
     } finally {
       vi.unstubAllEnvs();
     }

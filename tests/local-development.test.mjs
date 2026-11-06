@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import test from "./support/test.mjs";
+import test from "node:test";
 
 import { createDevDiagnosticDump } from "../packages/corax/dist/src/cli/dev/diagnostic-dump.js";
 import { resolveLocalDevelopmentClientOptions } from "../packages/corax/dist/src/services/dev-client/client-options.js";
@@ -47,7 +47,7 @@ test("local diagnostic collection needs no external CLI or network", async (t) =
       await delay(10);
     }
     assert.ok(environment, "local environment diagnostics must finish");
-    assert.equal(environment.bunVersion, Bun.version);
+    assert.equal(environment.nodeVersion, process.versions.node);
     assert.equal(environment.sessionsDirectory.files, 1);
     assert.equal(environment.sessionsDirectory.bytes, 2);
     assert.equal(fetch.mock.callCount(), 0);

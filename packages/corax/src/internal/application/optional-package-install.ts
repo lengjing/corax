@@ -1,4 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -13,10 +14,10 @@ export { importInstalledEnginePackage } from "#internal/application/optional-pac
 
 export { CORAX_DEV_ENV_FLAG, isCoraxDevEnvironment };
 
-export type ProjectPackageManager = "bun";
+export type ProjectPackageManager = "bun" | "npm" | "pnpm" | "yarn";
 
 /**
- * Bun is the sole package manager used by the runtime.
+ * Resolve the project's package manager independently of the Node.js runtime.
  */
 export function detectProjectPackageManager(appRoot: string): ProjectPackageManager {
   return resolveProjectInstallation(appRoot).packageManager;
@@ -34,12 +35,17 @@ function resolveProjectInstallation(appRoot: string): {
   }
   const projectRoot = current;
   for (;;) {
+    for (const [lockfile, packageManager] of [
+      ["package-lock.json", "npm"], ["pnpm-lock.yaml", "pnpm"], ["yarn.lock", "yarn"],
+    ] as const) {
+      if (existsSync(join(current, lockfile))) return { root: current, packageManager };
+    }
     if (existsSync(join(current, "bun.lock")) || existsSync(join(current, "bun.lockb"))) {
       return { root: current, packageManager: "bun" };
     }
     const parent = dirname(current);
     if (parent === current) {
-      return { root: projectRoot, packageManager: "bun" };
+      return { root: projectRoot, packageManager: "npm" };
     }
     current = parent;
   }
@@ -63,24 +69,31 @@ export async function installPackageIntoProject(input: {
   readonly ignoredOptionalDependencies?: readonly string[];
 }): Promise<void> {
   const packageManager = detectProjectPackageManager(input.appRoot);
-  const args = ["add", "--dev", input.packageName];
+  const args = packageManager === "npm"
+    ? ["install", "--save-dev", input.packageName]
+    : ["add", "--dev", input.packageName];
 
   console.info(
     `[corax:dev] installing optional dependency "${input.packageName}" via \`${packageManager} ${args.join(" ")}\`...`,
   );
 
-  const child = Bun.spawn([process.execPath, ...args], {
-    cwd: input.appRoot,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+  const outputChunks: string[] = [];
+  const exitCode = await new Promise<number | null>((resolveExit, reject) => {
+    // Windows package managers are .cmd shims; quote arguments for cmd.exe.
+    const windows = process.platform === "win32" && packageManager !== "bun";
+    const command = windows ? process.env.ComSpec || "cmd.exe" : packageManager;
+    const commandArgs = windows
+      ? ["/d", "/s", "/c", `${packageManager} ${args.map((arg) => `"${arg.replace(/["%\r\n]/g, "")}"`).join(" ")}`]
+      : args;
+    const child = spawn(command, commandArgs, { cwd: input.appRoot, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    child.stdout.on("data", (chunk) => outputChunks.push(String(chunk)));
+    child.stderr.on("data", (chunk) => outputChunks.push(String(chunk)));
+    child.once("error", reject);
+    child.once("close", resolveExit);
   });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    child.exited, new Response(child.stdout).text(), new Response(child.stderr).text(),
-  ]);
 
   if (exitCode !== 0) {
-    const output = `${stdout}\n${stderr}`.trim();
+    const output = outputChunks.join("").trim();
     throw new Error(
       `Failed to install "${input.packageName}" with ${packageManager} (exit ${exitCode}).` +
         (output.length > 0 ? `\n${output.slice(-2000)}` : ""),
@@ -158,7 +171,7 @@ export async function loadOptionalEnginePackage<T>(input: {
         `${input.missingMessage} Automatic installation completed, but "${input.packageName}" ` +
           `still could not be loaded from "${input.appRoot}". This usually means the package ` +
           "manager installed into a different workspace, node_modules is unavailable, or the " +
-           `Bun environment changed while corax dev was running. Last load error: ${toMessage(postInstallImportError)}`,
+           `Node.js environment changed while corax dev was running. Last load error: ${toMessage(postInstallImportError)}`,
         { cause: postInstallImportError },
       );
     }

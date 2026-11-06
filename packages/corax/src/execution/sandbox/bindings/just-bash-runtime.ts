@@ -66,7 +66,7 @@ async function loadJustBashModule(input: {
       importModule: async () => await import("just-bash"),
       missingMessage:
         "The just-bash sandbox provider requires the `just-bash` package. " +
-        "Restore it with `bun install`, or use " +
+        "Restore it with `npm install`, or use " +
         "DockerSandbox or DefaultSandbox instead.",
       packageName: JUST_BASH_PACKAGE_NAME,
       ignoredOptionalDependencies: ["@mongodb-js/zstd", "node-liblzma"],

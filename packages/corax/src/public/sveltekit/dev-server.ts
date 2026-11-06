@@ -170,6 +170,7 @@ function startServerProcess(input: {
 }): Promise<CoraxProcessHandle> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(input.command, input.args, {
+      windowsHide: true,
       cwd: input.cwd,
       env: { ...process.env, ...input.env },
       stdio: ["ignore", "pipe", "pipe"],

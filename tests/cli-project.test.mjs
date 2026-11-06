@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { cp, mkdtemp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import test from "./support/test.mjs";
+import test from "node:test";
 import { resolveDiscoveryProject } from "../packages/corax/dist/src/discover/project.js";
 import { discoverAgent } from "../packages/corax/dist/src/discover/discover-agent.js";
 import { resolveAuthoredPackageRoot } from "../packages/corax/dist/src/internal/authored-module-loader.js";
@@ -28,15 +29,16 @@ test("every example is a valid flat agent that discovers without diagnostics", a
   }
 });
 
-test("Bun starts the supervised channels development child with its console preload", { timeout: 60_000 }, async (t) => {
+test("Node starts the supervised channels development child with its console preload", { timeout: 60_000 }, async (t) => {
   const project = await mkdtemp(join(tmpdir(), "corax-dev-child-"));
   t.after(() => rm(project, { recursive: true, force: true, maxRetries: 5 }));
   const example = new URL("../examples/channels/", import.meta.url);
+  const exampleRequire = createRequire(new URL("package.json", example));
   for (const name of ["agent.ts", "package.json", "channels"])
     await cp(new URL(name, example), join(project, name), { recursive: true });
   await mkdir(join(project, "node_modules/@ai-sdk"), { recursive: true });
   for (const name of ["corax", "@ai-sdk/openai"])
-    await symlink(fileURLToPath(new URL(`node_modules/${name}`, example)), join(project, "node_modules", name),
+    await symlink(dirname(exampleRequire.resolve(`${name}/package.json`)), join(project, "node_modules", name),
       process.platform === "win32" ? "junction" : "dir");
   const { stdout } = await execute(process.execPath, [
     fileURLToPath(new URL("./support/development-check.mjs", import.meta.url)), project],

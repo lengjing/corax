@@ -10,7 +10,7 @@ import { createDevDiagnostics } from "./diagnostics.js";
 
 const STUB_ENVIRONMENT = {
   coraxVersion: "0.0.0-test",
-  bunVersion: Bun.version,
+  nodeVersion: process.versions.node,
   platform: "test",
 };
 

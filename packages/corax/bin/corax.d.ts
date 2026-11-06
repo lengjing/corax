@@ -47,14 +47,14 @@ export interface BootstrapDependencies extends BootstrapBuildDependencies {
   importModule?: (specifier: string) => Promise<BootstrapCliModule>;
 
   /**
-   * Bun version string used by tests to exercise the bin version guard.
+   * Node.js version string used by tests to exercise the bin version guard.
    */
-  bunVersion?: string;
+  nodeVersion?: string;
 
   /**
-   * Bun engine range used by tests to exercise non-default package contracts.
+   * Node.js engine range used by tests to exercise non-default package contracts.
    */
-  bunEngineRequirement?: string;
+  nodeEngineRequirement?: string;
 }
 
 /**

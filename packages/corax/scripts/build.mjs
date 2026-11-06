@@ -6,12 +6,11 @@ const cwd = fileURLToPath(new URL("../", import.meta.url));
 export async function buildCore() {
   for (const script of [
     "build-js.mjs",
-    "copy-docs.mjs",
     "stamp-version-tokens.mjs",
     "prepare-package.mjs",
   ]) {
     await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [`scripts/${script}`], { cwd, stdio: "inherit" });
+      const child = spawn(process.execPath, [`scripts/${script}`], { cwd, stdio: "inherit", windowsHide: true });
       child.once("error", reject);
       child.once("exit", (code, signal) => {
         if (code === 0) resolve();

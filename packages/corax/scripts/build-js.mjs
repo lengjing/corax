@@ -30,7 +30,7 @@ await copyRuntimeAssets();
 
 async function run(args) {
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd: packageRoot, stdio: "inherit" });
+    const child = spawn(process.execPath, args, { cwd: packageRoot, stdio: "inherit", windowsHide: true });
     child.once("error", reject);
     child.once("exit", (code, signal) =>
       code === 0 ? resolve() : reject(new Error(`${args.join(" ")} exited with ${signal ?? code}`)),

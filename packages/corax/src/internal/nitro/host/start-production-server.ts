@@ -222,6 +222,7 @@ export async function startProductionServer(
   let startError: unknown;
 
   const child = spawn(process.execPath, [serverEntry], {
+    windowsHide: true,
     cwd: appRoot,
     env: {
       ...process.env,

@@ -7,11 +7,11 @@ const CORAX_SHUTDOWN_SOURCE =
 const ENV_RUNNER_EXIT_SOURCE = 'parentPort?.postMessage({ event: "exit" });';
 const CORAX_EXIT_SOURCE = `${ENV_RUNNER_EXIT_SOURCE}\n      parentPort?.close();`;
 
-function createGracefulBunWorkerShutdownPlugin() {
+function createGracefulWorkerShutdownPlugin() {
   let patched = false;
 
   return {
-    name: "corax-env-runner-graceful-bun-worker-shutdown",
+    name: "corax-env-runner-graceful-worker-shutdown",
     transform(code, id) {
       if (!id.replaceAll("\\", "/").endsWith("/runners/node-worker/worker.mjs")) {
         return null;
@@ -41,7 +41,7 @@ function createGracefulBunWorkerShutdownPlugin() {
 export default {
   packageName: "env-runner",
   compiledPath: "env-runner",
-  plugins: [createGracefulBunWorkerShutdownPlugin()],
+  plugins: [createGracefulWorkerShutdownPlugin()],
   entries: [
     {
       entry: "dist/_chunks/common-base-runner.mjs",
@@ -50,7 +50,7 @@ export default {
     },
     {
       entry: "dist/runners/node-worker/worker.mjs",
-      outputPath: "bun-worker",
+      outputPath: "node-worker",
       declaration: "export {};\n",
     },
   ],

@@ -2,16 +2,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "./support/test.mjs";
+import test from "node:test";
 import { executeBashOnSandbox } from "../packages/corax/dist/src/execution/sandbox/bash.js";
 import {
   createBashSandbox,
   createJustBashHandle,
 } from "../packages/corax/dist/src/execution/sandbox/bindings/just-bash-runtime.js";
 
-// Vitest runs its workers under Node, where just-bash and Bun's lazily built
-// FileHandle registry never collide; only Bun Test exercises the real runtime.
-test("just-bash redirections write through under Bun", async (t) => {
+test("just-bash redirections write through under Node", async (t) => {
   const rootPath = await mkdtemp(join(tmpdir(), "corax-just-bash-"));
   const host = {
     loadOptionalPackage: async ({ importModule }) => importModule(),

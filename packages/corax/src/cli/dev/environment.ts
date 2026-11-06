@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { findCoraxProjectRoot } from "#internal/corax-project-root.js";
@@ -33,9 +32,8 @@ export function getDevelopmentEnvironmentFilePaths(appRoot: string): string[] {
 }
 
 /**
- * Captures the environment-file baseline and applies saved provider settings.
- * Bun owns dotenv loading and interpolation. File edits require a process
- * restart; reinterpreting process.env cannot recover where a value came from.
+ * Loads project dotenv values and saved settings, preserving the environment
+ * inherited before the first load. File-owned values can be reloaded atomically.
  */
 export async function loadDevelopmentEnvironmentFiles(appRoot: string): Promise<void> {
   const resolvedAppRoot = resolve(appRoot);
@@ -83,25 +81,36 @@ function createDevelopmentEnvironmentLoader(
   appRoot: string,
   environmentRoot: string,
 ): DevelopmentEnvironmentLoader {
-  const files = DEVELOPMENT_ENV_FILE_NAMES.map((name) => join(environmentRoot, name));
-  const initialContents = files.map(readEnvironmentFile);
-  // Both shell exports and Bun-loaded values take precedence over saved settings.
   const protectedKeys = new Set(Object.keys(process.env));
+  const managedValues = new Map<string, string>();
 
-  const stageSettings = (): DevelopmentEnvironmentReload => {
+  const stageReload = (): DevelopmentEnvironmentReload => {
+    const previousManagedValues = new Map(managedValues);
+    const nextValues = readDevelopmentEnvironmentValues(environmentRoot);
     const settings = readProviderSettingsSync(appRoot);
-    const affectedKeys = [MODEL_CONNECTION_ENV, "CORAX_MODEL_KEY_SOURCE"];
+    // Explicit shell and dotenv values outrank persisted interactive choices.
+    if (settings && !nextValues.has(MODEL_CONNECTION_ENV)) {
+      nextValues.set(MODEL_CONNECTION_ENV, settings.selected);
+    }
+    if (settings?.keySource && !nextValues.has("CORAX_MODEL_KEY_SOURCE")) {
+      nextValues.set("CORAX_MODEL_KEY_SOURCE", settings.keySource);
+    }
+    const affectedKeys = new Set([...managedValues.keys(), ...nextValues.keys()]);
     const previousEnvironment = new Map(
       [...affectedKeys].map((key) => [key, process.env[key]] as const),
     );
     let settled = false;
-    if (!protectedKeys.has(MODEL_CONNECTION_ENV)) {
-      if (settings) process.env[MODEL_CONNECTION_ENV] = settings.selected;
-      else delete process.env[MODEL_CONNECTION_ENV];
+    for (const [key, previous] of managedValues) {
+      if (!nextValues.has(key)) {
+        if (!protectedKeys.has(key) && process.env[key] === previous) delete process.env[key];
+        managedValues.delete(key);
+      }
     }
-    if (!protectedKeys.has("CORAX_MODEL_KEY_SOURCE")) {
-      if (settings?.keySource) process.env.CORAX_MODEL_KEY_SOURCE = settings.keySource;
-      else delete process.env.CORAX_MODEL_KEY_SOURCE;
+    for (const [key, value] of nextValues) {
+      if (!protectedKeys.has(key)) {
+        process.env[key] = value;
+        managedValues.set(key, value);
+      }
     }
 
     return {
@@ -113,6 +122,8 @@ function createDevelopmentEnvironmentLoader(
           return;
         }
         settled = true;
+        managedValues.clear();
+        for (const [key, value] of previousManagedValues) managedValues.set(key, value);
         for (const [key, value] of previousEnvironment) {
           if (value === undefined) {
             delete process.env[key];
@@ -127,28 +138,8 @@ function createDevelopmentEnvironmentLoader(
   return {
     environmentRoot,
     reload() {
-      stageSettings().commit();
+      stageReload().commit();
     },
-    stageReload() {
-      // Only rebuilding requires the files to match the startup environment.
-      // Credential requests must keep working with that environment until restart.
-      if (files.some((path, index) => readEnvironmentFile(path) !== initialContents[index])) {
-        throw new Error(
-          "Environment files changed. Restart corax dev to load the updated environment.",
-        );
-      }
-      return stageSettings();
-    },
+    stageReload,
   };
-}
-
-function readEnvironmentFile(path: string): string | undefined {
-  try {
-    return readFileSync(path, "utf8");
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
 }

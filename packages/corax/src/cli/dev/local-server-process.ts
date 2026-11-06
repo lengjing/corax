@@ -1,5 +1,5 @@
 /**
- * The `corax dev` server child: forked `detached` (its own process group) and
+ * The `corax dev` server child: detached on POSIX (its own process group) and
  * bound to the CLI's lifetime through the IPC channel, never through the OS.
  *
  * Why the child is not bound to the parent at the OS level (shared process
@@ -15,14 +15,15 @@
  *   equivalent: the child self-stops whenever this process exits, for any
  *   reason including SIGKILL (see local-server-child.ts).
  *
- * `detached` makes the child a process-group leader, so close() can escalate
+ * On Windows, avoid detached mode: it creates a separate console window.
+ * On POSIX, `detached` makes the child a process-group leader, so close() can escalate
  * to a group-wide SIGTERM/SIGKILL that reaps the entire server tree. Sandbox
  * resources leaked by a crash are reconciled by the cleanup-intent janitor on
  * the next run (see local-server-cleanup.ts).
  */
 
 import { createConsoleOutputForwarder } from "./console-records.js";
-import { fork, type ChildProcess } from "node:child_process";
+import { fork, type ChildProcess, type ForkOptions, type SpawnOptions } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
@@ -104,7 +105,8 @@ export function createDevelopmentServer(
       ],
       {
         cwd: appRoot,
-        detached: true,
+        detached: process.platform !== "win32",
+        windowsHide: true,
         env: {
           ...shellEnvironment,
           [CORAX_DEV_ENV_FLAG]: "1",
@@ -112,10 +114,10 @@ export function createDevelopmentServer(
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         execArgv: [
           ...process.execArgv,
-          "--preload",
-          fileURLToPath(new URL("./console-records-preload.js", import.meta.url)),
+          "--import",
+          new URL("./console-records-preload.js", import.meta.url).href,
         ],
-      },
+      } as ForkOptions & Pick<SpawnOptions, "windowsHide">,
     );
     child = spawned;
     spawned.stdout?.on("data", (chunk: Buffer) =>

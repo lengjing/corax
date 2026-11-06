@@ -37,7 +37,7 @@ class BunDevelopmentRunner extends BaseEnvRunner implements DevelopmentRunner {
   #workerHasExited = false;
 
   constructor(input: DevelopmentRunnerInput) {
-    const workerEntry = resolvePackageCompiledFilePath("src/compiled/env-runner/bun-worker.js");
+    const workerEntry = resolvePackageCompiledFilePath("src/compiled/env-runner/node-worker.js");
     super({
       data: {
         entry: input.entry,

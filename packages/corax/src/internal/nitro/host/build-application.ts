@@ -54,7 +54,7 @@ function assertProfileOutsideOutput(profile: string | undefined, output: string)
   }
 }
 
-/** Builds a standalone Bun service while preserving recoverable, atomic output publication. */
+/** Builds a standalone Node.js service while preserving recoverable, atomic output publication. */
 export async function buildApplication(
   rootDir: string,
   options: ApplicationBuildOptions,

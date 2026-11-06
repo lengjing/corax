@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import test from "./support/test.mjs";
+import test from "node:test";
 
 const execute = promisify(execFile);
 const moduleUrl = (path) => new URL(`../packages/corax/src/${path}.ts`, import.meta.url).href;
@@ -13,7 +13,7 @@ test("one-time schedules and delay delivery are independent of the host timezone
   const root = await mkdtemp(join(tmpdir(), "corax-schedule-timezones-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const script = `
-import { Database } from "bun:sqlite";
+import { DatabaseSync as Database } from "node:sqlite";
 import assert from "node:assert/strict";
 import { nextSingleScheduleTime } from ${JSON.stringify(moduleUrl("shared/schedule-time"))};
 import { sqliteScheduleProvider, pumpSqliteSchedules } from ${JSON.stringify(moduleUrl("public/schedules/providers/sqlite"))};
@@ -47,10 +47,10 @@ const created = await provider.create(context, { name: "delay", expression, payl
 await provider.create({ ...context, operationId: "create-zoned" }, {
   name: "zoned", expression: { type: "single", at: "2090-01-01T12:00", timezone: "Asia/Shanghai" }, payload: {},
 });
-const db = new Database(path, { readonly: true });
+const db = new Database(path, { readOnly: true });
 let rows;
-try { rows = db.query("SELECT name, nextAt FROM schedules ORDER BY name").all(); }
-finally { db.close(true); }
+try { rows = db.prepare("SELECT name, nextAt FROM schedules ORDER BY name").all(); }
+finally { db.close(); }
 const memory = inMemoryScheduleProvider({ now: () => new Date(now) });
 await assert.rejects(memory.create(context, { name: "invalid", expression: { type: "single", at: "* * * * *" }, payload: {} }), /valid date/);
 const memoryRecord = await memory.create(context, { name: "delay", expression, payload: {} });
@@ -83,7 +83,6 @@ console.log(JSON.stringify({ state: created.state, expected, rows, memoryState: 
     const { stdout } = await execute(
       process.execPath,
       [
-        "--no-env-file",
         "--conditions=corax-source",
         "-e",
         script,

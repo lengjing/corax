@@ -12,7 +12,7 @@ import {
 
 const ENVIRONMENT: DevEnvironmentInfo = {
   coraxVersion: "0.9.9",
-  bunVersion: "1.4.2",
+  nodeVersion: "24.0.0",
   platform: "darwin arm64",
   vercelCliVersion: "48.1.0",
   vercelCliPath: "/usr/local/bin/vercel",

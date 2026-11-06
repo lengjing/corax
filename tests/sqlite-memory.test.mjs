@@ -4,7 +4,7 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import test from "./support/test.mjs";
+import test from "node:test";
 import { sqliteMemory } from "../packages/corax/dist/src/public/memory/file/backends/sqlite.js";
 import { defaultFileMemoryBackend } from "../packages/corax/dist/src/public/memory/file/backends/default.js";
 

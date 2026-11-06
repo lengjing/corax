@@ -79,7 +79,7 @@ export function createCliProgram(
 
   program
     .name("corax")
-    .description("Build and run a corax agent with Bun.")
+    .description("Build and run a corax agent with Node.js.")
     .version(packageVersion)
     .showHelpAfterError()
     .exitOverride()

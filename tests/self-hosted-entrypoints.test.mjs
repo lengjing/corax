@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import test from "./support/test.mjs";
+import test from "node:test";
 import { createCliProgram } from "../packages/corax/dist/src/cli/run.js";
 import {
   seedInstrumentationProviders,

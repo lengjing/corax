@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { resolveCoraxDataDirectory } from "#shared/data-directory.js";
-import { Database } from "bun:sqlite";
+import { DatabaseSync as Database } from "node:sqlite";
 import {
   MemoryDocumentConflictError,
   type MemoryDocumentBackend,
@@ -30,7 +30,7 @@ export function sqliteMemory(options: SqliteMemoryOptions = {}): MemoryDocumentB
       `);
       return db;
     } catch (error) {
-      db.close(true);
+      db.close();
       throw error;
     }
   };
@@ -41,11 +41,11 @@ export function sqliteMemory(options: SqliteMemoryOptions = {}): MemoryDocumentB
       const db = open();
       try {
         const row = db
-          .prepare<{ content: string; version: string }, [string]>("SELECT content, version FROM memory_documents WHERE key = ?")
+          .prepare("SELECT content, version FROM memory_documents WHERE key = ?")
           .get(key);
         return row ? { content: String(row.content), version: String(row.version) } : null;
       } finally {
-        db.close(true);
+        db.close();
       }
     },
     async write({ key, content, expectedVersion, signal }) {
@@ -68,7 +68,7 @@ export function sqliteMemory(options: SqliteMemoryOptions = {}): MemoryDocumentB
         if (result.changes !== 1) throw new MemoryDocumentConflictError(key);
         return { content, version };
       } finally {
-        db.close(true);
+        db.close();
       }
     },
   };

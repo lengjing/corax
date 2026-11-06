@@ -18,15 +18,15 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "clean": "bun -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.build.json",
     "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly",
     "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "devDependencies": {
-    "vitest": "catalog:"
+    "vitest": "5.0.2"
   },
   "engines": {
-    "bun": ">=1.4.2"
+    "node": ">=24.0.0"
   }
 }

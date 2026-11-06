@@ -1,6 +1,0 @@
-[run]
-bun = true
-
-[test]
-root = "./tests"
-timeout = 30000

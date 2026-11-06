@@ -85,8 +85,8 @@ function resolveWorkflowAliases(): Record<string, string> {
   return aliases;
 }
 
-function resolveProductionNitroPreset(): "bun" {
-  return "bun";
+function resolveProductionNitroPreset(): "node-server" {
+  return "node-server";
 }
 
 /** Whether any agent exposes a generated-program tool that needs the workflow sandbox runtime. */

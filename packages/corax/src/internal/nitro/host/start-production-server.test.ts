@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { resolve } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
 
@@ -81,7 +82,7 @@ describe("startProductionServer", () => {
     mocks.existsSync.mockReturnValueOnce(false);
 
     await expect(startProductionServer("/tmp/app")).rejects.toThrow(
-      'Missing corax build output at /tmp/app/.output/server/index.mjs. Run "corax build" before "corax start".',
+      `Missing corax build output at ${resolve("/tmp/app/.output/server/index.mjs")}. Run "corax build" before "corax start".`,
     );
 
     expect(mocks.spawn).not.toHaveBeenCalled();
@@ -100,12 +101,13 @@ describe("startProductionServer", () => {
 
     expect(server.url).toBe("http://127.0.0.1:4321/");
     expect(stdoutWrites).toContain("Listening on http://127.0.0.1:4321/\n");
-    expect(mocks.loadDevelopmentEnvironmentFiles).toHaveBeenCalledWith("/tmp/app");
+    expect(mocks.loadDevelopmentEnvironmentFiles).toHaveBeenCalledWith(resolve("/tmp/app"));
     expect(mocks.spawn).toHaveBeenCalledWith(
       process.execPath,
-      ["/tmp/app/.output/server/index.mjs"],
+      [resolve("/tmp/app/.output/server/index.mjs")],
       {
-        cwd: "/tmp/app",
+        cwd: resolve("/tmp/app"),
+        windowsHide: true,
         env: expect.objectContaining({
           HOST: "127.0.0.1",
           NITRO_HOST: "127.0.0.1",

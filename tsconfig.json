@@ -20,7 +20,7 @@
     "useUnknownInCatchVariables": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["bun"]
+    "types": ["node"]
   },
   "exclude": ["**/node_modules", "**/dist", "**/.corax", "**/.output"]
 }

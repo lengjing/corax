@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "./support/test.mjs";
+import test from "node:test";
 import { atomicWriteFile } from "../packages/corax/dist/src/shared/atomic-write-file.js";
 
 test("concurrent same-millisecond atomic writes never share a temporary file", async (t) => {

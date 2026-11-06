@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { spawn } from "node:child_process";
 import { access, readdir, realpath, stat } from "node:fs/promises";
@@ -8,12 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json");
-const packageBunEngine = packageJson.engines?.bun;
+const packageNodeEngine = packageJson.engines?.node;
 const bootstrapPackageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 let semverPromise;
 
-if (typeof packageBunEngine !== "string") {
-  throw new Error("corax package.json must declare a valid engines.bun range.");
+if (typeof packageNodeEngine !== "string") {
+  throw new Error("corax package.json must declare a valid engines.node range.");
 }
 
 function createBootstrapOptions(overrides = {}) {
@@ -157,17 +157,17 @@ async function loadVendoredSemver(options, dependencies = {}) {
   return semverPromise;
 }
 
-async function assertSupportedBunVersion(
-  version = process.versions.bun,
-  requiredRange = packageBunEngine,
+async function assertSupportedNodeVersion(
+  version = process.versions.node,
+  requiredRange = packageNodeEngine,
   options = createBootstrapOptions(),
   dependencies = {},
 ) {
-  if (!version) throw new Error("corax requires Bun. Run the CLI with bun.");
+  if (!version) throw new Error("corax requires Node.js. Run the CLI with node.");
   const semver = await loadVendoredSemver(options, dependencies);
 
   if (semver.validRange(requiredRange) === null) {
-    throw new Error(`corax declares an invalid Bun engine range: "${requiredRange}".`);
+    throw new Error(`corax declares an invalid Node.js engine range: "${requiredRange}".`);
   }
   if (semver.satisfies(version, requiredRange)) {
     return;
@@ -175,9 +175,9 @@ async function assertSupportedBunVersion(
 
   throw new Error(
     [
-      `corax requires Bun ${requiredRange}.`,
+      `corax requires Node.js ${requiredRange}.`,
       `You are running ${version}.`,
-      "Please install a compatible Bun version and try again.",
+      "Please install a compatible Node.js version and try again.",
     ].join(" "),
   );
 }
@@ -185,6 +185,7 @@ async function assertSupportedBunVersion(
 async function runCommand(command, args, options) {
   await new Promise((resolveCommand, rejectCommand) => {
     const child = spawn(command, args, {
+      windowsHide: true,
       cwd: options.cwd,
       stdio: "inherit",
     });
@@ -261,9 +262,9 @@ export async function ensureBuiltCli(overrides = {}, dependencies = {}) {
  */
 export async function runCoraxCli(argv = process.argv.slice(2), overrides = {}, dependencies = {}) {
   const options = createBootstrapOptions(overrides);
-  await assertSupportedBunVersion(
-    dependencies.bunVersion,
-    dependencies.bunEngineRequirement,
+  await assertSupportedNodeVersion(
+    dependencies.nodeVersion,
+    dependencies.nodeEngineRequirement,
     options,
     dependencies,
   );

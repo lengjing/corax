@@ -42,6 +42,7 @@ export function copyTextToClipboard(text: string, writeTerminal: (chunk: string)
   if (command === undefined) return;
   try {
     const child = spawn(command[0]!, command.slice(1), {
+      windowsHide: true,
       stdio: ["pipe", "ignore", "ignore"],
       detached: false,
     });
