@@ -7,6 +7,7 @@ import { agentCommand } from "#cli/agent-command.js";
 import { resolveCliApplicationProject } from "#cli/application-root.js";
 import { coraxCliBanner } from "#cli/banner.js";
 import { registerDevelopmentCommand } from "#cli/dev/command.js";
+import { registerRemoteCommands } from "#cli/remote/command.js";
 import { resolveDevUiMode, resolveTuiDisplayOptions } from "#cli/dev/ui-options.js";
 import { waitForShutdownSignal } from "#cli/shutdown.js";
 import type { ProductionCliOptions } from "#cli/dev/command-options.js";
@@ -30,6 +31,7 @@ interface CliLogger {
 }
 
 interface CliRuntimeDependencies {
+  isInteractiveTerminal(): boolean;
   buildHost: BuildHost;
   printApplicationInfo(
     logger: CliLogger,
@@ -132,6 +134,7 @@ export function createCliProgram(
     });
 
   registerDevelopmentCommand({ applicationContext, logger, program, runtime });
+  registerRemoteCommands({ program, runtime });
 
   const logs = program
     .command("logs")
