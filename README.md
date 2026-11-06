@@ -1,138 +1,125 @@
 # Corax
 
-基于 Bun 的本地 agent CLI 运行器。通过约定目录中的 TypeScript 模块自由组合模型、指令、渠道、memory 和 sandbox，再由 corax 发现、编译和运行。CLI 不生成项目，也不绑定一个固定 agent。
+Corax 是基于 **Node.js + TypeScript** 的自托管 AI Agent 框架，同时提供 SDK 和终端 CLI。通过约定目录组合模型、指令、工具、渠道、记忆、沙箱、子 Agent 和定时任务，再由 Corax 发现、编译和运行。
 
-## 环境与安装
+基于 eve 0.79.1 修改，采用 Apache-2.0 许可证并保留上游版权声明。
 
-需要 **Bun 1.4.2+**；创建发布压缩包还需要 `tar`。
+## 安装与使用
 
-在仓库根目录执行：
+运行需要 **Node.js 24+**。
 
 ```sh
-bun install --frozen-lockfile
-bun run build
+npm install corax @ai-sdk/openai
 ```
 
-也可执行 `bun run setup` 完成安装和构建。依赖安装、工程脚本、测试和服务运行均使用 Bun。
-
-## Agent 项目约定
-
-项目根目录就是 agent 根目录，无需额外的 `agent/`：
+一个最小项目：
 
 ```text
 my-agent/
 ├─ agent.ts
 ├─ instructions.md
-├─ channels/
-│  └─ corax.ts
-├─ memory/
-│  └─ personal.ts
-├─ sandbox.ts
 ├─ .env
 └─ package.json
 ```
 
-`agent.ts` 定义模型等根配置，其余能力按需添加。项目通过自己的 `package.json` 声明 `corax`、模型 SDK 和可选沙箱等依赖。
+```ts
+// agent.ts
+import { createOpenAI } from "@ai-sdk/openai";
+import { defineAgent } from "corax";
 
-## 运行
+const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-源码 checkout 中，每个示例都带有 `dev` / `build` / `start` 脚本：
+export default defineAgent({
+  model: provider.chat("gpt-5.4"),
+  modelContextWindowTokens: 400_000,
+});
+```
+
+在 `.env` 中设置模型密钥，在 `instructions.md` 中编写指令，然后运行：
 
 ```sh
-bun run --cwd examples/channels dev
-bun run --cwd examples/basic dev -- --no-ui
-bun run --cwd examples/basic build
-bun run --cwd examples/basic start
+npx corax dev
 ```
 
-安装发布包的命令入口后，在 agent 项目目录中使用：
+模型应传入 AI SDK Provider 实例并声明上下文窗口。裸字符串模型 ID 会使用 AI Gateway；仅在显式配置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 和 `AI_GATEWAY_API_KEY` 时启用该路径。
 
-```sh
-cd my-agent
-corax dev
-corax build
-corax start
-```
-
-CLI 和 git、npm 一样从当前目录向上查找 agent 项目。`dev` 启动服务和终端交互，`--no-ui` 只运行服务；`build` 生成生产产物，`start` 运行已有产物。`dev` 默认监听 `127.0.0.1:2000`，`start` 默认监听 `0.0.0.0:3000`；两者都接受 `--host` / `--port`，端口也可由 `PORT` 环境变量指定。健康接口为 `/corax/v1/health`。
-
-`.env` 由 Bun 在进程启动时原生加载和展开变量，进程已有的变量优先。请从项目目录启动，或用 Bun 的 `--env-file` 显式选择环境文件。修改环境文件后需重启 `corax dev`；CLI 不会在热重载时覆盖启动环境。
-
-## 按能力拆分的示例
-
-| 示例 | 内容 |
-| --- | --- |
-| [`minimal`](examples/minimal/) | 只有模型与根定义 |
-| [`channels`](examples/channels/) | 终端/API 渠道和认证 |
-| [`memory`](examples/memory/) | 按用户隔离的 SQLite memory |
-| [`sandbox`](examples/sandbox/) | JustBash sandbox |
-| [`tools`](examples/tools/) | 自定义工具与 `lib/` 共享代码 |
-| [`skills`](examples/skills/) | 打包技能（`SKILL.md`）与单文件技能 |
-| [`connections`](examples/connections/) | OpenAPI 连接与按会话动态启用的 MCP 连接 |
-| [`schedules`](examples/schedules/) | Markdown 与 TypeScript 两种 cron 定时任务 |
-| [`subagents`](examples/subagents/) | 带独立指令的子 agent 委派 |
-| [`hooks`](examples/hooks/) | 观察事件流的钩子 |
-| [`extensions`](examples/extensions/) | 挂载内置 git 扩展 |
-| [`instrumentation`](examples/instrumentation/) | 本地 OpenTelemetry 追踪 |
-| [`evals`](examples/evals/) | `corax eval` 评测用例 |
-| [`basic`](examples/basic/) | 以上全部能力的完整组合 |
-
-将所选示例的 `.env.example` 复制为同目录 `.env`，填写模型配置。示例之间不互相依赖，可以复制能力模块进行组合。框架默认提供 corax 会话渠道；`channels`、`evals` 和 `basic` 另外展示显式渠道配置。详见 [示例说明](examples/README.md)。
-
-## 示例配置
-
-这些模型和认证变量由示例模块使用，不限制用户自定义模块的配置方式：
-
-| 变量 | 默认值 | 用途 |
-| --- | --- | --- |
-| `DEEPSEEK_API_KEY` | 空 | DeepSeek（OpenAI 兼容接口）密钥 |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 模型接口地址 |
-| `CORAX_MODEL` | `deepseek-flash` | 模型 ID |
-| `CORAX_CONTEXT_WINDOW` | `128000` | 模型上下文 token 数 |
-| `CORAX_USERNAME` | `admin` | 示例 HTTP Basic 用户名 |
-| `CORAX_PASSWORD` | 空 | 示例生产会话 API 密码 |
-
-模型请传入 AI SDK provider 实例并指定 `modelContextWindowTokens`。裸字符串模型 ID 会被 AI SDK 路由到 Vercel AI Gateway，Corax 默认拒绝并提示修改；如确需 Gateway，设置 `CORAX_MODEL_CONNECTION=ai-gateway-key` 与 `AI_GATEWAY_API_KEY` 显式开启。
-
-## 目录结构
-
-```text
-packages/corax/bin/       `corax` 命令入口
-packages/corax/src/       核心框架、CLI 与内置能力
-packages/corax/scripts/   核心编译、vendoring、打包
-packages/corax-catalog/   集成目录库
-packages/tracing/       追踪库
-examples/               按能力拆分的扁平 agent 项目
-scripts/release.mjs      发布包组装与验证
-tests/                  CLI、持久化及发布回归
-docs/                   架构、运行和部署说明
-```
-
-CLI 命令与 SDK 包名均为 `corax`，命令由 `corax` 包的 `bin` 提供，公共 API 通过 `corax/*` 导入。仓库根包 `corax-workspace` 仅用于开发编排，发布压缩包中的 `corax-cli` 只负责安装本地 SDK 及其生产依赖。
-
-Corax 基于 eve 0.79.1 修改，保留上游许可证与版权声明。
-
-## 开发与验证
+## CLI
 
 | 命令 | 用途 |
 | --- | --- |
-| `bun run build` | 构建 CLI 所需核心与运行资产 |
-| `bun run build:example` | 构建 basic 示例 |
-| `bun run typecheck` | 检查核心、内部依赖和示例类型 |
-| `bun run typecheck:packages` | 仅检查 packages 中的 workspace 包 |
-| `bun run typecheck:examples` | 仅检查全部示例类型 |
-| `bun run test` | 构建核心后使用 Bun Test 运行产品回归 |
-| `bun run release` | 构建并验证可独立运行的 CLI 发布包 |
-| `bun run test:release` | 验证已生成的 CLI 发布包 |
+| `corax dev` | 开发服务、热重载和终端交互；`--no-ui` 仅启动服务 |
+| `corax build` | 编译当前 Agent 到 `.output/` |
+| `corax start` | 启动已有生产产物；不会自动重新构建 |
+| `corax remote connect --url <url>` | 用终端 UI 连接已有服务 |
+| `corax info` | 查看解析后的项目配置 |
+| `corax logs` / `corax traces` | 查看开发日志和追踪 |
+| `corax eval` | 运行 Agent 评测 |
 
-## 持久化与部署
+CLI 从当前目录向上定位项目。开发默认监听 `127.0.0.1:2000`，生产默认监听 `0.0.0.0:3000`，可用 `--host` / `--port` 覆盖，端口也可通过 `PORT` 设置。健康接口为 `/corax/v1/health`。
 
-每个项目的 `.corax/` 保存工作流、会话状态，以及默认的 SQLite memory 和动态调度数据库（可通过各自的 `path` 选项改到别处）；`.output/` 保存生产产物。配置与数据写入目标项目，不写入 CLI 安装目录。
+```sh
+npx corax build
+npx corax start
+# 在另一个交互式终端连接，不需要本地 Agent 项目：
+npx corax remote connect --url http://localhost:3000
+```
 
-宿主应用可设置 `CORAX_PROJECT_ROOT` 为 Agent 项目绝对路径，并设置 `CORAX_DATA_DIR` 为该项目的数据目录（绝对路径或相对项目路径）。工作流、开发运行快照、日志、trace、sandbox cache、默认 memory/schedules 数据库统一使用该目录；编译器的隔离副本仍使用自己的内部 artifact 目录。自定义数据目录不会触发 authored-source 热重编译。
+认证由项目的渠道模块配置。客户端可传入重复的 `--header "Authorization: Bearer <token>"`，或通过 `http://用户名:密码@localhost:3000` 提供 Basic Auth（特殊字符需 URL 编码）。非本地地址使用 HTTPS。
 
-认证后的 `GET /corax/v1/session?limit=50&offset=0` 返回原生 Workflow 目录中的根会话元数据 `{sessions, hasMore}`，包含 Corax 会话 ID、标题及时间，不需要应用另建会话映射数据库。
+## 配置与持久化
 
-默认本地持久化使用 `bun:sqlite`。动态调度保留稳定 executionId、租约与重试，提供至少一次投递。示例使用本地 Workflow World 和 JustBash，不要求托管平台账号。JustBash 是虚拟文件系统沙箱，不等同于本机原生 shell。
+- 环境文件优先级：进程已有变量 > `.env.development.local` > `.env.local` > `.env.development` > `.env`。
+- 使用 Node dotenv 解析规则，`${VAR}` 保持字面值。开发模式重新加载文件管理的变量，支持更新、删除及重建失败回滚；启动时已有的进程变量不被覆盖。生产服务修改环境后需重启。
+- 显式环境配置优先于交互式保存的 Provider 设置。
+- `.corax/` 保存会话、工作流、日志、trace、沙箱缓存及默认 SQLite 数据库；`.output/` 保存生产构建产物。
+- 宿主可设置 `CORAX_PROJECT_ROOT` 为项目绝对路径，设置 `CORAX_DATA_DIR` 为绝对路径或相对项目的数据目录。编译器隔离副本仍有独立的内部产物目录。
+- 默认持久化使用 `node:sqlite`。动态调度采用至少一次投递，支持稳定 executionId、租约和重试。
+- 认证后的 `GET /corax/v1/session?limit=50&offset=0` 返回根会话元数据 `{ sessions, hasMore }`。
+- JustBash 是虚拟文件系统沙箱，不是本机原生 shell。
 
-发布包包含通用 CLI、核心 SDK 和运行依赖，不包含固定 agent 或本机密钥。用户项目仍需安装自己声明的依赖。
+## 示例
+
+[`examples/`](examples/README.md) 按能力拆分，可复制和组合：
+
+| 示例 | 能力 |
+| --- | --- |
+| `minimal` / `channels` | 最小定义、会话 API 与认证 |
+| `memory` / `sandbox` / `tools` | SQLite 记忆、JustBash、自定义工具 |
+| `skills` / `connections` | 技能、OpenAPI 和 MCP |
+| `subagents` / `schedules` | 子 Agent 和定时任务 |
+| `hooks` / `extensions` | 生命周期钩子与 git 扩展 |
+| `instrumentation` / `evals` | 本地追踪和评测 |
+| `basic` | 完整组合 |
+
+示例默认使用 DeepSeek。复制对应 `.env.example` 为 `.env` 并设置 `DEEPSEEK_API_KEY`，可用 `DEEPSEEK_BASE_URL`、`CORAX_MODEL` 和 `CORAX_CONTEXT_WINDOW` 覆盖默认配置。
+
+## 仓库开发
+
+需要 Node.js 24+ 和 npm 11+，无需 Bun。
+
+```sh
+npm install
+npm run build
+npm run dev --workspace examples/channels
+```
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run build` | 构建 SDK、CLI 和 `.d.ts` |
+| `npm run build:example` | 构建 basic 示例（核心构建不会自动更新示例产物） |
+| `npm run typecheck` | 检查内部包及全部示例类型 |
+| `npm test` | 构建后运行单元、集成与产品回归测试 |
+| `npm run pack` | 生成可发布的 `artifacts/corax.tgz` |
+| `npm run test:package` | 在仓库外安装并验证上一步生成的 npm 包 |
+
+```text
+packages/corax/          SDK、CLI、运行时及源码测试
+packages/corax-catalog/  内部集成目录（随核心打包，不单独发布）
+packages/tracing/        内部追踪库（随核心打包，不单独发布）
+examples/               Agent 示例
+tests/                  产品回归、包安装验证与辅助程序
+scripts/                npm 包组装
+.github/workflows/      Linux/Windows CI 与 npm 发布
+```
+
+贡献与测试约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，npm 首次发布、Trusted Publishing 和版本操作见 [发布指南](docs/releasing.md)。
