@@ -1,13 +1,33 @@
+# Dependencies and generated builds (all workspaces)
 node_modules/
+package-lock.json
 dist/
 .generated/
-.corax/
 .output/
-data/
-release/
-*.tgz
 *.tsbuildinfo
+
+# Local agent state and test output
+.corax/
+.workflow-vitest/
+.workflow-data/
+coverage/
+.vitest-cache/
+.vite/
+test-results/
 *.log
+
+# npm artifacts and old CLI archives
+/artifacts/
+/release/
+*.tgz
+
+# Environment files (templates are safe to commit)
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
