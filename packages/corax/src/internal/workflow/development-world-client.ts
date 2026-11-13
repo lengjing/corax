@@ -116,7 +116,8 @@ export function createDevelopmentWorkflowWorld(): World {
     createQueueHandler,
     runs: forwarded.groups.runs as World["runs"],
     steps: forwarded.groups.steps as World["steps"],
-    events: forwarded.groups.events as World["events"],
+    // Only whitelisted async operations cross RPC; callback subscriptions do not.
+    events: forwarded.groups.events as unknown as World["events"],
     hooks: forwarded.groups.hooks as World["hooks"],
     streams: {
       ...forwarded.groups.streams,

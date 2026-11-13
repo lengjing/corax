@@ -21,6 +21,14 @@ try {
     headers: { authorization: `Basic ${Buffer.from("smoke-user:smoke-password").toString("base64")}` },
   });
   assert.equal(accepted.status, 200, await accepted.text());
+  // Skipping a live tail scan must still reject missing history before HTTP 200.
+  const missing = "wrun_01M6JWQZ0A0QH6MERWTZ96Z7TB";
+  for (const suffix of ["?startIndex=0", "?follow=false"]) {
+    const history = await fetch(new URL(`/corax/v1/session/${missing}/stream${suffix}`, production.url), {
+      headers: { authorization: `Basic ${Buffer.from("smoke-user:smoke-password").toString("base64")}` },
+    });
+    assert.equal(history.status, 404, await history.text());
+  }
   await production.close();
   production = undefined;
 

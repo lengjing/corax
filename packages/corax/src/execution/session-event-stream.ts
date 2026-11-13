@@ -1,5 +1,7 @@
 import { parseNdjsonStream } from "#execution/ndjson-stream.js";
-import { getRun } from "#internal/workflow/runtime.js";
+import { getRun, getWorld } from "#internal/workflow/runtime.js";
+import { RunExpiredError } from "#compiled/@workflow/errors/index.js";
+import { readScopedTail } from "#execution/history-read-scope.js";
 import type { MessageStreamEvent } from "#protocol/message.js";
 import {
   normalizePersistedMessageStreamEvent,
@@ -47,7 +49,10 @@ export function readSessionEventHistory(
   sessionId: string,
   startIndex?: number,
 ): ReadableStream<MessageStreamEvent> {
-  const events = streamSessionEvents(sessionId, { follow: false, startIndex });
+  // Capture inside the request scope: ReadableStream may pull outside it later.
+  const tail = readSessionStreamTailIndex(sessionId);
+  tail.catch(() => {});
+  const events = streamSessionEvents(sessionId, { follow: false, startIndex }, tail);
   return new ReadableStream<MessageStreamEvent>({
     async pull(controller) {
       const next = await events.next();
@@ -63,11 +68,31 @@ export function readSessionEventHistory(
 /** Returns the index of the last durably recorded event, or `-1` before the first. */
 export async function readSessionStreamTailIndex(sessionId: string): Promise<number> {
   // The readable is never consumed; cancel it so the unread source does not linger.
-  const readable = getRun(sessionId).getReadable();
-  try {
-    return await readable.getTailIndex();
-  } finally {
-    await readable.cancel().catch(() => {});
+  return readScopedTail(sessionId, async () => {
+    const readable = getRun(sessionId).getReadable();
+    try {
+      const [, tail] = await Promise.all([
+        assertSessionHistoryReadable(sessionId),
+        readable.getTailIndex(),
+      ]);
+      return tail;
+    } finally {
+      await readable.cancel().catch(() => {});
+    }
+  });
+}
+
+/** Validate a live read before committing HTTP headers, without scanning chunk files. */
+export async function assertSessionHistoryReadable(sessionId: string): Promise<void> {
+  const world = await getWorld();
+  const run = await world.runs.get(sessionId, { resolveData: "none" });
+  if (run.expiredAt !== undefined && run.expiredAt.getTime() <= Date.now()) {
+    throw new RunExpiredError(
+      "Session history is no longer available.",
+      sessionId,
+      run.status,
+      run.expiredAt,
+    );
   }
 }
 
@@ -82,6 +107,7 @@ export async function readSessionStreamTailIndex(sessionId: string): Promise<num
 export async function* streamSessionEvents(
   sessionId: string,
   options: SessionEventStreamOptions = {},
+  capturedTail?: Promise<number>,
 ): AsyncGenerator<MessageStreamEvent, void, undefined> {
   const { follow = true, signal } = options;
   const requestedStartIndex = options.startIndex ?? 0;
@@ -90,7 +116,7 @@ export async function* streamSessionEvents(
   let tailIndex: number | undefined;
   let startIndex = requestedStartIndex;
   if (!follow || requestedStartIndex < 0) {
-    tailIndex = await readSessionStreamTailIndex(sessionId);
+    tailIndex = await (capturedTail ?? readSessionStreamTailIndex(sessionId));
     if (requestedStartIndex < 0) startIndex = Math.max(0, tailIndex + 1 + requestedStartIndex);
   }
   if (!follow && tailIndex !== undefined && startIndex > tailIndex) return;

@@ -358,7 +358,7 @@ async function reenqueueActiveDevelopmentRuns(input: {
   readonly enqueue: World["queue"];
   readonly canRecover: (generationId: string) => Promise<boolean>;
   readonly prefix: string;
-  readonly world: World;
+  readonly world: World & { releaseOrphanedSteps?(runId: string): Promise<void> };
 }): Promise<void> {
   for (const status of ["pending", "running"] as const) {
     let cursor: string | undefined;
@@ -379,6 +379,7 @@ async function reenqueueActiveDevelopmentRuns(input: {
       }
       for (const run of page.data) {
         if (!(await input.canRecover(run.deploymentId))) continue;
+        await input.world.releaseOrphanedSteps?.(run.runId);
         await input.enqueue(`${input.prefix}${run.workflowName}` as ValidQueueName, {
           runId: run.runId,
         });

@@ -626,19 +626,19 @@ describe("coraxChannel — stream cursor", () => {
     },
   );
 
-  it("resolves the tail index by default without returning it", async () => {
+  it("does not resolve the tail index for a default following read", async () => {
     const handler = createCoraxStreamHandler({ auth: none() });
 
     const response = await handler.fetch("https://corax.test/corax/v1/session/test-session-id/stream");
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-corax-stream-tail-index")).toBeNull();
-    expect(handler.getStreamTailIndex).toHaveBeenCalledOnce();
+    expect(handler.getStreamTailIndex).not.toHaveBeenCalled();
   });
 
   it("returns 404 for an unknown session in follow mode", async () => {
     const handler = createCoraxStreamHandler({ auth: none() });
-    handler.getStreamTailIndex.mockRejectedValueOnce(
+    handler.getEventStream.mockRejectedValueOnce(
       new WorkflowRunNotFoundError("test-session-id"),
     );
 
@@ -653,7 +653,7 @@ describe("coraxChannel — stream cursor", () => {
     ["run", new RunExpiredError("Run expired.", "test-session-id")],
   ])("returns a terminal 410 when the session %s passed retention", async (_, error) => {
     const handler = createCoraxStreamHandler({ auth: none() });
-    handler.getStreamTailIndex.mockRejectedValueOnce(error);
+    handler.getEventStream.mockRejectedValueOnce(error);
 
     const response = await handler.fetch("https://corax.test/corax/v1/session/test-session-id/stream");
 
@@ -669,7 +669,9 @@ describe("coraxChannel — stream cursor", () => {
       new WorkflowRunNotFoundError("test-session-id"),
     );
 
-    const response = await handler.fetch("https://corax.test/corax/v1/session/test-session-id/stream");
+    const response = await handler.fetch(
+      "https://corax.test/corax/v1/session/test-session-id/stream?includeTailIndex=1",
+    );
 
     expect(response.status).toBe(404);
     await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
@@ -677,7 +679,7 @@ describe("coraxChannel — stream cursor", () => {
 
   it("returns 503 when the session lookup fails transiently", async () => {
     const handler = createCoraxStreamHandler({ auth: none() });
-    handler.getStreamTailIndex.mockRejectedValueOnce(new Error("stream lookup failed"));
+    handler.getEventStream.mockRejectedValueOnce(new Error("stream lookup failed"));
 
     const response = await handler.fetch("https://corax.test/corax/v1/session/test-session-id/stream");
 

@@ -18,11 +18,17 @@
     "test:unit": "npm run test:unit --workspaces --if-present",
     "test:integration": "npm run test:integration --workspaces --if-present",
     "test:regression": "node --test tests/*.test.mjs",
+    "benchmark:history": "node scripts/benchmark-local-history.mjs",
     "typecheck": "npm run typecheck:packages && npm run typecheck:examples",
     "typecheck:packages": "npm run typecheck --workspace packages/corax --workspace packages/corax-catalog --workspace packages/tracing",
     "typecheck:examples": "tsc --noEmit -p examples/tsconfig.json"
   },
   "dependencies": { "@coraxjs/core": "*" },
+  "overrides": {
+    "@workflow/errors": "5.1.1",
+    "@workflow/world": "5.2.0",
+    "zod": "4.6.7"
+  },
   "devDependencies": {
     "@types/node": "24.13.3",
     "oxfmt": "0.66.0",

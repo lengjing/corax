@@ -39,6 +39,7 @@ const world = {
   // Vercel-shaped: owners run on their own deployment, so ingress resumes by token.
   capabilities: { deploymentAffinity: true },
   getDeploymentId: vi.fn(async () => "dpl_current"),
+  runs: { get: vi.fn(async () => ({})) },
 };
 const getRunMock = vi.fn();
 const getWorldMock = vi.fn();
@@ -66,6 +67,7 @@ beforeEach(() => {
     return currentSessionHook(token);
   });
   getWorldMock.mockResolvedValue(world);
+  world.runs.get.mockResolvedValue({});
   getRunMock.mockReturnValue({ status: Promise.resolve("completed") });
   resumeHookMock.mockImplementation(async (token: string) => currentSessionHook(token));
 });
@@ -74,6 +76,7 @@ afterEach(() => {
   getHookByTokenMock.mockReset();
   getRunMock.mockReset();
   getWorldMock.mockReset();
+  world.runs.get.mockReset();
   resumeHookMock.mockReset();
   cancelRunMock.mockReset();
   startMock.mockReset();
@@ -968,6 +971,14 @@ describe("createWorkflowRuntime#createSession", () => {
         type: "message.appended",
       },
     });
+  });
+
+  it("rejects an unknown live session before opening its durable stream", async () => {
+    world.runs.get.mockRejectedValueOnce(new WorkflowRunNotFoundError("missing"));
+    await expect(
+      buildRuntime({} as RuntimeCompiledArtifactsSource).getEventStream("missing"),
+    ).rejects.toBeInstanceOf(WorkflowRunNotFoundError);
+    expect(world.runs.get).toHaveBeenCalledWith("missing", { resolveData: "none" });
   });
 });
 

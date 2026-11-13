@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "#channel/session.js";
 import { createSessionStreamResponse } from "#corax-channel/request.js";
 import { parseNdjsonStream } from "#execution/ndjson-stream.js";
+import { readScopedTail } from "#execution/history-read-scope.js";
 import {
   CORAX_STREAM_CONTROL_VERSION,
   CORAX_STREAM_CONTROL_VERSION_QUERY,
@@ -53,6 +54,63 @@ afterEach(() => {
 });
 
 describe("createSessionStreamResponse", () => {
+  it("opens a positive live cursor without requesting the stream tail", async () => {
+    const session = stubSession(new ReadableStream({ start: (controller) => controller.close() }));
+    const tail = vi
+      .spyOn(session, "getStreamTailIndex")
+      .mockRejectedValue(new Error("must not scan"));
+    const response = await createSessionStreamResponse(
+      new Request("https://corax.test/stream?startIndex=10"),
+      session,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-corax-stream-tail-index")).toBeNull();
+    expect(tail).not.toHaveBeenCalled();
+    await response.text();
+  });
+
+  it("shares a finite response boundary while a later request observes appended events", async () => {
+    let boundary = 9;
+    let reads = 0;
+    const getTail = () =>
+      readScopedTail("session_1", async () => {
+        reads++;
+        return boundary++;
+      });
+    const session = {
+      id: "session_1",
+      getStreamTailIndex: getTail,
+      async getEventStream() {
+        await getTail();
+        return new ReadableStream({ start: (controller) => controller.close() });
+      },
+    } as unknown as Session;
+    for (const expected of [9, 10]) {
+      const response = await createSessionStreamResponse(
+        new Request("https://corax.test/stream?follow=false"),
+        session,
+      );
+      expect(response.headers.get("x-corax-stream-tail-index")).toBe(String(expected));
+      await response.text();
+    }
+    expect(reads).toBe(2);
+  });
+
+  it("still resolves the tail when a live read explicitly requests it", async () => {
+    const session = stubSession(
+      new ReadableStream({ start: (controller) => controller.close() }),
+      8,
+    );
+    const tail = vi.spyOn(session, "getStreamTailIndex");
+    const response = await createSessionStreamResponse(
+      new Request("https://corax.test/stream?includeTailIndex=1"),
+      session,
+    );
+    expect(response.headers.get("x-corax-stream-tail-index")).toBe("8");
+    expect(tail).toHaveBeenCalledTimes(1);
+    await response.text();
+  });
+
   it("ends a negotiated response after its lease and cancels the source", async () => {
     vi.useFakeTimers();
     let cancelled = false;

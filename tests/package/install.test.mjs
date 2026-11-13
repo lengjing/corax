@@ -43,6 +43,10 @@ test("npm tarball preserves SDK types and builds/serves an external project", { 
   }
 
   const cli = join(packageRoot, "bin/corax.js");
+  const history = await execute(process.execPath, [
+    fileURLToPath(new URL("../support/history-read-check.mjs", import.meta.url)), packageRoot,
+  ], { cwd: project, timeout: 30_000, maxBuffer: 1024 * 1024 });
+  assert.match(history.stdout, /HISTORY_READ_SMOKE=ok/);
   for (const args of [["--help"], ["--version"], ["remote", "connect", "--help"]]) {
     const { stdout } = await execute(process.execPath, [cli, ...args], { cwd: project, timeout: 20_000 });
     assert.match(stdout, args[0] === "--version" ? new RegExp(manifest.version.replaceAll(".", "\\.")) : /corax/);

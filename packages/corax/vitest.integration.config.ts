@@ -19,6 +19,7 @@ export default defineConfig({
       "src/compiler/model-catalog.integration.test.ts",
       "src/shared/model-gateway-opt-in.integration.test.ts",
       "src/internal/nitro/host/dev-environment-watcher.integration.test.ts",
+      "src/internal/workflow/local-world-stream-reads.integration.test.ts",
       "src/cli/dev/diagnostic*.integration.test.ts",
     ],
   },

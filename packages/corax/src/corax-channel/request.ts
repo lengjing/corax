@@ -1,4 +1,5 @@
 import { parseToolStubs } from "#tool-stubs/rules.js";
+import { withHistoryReadScope } from "#execution/history-read-scope.js";
 import type { FilePart, TextPart, UserContent } from "ai";
 
 import type {
@@ -299,24 +300,36 @@ export async function createSessionStreamResponse(
   request: Request,
   session: Session,
 ): Promise<Response> {
+  return parseFollow(request)
+    ? createSessionStreamResponseWithinScope(request, session)
+    : withHistoryReadScope(session.id, () =>
+        createSessionStreamResponseWithinScope(request, session),
+      );
+}
+
+async function createSessionStreamResponseWithinScope(
+  request: Request,
+  session: Session,
+): Promise<Response> {
   const startIndex = parseStartIndex(request);
   if (startIndex instanceof Response) return startIndex;
   const follow = parseFollow(request);
   const includeTailIndex = !follow || parseIncludeTailIndex(request);
 
   try {
-    // Resolve the tail before committing a response; otherwise an unknown or
-    // unreachable session would answer 200 and fail mid-body. Open the event
-    // stream alongside the tail lookup to avoid an extra round trip.
+    // The event stream validates live reads as it opens. Only reads reporting
+    // a tail, or resolving a negative cursor, need the additional tail lookup.
     const eventsPromise = session.getEventStream({ follow, startIndex });
     // Handled below; this keeps an early rejection from being reported as unhandled.
     eventsPromise.catch(() => {});
-    let tailIndex: number;
-    try {
-      tailIndex = await session.getStreamTailIndex();
-    } catch (error) {
-      void eventsPromise.then((events) => events.cancel()).catch(() => {});
-      throw error;
+    let tailIndex: number | undefined;
+    if (includeTailIndex || (startIndex !== undefined && startIndex < 0)) {
+      try {
+        tailIndex = await session.getStreamTailIndex();
+      } catch (error) {
+        void eventsPromise.then((events) => events.cancel()).catch(() => {});
+        throw error;
+      }
     }
     const events = await eventsPromise;
     const controlVersion =

@@ -3,11 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TEST_USAGE, stampTestEvent } from "#internal/testing/events.js";
 import { createSessionWaitingEvent, type MessageStreamEvent } from "#protocol/message.js";
 import { sessions } from "#public/server/index.js";
+import { withHistoryReadScope } from "#execution/history-read-scope.js";
+import {
+  assertSessionHistoryReadable,
+  readSessionEventHistory,
+  readSessionStreamTailIndex,
+} from "#execution/session-event-stream.js";
 
 const getRunMock = vi.fn();
+const runMetadataMock = vi.fn(async () => ({}));
 
 vi.mock("#compiled/@workflow/core/runtime.js", () => ({
   getRun: (...args: unknown[]) => getRunMock(...args),
+  getWorld: async () => ({ runs: { get: runMetadataMock } }),
 }));
 
 const encoder = new TextEncoder();
@@ -22,6 +30,7 @@ function mockSessionStream(
 ) {
   const startIndexes: Array<number | undefined> = [];
   const cancelled: Array<number | undefined> = [];
+  const tailReads = vi.fn(async () => stored.length - 1);
   getRunMock.mockImplementation(() => ({
     getReadable(readOptions?: { startIndex?: number }) {
       const startIndex = readOptions?.startIndex;
@@ -38,10 +47,10 @@ function mockSessionStream(
           cancelled.push(startIndex);
         },
       });
-      return Object.assign(readable, { getTailIndex: async () => stored.length - 1 });
+      return Object.assign(readable, { getTailIndex: tailReads });
     },
   }));
-  return { cancelled, startIndexes };
+  return { cancelled, startIndexes, tailReads };
 }
 
 const storedEvents = (count: number) =>
@@ -57,9 +66,42 @@ async function collect(iterable: AsyncIterable<MessageStreamEvent>) {
 
 afterEach(() => {
   getRunMock.mockReset();
+  runMetadataMock.mockReset();
+  runMetadataMock.mockResolvedValue({});
 });
 
 describe("sessions.attach().stream()", () => {
+  it("captures one finite boundary before stream pulls leave the request scope", async () => {
+    const stored = storedEvents(3);
+    const stream = mockSessionStream(stored, { open: true });
+    const result = await withHistoryReadScope("wrun_1", async () => {
+      const history = readSessionEventHistory("wrun_1", -2);
+      const tail = await readSessionStreamTailIndex("wrun_1");
+      return { history, tail };
+    });
+    stored.push(...storedEvents(1));
+    const reader = result.history.getReader();
+    const events = [];
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      events.push(next.value);
+    }
+    expect(result.tail).toBe(2);
+    expect(events.map((event) => event.meta.id)).toEqual([stored[1]!.meta.id, stored[2]!.meta.id]);
+    expect(stream.tailReads).toHaveBeenCalledTimes(1);
+    expect(await readSessionStreamTailIndex("wrun_1")).toBe(3);
+    expect(stream.tailReads).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects expired history without mistaking retained chunks for a readable session", async () => {
+    runMetadataMock.mockResolvedValue({ expiredAt: new Date(0), status: "completed" });
+    await expect(assertSessionHistoryReadable("wrun_1")).rejects.toMatchObject({
+      name: "RunExpiredError",
+    });
+    expect(getRunMock).not.toHaveBeenCalled();
+  });
+
   it("ends a bounded read at the tail observed when it opens", async () => {
     const stored = storedEvents(3);
     const stream = mockSessionStream(stored, { open: true });
